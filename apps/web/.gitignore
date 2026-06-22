@@ -1,0 +1,17 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# vercel
+.vercel
+
+# generated: synced from packages/types/schemas by scripts/sync-schemas.mjs
+/public/*.v1.json
+
+# local env
+.env*.local

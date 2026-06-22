@@ -1,0 +1,116 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: pomodoro-timer
+description: Build a polished Pomodoro timer web application from scratch
+task:
+  prompt: |-
+    Build a Pomodoro timer web application from scratch. The Pomodoro Technique uses
+    25-minute work sessions followed by 5-minute breaks.
+
+    **Requirements:**
+
+    1. **Timer Display**
+       - Large, readable timer showing minutes and seconds (MM:SS format)
+       - Visual distinction between work mode and break mode (different colors/themes)
+
+    2. **Controls**
+       - Start button to begin the timer
+       - Pause button to pause the timer
+       - Reset button to reset to the beginning of the current session
+       - Skip button to skip to the next session (work → break or break → work)
+
+    3. **Session Management**
+       - Work sessions: 25 minutes
+       - Short breaks: 5 minutes
+       - After 4 work sessions, offer a long break (15 minutes)
+       - Display which session number the user is on (e.g., "Session 2 of 4")
+
+    4. **Visual Polish**
+       - Clean, modern design
+       - Smooth transitions between states
+       - The timer should be the focal point of the page
+       - Responsive design that works on mobile and desktop
+
+    5. **Audio/Visual Notification**
+       - Play a sound or show a visual alert when a session ends
+       - The notification should be noticeable but not jarring
+
+    **Technical Requirements:**
+    - Use any modern JavaScript framework (React, Vue, Svelte) or vanilla JS
+    - Include a dev server that can be started with `npm run dev` or similar
+    - The app should run on port 3000 or 5173 (Vite default)
+
+    **Deliverables:**
+    - A working web application in the /workspace directory
+    - package.json with dev script
+    - All source code and assets
+workspace:
+  sources:
+    - path: ./workspace
+environment:
+  image:
+    base: bunsen/visual
+evaluation:
+  criteria:
+    - id: timer-functionality
+      title: Timer Functionality
+      type: agent
+      scores:
+        - 0
+        - 0.5
+        - 1
+      instructions: |
+        Start the dev server and verify the timer works correctly:
+        - Timer displays in MM:SS format and counts down
+        - Start/Pause/Reset buttons function as expected
+        - Sessions transition correctly (work → break)
+        - Session counter shows progress (e.g., "Session 2 of 4")
+
+        Score 1.0 if all controls work correctly, 0.5 if timer runs but some
+        controls are broken or missing, 0.0 if timer doesn't function.
+    - id: visual-design
+      title: Visual Design
+      type: browser-agent
+      scores:
+        - 0
+        - 0.25
+        - 0.5
+        - 0.75
+        - 1
+      instructions: |
+        Take screenshots of the running application and evaluate:
+        - Clean, modern aesthetic (not default/unstyled)
+        - Timer is large, prominent, and easy to read
+        - Clear visual distinction between work mode and break mode
+        - Controls are well-designed and clearly labeled
+        - Overall professional appearance
+
+        Score 0.25 for basic styling, 0.5 for decent design, 0.75 for polished,
+        1.0 for impressive/delightful.
+    - id: responsive-layout
+      title: Responsive Layout
+      type: browser-agent
+      weight: 0.5
+      scores:
+        - 0
+        - 0.5
+        - 1
+      instructions: |
+        Test the layout at different viewport sizes:
+        - Desktop (1280px): Layout is well-proportioned
+        - Mobile (375px): Timer and controls remain usable
+
+        Score 1.0 if fully responsive, 0.5 if somewhat usable on mobile,
+        0.0 if broken on mobile.
+    - id: code-quality
+      title: Code Quality
+      type: judge
+      instructions: |
+        Review the code structure:
+        - Well-organized file structure with clear separation of concerns
+        - Timer logic is correct (uses proper intervals, handles edge cases)
+        - Component architecture is appropriate for the chosen framework
+        - No obvious bugs or antipatterns
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

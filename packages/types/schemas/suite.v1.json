@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.bunsen.dev/suite.v1.json",
+  "title": "Bunsen Suite Manifest (v1)",
+  "description": "Authoritative schema for bunsen-suite.yaml v1. See docs/SUITES.md. Note: the manifest does not declare its own id — a suite's canonical id is derived from where it was cloned from (host/org/repo) or local/<dirname> for on-disk suites.",
+  "type": "object",
+  "required": ["version", "name", "experiments"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": "v1" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "version_tag": { "type": "string", "minLength": 1 },
+    "license": { "type": "string", "minLength": 1 },
+
+    "compatibility": { "$ref": "#/$defs/compatibility" },
+
+    "experiments": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+
+    "tags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "tracks": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/track" }
+    },
+
+    "aggregation": { "$ref": "#/$defs/aggregation" }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "min_bunsen_version": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "track": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "include": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "aggregation": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "type": "string",
+          "enum": ["weighted_average", "all", "any", "min", "max", "mean"]
+        },
+        "weights": { "$ref": "#/$defs/weightConfig" }
+      },
+      "additionalProperties": false
+    },
+
+    "weightConfig": {
+      "type": "object",
+      "properties": {
+        "by_tag": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "by_experiment": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

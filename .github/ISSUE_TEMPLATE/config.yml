@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security / vulnerability report
+    url: https://github.com/bunsen-dev/bunsen/security/advisories/new
+    about: Please report vulnerabilities privately — do not open a public issue. See SECURITY.md.
+  - name: Questions, feedback, collaboration
+    url: mailto:hello@bunsen.dev
+    about: General questions and feedback that aren't a bug or feature request.

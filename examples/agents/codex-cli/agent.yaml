@@ -1,0 +1,131 @@
+$schema: https://schemas.bunsen.dev/agent.v1.json
+version: v1
+name: codex-cli
+description: |
+  OpenAI Codex CLI - OpenAI's official agentic coding CLI.
+
+  Installs the pinned Rust binary from GitHub releases. Always invoked via
+  `codex exec` (the non-interactive print mode); the TUI requires a TTY and
+  is not used inside Bunsen containers.
+
+  Permissions: runs with `--sandbox danger-full-access` and
+  `--dangerously-bypass-approvals-and-sandbox`. The Docker container is the
+  sandbox; codex's own Landlock/seccomp layer is disabled because we already
+  isolate the agent.
+
+install:
+  source:
+    type: local
+  build:
+    image: ubuntu:22.04
+    cacheSalt: codex-cli-0.129.0
+    run:
+      - |
+        set -euo pipefail
+        if ! command -v curl >/dev/null 2>&1; then
+          apt-get update && apt-get install -y curl ca-certificates
+        fi
+        VERSION=0.129.0
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64) TARGET=x86_64-unknown-linux-musl ;;
+          aarch64) TARGET=aarch64-unknown-linux-musl ;;
+          *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+        esac
+        URL="https://github.com/openai/codex/releases/download/rust-v${VERSION}/codex-${TARGET}.tar.gz"
+        curl -fsSL "$URL" -o /tmp/codex.tar.gz
+        mkdir -p /tmp/codex-extract /output/bin
+        tar -xzf /tmp/codex.tar.gz -C /tmp/codex-extract
+        # Release tarballs contain a single binary named codex-<target>.
+        BIN=$(find /tmp/codex-extract -maxdepth 2 -type f -name 'codex*' -executable | head -n1)
+        if [ -z "$BIN" ]; then
+          echo "Could not find codex binary in extracted tarball" >&2
+          ls -laR /tmp/codex-extract >&2
+          exit 1
+        fi
+        cp "$BIN" /output/bin/codex
+        chmod +x /output/bin/codex
+  configure:
+    - run: |
+        # Codex 0.129.0's built-in `openai` provider requires `codex login`
+        # (writes ~/.codex/auth.json) and does NOT read OPENAI_API_KEY at
+        # request time — see codex-rs/model-provider-info/src/lib.rs (env_key:
+        # None, requires_openai_auth: true on the built-in). It also defaults
+        # to a WebSocket transport (wss://api.openai.com/v1/responses) which
+        # mitmproxy cannot see.
+        #
+        # We define a custom provider `openai-apikey` that:
+        #   - reads OPENAI_API_KEY via env_key
+        #   - leaves supports_websockets at its default (false), forcing the
+        #     HTTPS path so the proxy can capture traffic
+        #   - leaves requires_openai_auth at its default (false), so no login
+        #     flow is needed
+        #
+        # Writes to $BUNSEN_AGENT_HOME (set by the runtime to the agent's
+        # actual home dir, regardless of root vs non-root execution). The
+        # runtime chowns this directory to the execution user after configure
+        # runs.
+        MODEL="${CODEX_MODEL:-gpt-5.5}"
+        mkdir -p "$BUNSEN_AGENT_HOME/.codex"
+        cat > "$BUNSEN_AGENT_HOME/.codex/config.toml" <<EOF
+        model = "$MODEL"
+        model_provider = "openai-apikey"
+        approval_policy = "never"
+        sandbox_mode = "danger-full-access"
+
+        [model_providers.openai-apikey]
+        name = "OpenAI (API key)"
+        base_url = "https://api.openai.com/v1"
+        env_key = "OPENAI_API_KEY"
+        wire_api = "responses"
+        EOF
+
+# Codex CLI ships as a self-contained Rust binary. No host runtime is needed.
+# (The npm package is a Node launcher that wraps the same binary; we use the
+# raw binary so the agent has no Node dependency.)
+
+entrypoint:
+  command: codex
+  # Guaranteed args appended to every invocation. clap accepts these flags
+  # anywhere in argv, so the orchestrator can put `exec <prompt>` first and
+  # these tail flags still bind to the `exec` subcommand.
+  #
+  # --sandbox danger-full-access: container is the sandbox; turn off Landlock.
+  # --dangerously-bypass-approvals-and-sandbox: never block on approvals.
+  # --skip-git-repo-check: workspace may not be a git repo.
+  args:
+    - --sandbox
+    - danger-full-access
+    - --dangerously-bypass-approvals-and-sandbox
+    - --skip-git-repo-check
+
+# Direct mode — `codex exec` is already non-interactive. No TTY, no prompts,
+# so no supervisor needed.
+interaction:
+  mode: direct
+
+# Codex reads its model from the config.toml the configure step writes from
+# CODEX_MODEL. `bn run <exp> codex-cli --model <id>` sets it at CLI precedence;
+# with no flag, `default` is used.
+model:
+  env: CODEX_MODEL
+  default: gpt-5.5
+
+examples:
+  - prompt: Fix the bug in the authentication module
+    invocation: codex exec "Fix the bug in the authentication module"
+
+# Behavioral overlays only — pick the model with `--model`
+# (e.g. `codex-cli --model gpt-5.4-mini`).
+variants:
+  json:
+    description: |
+      Headless mode that emits JSONL events to stdout instead of human-readable
+      output. Useful when downstream tooling consumes structured trace events.
+    entrypoint:
+      args:
+        - --sandbox
+        - danger-full-access
+        - --dangerously-bypass-approvals-and-sandbox
+        - --skip-git-repo-check
+        - --json

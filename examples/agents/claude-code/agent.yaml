@@ -1,0 +1,165 @@
+$schema: https://schemas.bunsen.dev/agent.v1.json
+version: v1
+name: claude-code
+description: |
+  Claude Code - Anthropic's official agentic coding assistant.
+
+  Runs as a CLI tool with full access to the workspace. Capable of:
+  - Reading and writing files
+  - Running shell commands
+  - Multi-step reasoning and planning
+  - Complex code modifications
+
+  Uses --dangerously-skip-permissions for autonomous operation.
+
+install:
+  source:
+    type: local
+  build:
+    # Pin Claude Code to a specific version for reproducibility across runs.
+    # Bump this deliberately when you want a newer CLI. The `cacheSalt` bumps
+    # the artifact cache key alongside the version string.
+    #
+    # 2.1.113+ ships as a Bun-compiled per-platform native binary that does
+    # NOT need Node at runtime — this is what makes claude-code a true
+    # sealed-closure agent (asymmetric composition; see
+    # docs/ENVIRONMENT.md#asymmetric-composition).
+    image: ubuntu:22.04
+    cacheSalt: claude-code-2.1.142
+    run:
+      - |
+        if ! command -v curl >/dev/null 2>&1; then
+          apt-get update && apt-get install -y curl
+        fi
+        curl -fsSL https://claude.ai/install.sh | bash -s 2.1.142
+        mkdir -p /output/bin
+        cp "$HOME/.local/bin/claude" /output/bin/claude
+        chmod +x /output/bin/claude
+  configure:
+    - run: |
+        # Pre-configure Claude Code to skip interactive login flow and set default model.
+        # Writes to $BUNSEN_AGENT_HOME (set by the runtime to the agent's actual
+        # home dir, regardless of root vs non-root execution). The runtime
+        # chowns this directory to the execution user after configure runs.
+        if [ -n "$ANTHROPIC_API_KEY" ]; then
+          mkdir -p "$BUNSEN_AGENT_HOME/.claude"
+          MODEL="${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+          printf '{"primaryApiKey":"%s","hasCompletedOnboarding":true,"model":"%s"}\n' "$ANTHROPIC_API_KEY" "$MODEL" > "$BUNSEN_AGENT_HOME/.claude.json"
+        fi
+
+entrypoint:
+  command: claude
+  # Guaranteed args appended to every invocation.
+  # --dangerously-skip-permissions skips permission prompts for any actions Claude Code takes.
+  # This works because Bunsen runs agents as non-root user (Claude Code blocks this flag for root).
+  # --no-session-persistence is only valid in print mode (-p), so it is set on headless variants only.
+  args:
+    - --dangerously-skip-permissions
+
+# Enable supervisor agent to drive Claude Code, navigating through any prompts it presents.
+interaction:
+  mode: supervised
+
+# Claude Code reads its model from ANTHROPIC_MODEL (the configure step above also
+# bakes it into .claude.json). `bn run <exp> claude-code --model <id>` sets this
+# at CLI precedence; with no flag, `default` is used. Pick a model with --model
+# instead of authoring a per-model variant.
+model:
+  env: ANTHROPIC_MODEL
+  default: claude-sonnet-4-6
+
+examples:
+  - prompt: Fix the bug in the authentication module
+    invocation: claude "Fix the bug in the authentication module"
+
+# Variants are behavioral overlays only — pick the model with `--model`, not a
+# variant. The one exception is `auto`, which pins Opus 4.7 because the
+# permission-mode auto classifier is only supported there.
+variants:
+  verbose:
+    description: Claude Code with verbose output
+    entrypoint:
+      args:
+        - --verbose
+        - --dangerously-skip-permissions
+
+  max-turns-10:
+    description: Limit to 10 conversation turns
+    entrypoint:
+      args:
+        - --max-turns
+        - "10"
+        - --dangerously-skip-permissions
+
+  headless:
+    description: |
+      Non-interactive print mode (-p). Runs as a script — no interactive
+      session, no supervisor needed. Fastest and most reliable for automated
+      runs. Pick the model with --model, e.g.
+      `claude-code:headless --model claude-opus-4-7`.
+    interaction:
+      mode: direct
+    entrypoint:
+      args:
+        - -p
+        - --dangerously-skip-permissions
+        - --no-session-persistence
+        - --output-format
+        - text
+        - --verbose
+
+  disable-background-tasks:
+    description: Disables background task management so background processes survive after the agent exits. Use with evaluation.container:agent for service tasks.
+    entrypoint:
+      args:
+        - --dangerously-skip-permissions
+    defaults:
+      env:
+        CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
+
+  # Demonstration of the system-prompt cookbook pattern (see docs/SYSTEM_PROMPTS.md).
+  # Drops a system prompt into the location Claude Code reads at startup
+  # ($BUNSEN_AGENT_HOME/.claude/CLAUDE.md) by adding ONE writeFile step on top
+  # of the base configure list — using `mergeMode: append` so we don't have to
+  # redeclare the base block.
+  cautious:
+    description: Claude Code with a cautious system prompt (writeFile + mergeMode demo).
+    install:
+      configure:
+        mergeMode: append
+        items:
+          - writeFile: $BUNSEN_AGENT_HOME/.claude/CLAUDE.md
+            from: prompts/cautious.md
+
+  # Use this variant on experiments that set `environment.user: root`. The
+  # `--dangerously-skip-permissions` flag used by every other variant is
+  # blocked by Claude Code when uid=0, so root experiments otherwise fail
+  # at startup. `--permission-mode auto` (Claude Code 2.1.83+) sidesteps
+  # that block by routing actions through Anthropic's auto-approval
+  # classifier instead of the all-off skip switch.
+  #
+  # IMPORTANT: auto-mode classification is only supported on Opus 4.7.
+  # On Sonnet 4.6 or Opus 4.6, Claude Code accepts the `--permission-mode
+  # auto` flag but the classifier does not engage — runs proceed in a
+  # degraded mode that does not match the documented semantics. If you
+  # override ANTHROPIC_MODEL on this variant, keep it on Opus 4.7.
+  #
+  # Direct + `-p` (print mode) because the auto classifier already handles
+  # approvals without the supervisor, and supervisor mode requires tmux in
+  # the container image — which not every TB experiment ships.
+  auto:
+    description: Print mode with --permission-mode auto, Opus 4.7 (the only model the auto classifier supports). Works under root unlike --dangerously-skip-permissions.
+    interaction:
+      mode: direct
+    entrypoint:
+      args:
+        - -p
+        - --permission-mode
+        - auto
+        - --no-session-persistence
+        - --output-format
+        - text
+        - --verbose
+    defaults:
+      env:
+        ANTHROPIC_MODEL: claude-opus-4-7

@@ -1,0 +1,86 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: fastify-json-escape
+description: Fix JSON escaping security bug in Fastify's onBadUrl handler
+task:
+  prompt: |-
+    The Fastify web framework has a bug in its `onBadUrl` handler. When a bad URL
+    contains special characters (like quotes or backslashes), the JSON response
+    is malformed because template string interpolation doesn't properly escape them.
+
+    For example, a request to `/test"path` produces invalid JSON:
+    {"error":"Not Found","message":"Route GET:/test"path not found","statusCode":404}
+
+    The response should use proper JSON escaping:
+    {"error":"Not Found","message":"Route GET:/test\"path not found","statusCode":404}
+
+    Find and fix this bug. The fix should:
+    1. Use JSON.stringify() instead of template strings for proper escaping
+    2. Update Content-Length calculation to handle multi-byte characters correctly
+    3. Add a test to verify the fix works with special characters
+
+    Run `npm test` to verify your fix doesn't break existing tests.
+workspace:
+  sources:
+    - path: ./workspace
+  setup:
+    - run: npm install
+environment:
+  image:
+    base: bunsen/headless
+evaluation:
+  criteria:
+    - id: tests-pass
+      title: Tests Pass
+      type: agent
+      scores:
+        - 0
+        - 1
+      gate:
+        ifBelow: 1
+      instructions: |
+        Run `npm test` to verify:
+        - All existing Fastify tests still pass
+        - New test for JSON escaping in bad URL handler passes
+
+        Score 1.0 if all tests pass, 0.0 if any tests fail.
+    - id: fix-correctness
+      title: Fix Correctness
+      type: agent
+      instructions: |
+        Review the fix for the JSON escaping bug:
+        - Uses JSON.stringify() for proper character escaping
+        - Handles quotes, backslashes, and other special characters
+        - Content-Length calculated correctly (using Buffer.byteLength for UTF-8)
+        - Response is valid JSON after the fix
+    - id: test-coverage
+      title: Test Coverage
+      type: agent
+      instructions: |
+        Review the added tests:
+        - Test covers URLs with special characters (quotes, backslashes)
+        - Test verifies the response is valid JSON
+        - Test follows existing Fastify test patterns
+        - Test provides good regression coverage
+    - id: code-quality
+      title: Code Quality
+      type: agent
+      weight: 0.5
+      instructions: |
+        Is the fix clean and appropriate?
+        - Uses standard library methods (JSON.stringify)
+        - Follows Fastify's code style
+        - No security vulnerabilities introduced
+        - Solution is robust
+    - id: minimal-changes
+      title: Minimal Changes
+      type: agent
+      weight: 0.5
+      instructions: |
+        Review the diff for minimality:
+        - Only changes to onBadUrl handler
+        - No unrelated refactoring
+        - Fix is focused and surgical
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

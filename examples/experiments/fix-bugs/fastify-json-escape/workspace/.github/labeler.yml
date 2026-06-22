@@ -1,0 +1,19 @@
+# PRs that only touch the docs folder
+documentation:
+- changed-files:
+  - any-glob-to-any-file: docs/**
+
+"github actions":
+- changed-files:
+  - any-glob-to-any-file: ".github/workflows/*"
+
+# PRs that only touch type files
+typescript:
+- changed-files:
+  - any-glob-to-any-file: "**/*[.|-]d.ts"
+
+plugin:
+- all: ["docs/Guides/Ecosystem.md"]
+
+test:
+- all: ["test/**/*"]

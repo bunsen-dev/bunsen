@@ -1,0 +1,153 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: markdown-editor
+description: Build a polished markdown editor with live preview from scratch
+task:
+  prompt: |-
+    Build a markdown editor with live preview from scratch. The editor should provide
+    a split-pane interface where users type markdown on the left and see rendered
+    HTML on the right in real-time.
+
+    **Requirements:**
+
+    1. **Split-Pane Layout**
+       - Left pane: Markdown text editor
+       - Right pane: Rendered HTML preview
+       - Resizable divider between panes (drag to adjust widths)
+       - Synchronized scrolling (optional but nice)
+
+    2. **Markdown Editor (Left Pane)**
+       - Monospace font for the editor
+       - Syntax highlighting for markdown elements (headers, bold, code, etc.)
+       - Line numbers
+       - Preserve indentation when pressing Enter
+       - Tab key should insert spaces (not change focus)
+
+    3. **Preview (Right Pane)**
+       - Render standard markdown syntax:
+         - Headings (# through ######)
+         - Bold (**text**) and italic (*text*)
+         - Links [text](url) and images ![alt](url)
+         - Ordered and unordered lists
+         - Code blocks (``` and inline `)
+         - Blockquotes (>)
+         - Horizontal rules (---)
+         - Tables
+       - Styled rendering (not raw HTML display)
+       - Code blocks should have syntax highlighting
+
+    4. **Visual Polish**
+       - Clean, distraction-free interface
+       - Dark mode support (or at least a pleasant color scheme)
+       - Smooth updates as user types (debounced)
+       - Responsive: on mobile, stack panes vertically or allow toggle
+
+    5. **Toolbar (optional but recommended)**
+       - Buttons for common formatting (bold, italic, link, code)
+       - These should insert markdown syntax at cursor position
+
+    **Technical Requirements:**
+    - Use any modern JavaScript framework (React, Vue, Svelte) or vanilla JS
+    - Include a dev server that can be started with `npm run dev` or similar
+    - The app should run on port 3000 or 5173 (Vite default)
+    - May use markdown parsing libraries (marked, remark, markdown-it, etc.)
+
+    **Deliverables:**
+    - A working web application in the /workspace directory
+    - package.json with dev script
+    - All source code and assets
+workspace:
+  sources:
+    - path: ./workspace
+environment:
+  image:
+    base: bunsen/visual
+evaluation:
+  criteria:
+    - id: markdown-rendering
+      title: Markdown Rendering
+      type: agent
+      scores:
+        - 0
+        - 0.5
+        - 1
+      instructions: |
+        Start the dev server and verify markdown rendering:
+        - Headers (# through ######) render as h1-h6
+        - Bold (**text**) and italic (*text*) render correctly
+        - Code blocks (```) render with proper formatting
+        - Lists (ordered and unordered) render as HTML lists
+        - Links and images render correctly
+        - Tables render (if supported)
+
+        Score 1.0 if all common markdown renders correctly, 0.5 if basic
+        elements work but some are missing, 0.0 if rendering is broken.
+    - id: live-preview
+      title: Live Preview
+      type: browser-agent
+      scores:
+        - 0
+        - 1
+      instructions: |
+        Verify the live preview updates as the user types:
+        - Type markdown in the editor pane
+        - Confirm the preview pane updates in real-time (or near real-time)
+        - Changes should be reflected without manual refresh
+
+        Score 1.0 if live preview works, 0.0 if it doesn't.
+    - id: visual-design
+      title: Visual Design
+      type: browser-agent
+      scores:
+        - 0
+        - 0.25
+        - 0.5
+        - 0.75
+        - 1
+      instructions: |
+        Take screenshots and evaluate the visual design:
+        - Clean, professional split-pane layout
+        - Editor has monospace font and syntax highlighting
+        - Preview is styled (not raw/unstyled HTML)
+        - Good typography choices for rendered markdown
+        - Code blocks have distinct styling/highlighting
+
+        Score 0.25 for basic styling, 0.5 for decent design, 0.75 for polished,
+        1.0 for impressive professional quality.
+    - id: responsive-layout
+      title: Responsive Layout
+      type: browser-agent
+      weight: 0.5
+      scores:
+        - 0
+        - 0.5
+        - 1
+      instructions: |
+        Test at different viewport sizes:
+        - Desktop (1280px): Split panes display properly
+        - Mobile (375px): Layout adapts (stacked panes or toggle)
+
+        Score 1.0 if fully responsive, 0.5 if somewhat usable on mobile,
+        0.0 if broken on mobile.
+    - id: code-quality
+      title: Code Quality
+      type: judge
+      weight: 0.5
+      instructions: |
+        Review the code structure:
+        - Clean separation between editor, parser, and preview
+        - Markdown parsing is handled properly (library or custom)
+        - Debouncing for performance on rapid typing
+        - No obvious bugs or memory leaks
+    - id: essential-features
+      title: Essential Features
+      type: aggregate
+      weight: 0
+      needs:
+        - markdown-rendering
+        - live-preview
+      aggregate:
+        function: all
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

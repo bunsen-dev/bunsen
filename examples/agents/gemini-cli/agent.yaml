@@ -1,0 +1,232 @@
+$schema: https://schemas.bunsen.dev/agent.v1.json
+version: v1
+name: gemini-cli
+description: |
+  Google Gemini CLI - Google's official agentic CLI for the Gemini API.
+
+  Installs the pinned `@google/gemini-cli` npm package and exposes the
+  bundled CLI as `gemini` via a thin shell launcher. Always invoked with
+  `--yolo` (auto-approve all tool calls) and `-p` (headless prompt mode);
+  the container is the sandbox, no TTY or supervisor needed.
+
+  Auth flow: reads `GEMINI_API_KEY` from the project env. (`GOOGLE_API_KEY`
+  also works — it's the Google SDK fallback and takes precedence when both
+  are set, but the CLI's documented variable is `GEMINI_API_KEY`.) The
+  `install.configure` step writes a `.gemini/settings.json` with
+  `selectedAuthType=gemini-api-key` so the CLI doesn't drop into its
+  first-run auth picker even when a key is in env (see
+  google-gemini/gemini-cli#3144).
+
+  Targets the Gemini Direct API only (api keys from
+  https://aistudio.google.com/apikey). Vertex AI auth (service-account
+  JSON, ADC) is intentionally out of scope so the agent runs from a
+  personal `.env` without billing-org setup.
+
+install:
+  source:
+    type: local
+
+  # install.deps lifts the ripgrep download out of install.build. The dep
+  # builds once per (name, version, target) and mounts at
+  # /bunsen/deps/ripgrep/bin/rg with PATH wired up automatically. The
+  # SEA-layout placement still happens in install.build below because that
+  # path is gemini-cli-specific wiring, not a reusable concern.
+  deps:
+    # ripgrep ships a musl-static binary on amd64 (fully self-contained, no
+    # libc dependency) — the model `static` dep. arm64 falls back to a glibc
+    # build, but we still mark this dep `static` because the executable is
+    # self-contained on both platforms.
+    - name: ripgrep
+      version: "14.1.1"
+      description: BurntSushi/ripgrep static binary download
+      image: debian:bookworm-slim
+      linkage: static
+      provides:
+        binaries: [rg]
+      install:
+        - target: linux/amd64
+          run:
+            - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+            - curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz -o /tmp/rg.tar.gz
+            - mkdir -p /tmp/rg-extract && tar -xzf /tmp/rg.tar.gz -C /tmp/rg-extract
+            - cp /tmp/rg-extract/ripgrep-14.1.1-x86_64-unknown-linux-musl/rg /output/bin/rg
+            - chmod +x /output/bin/rg
+        - target: linux/arm64
+          run:
+            - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+            - curl -fsSL https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-aarch64-unknown-linux-gnu.tar.gz -o /tmp/rg.tar.gz
+            - mkdir -p /tmp/rg-extract && tar -xzf /tmp/rg.tar.gz -C /tmp/rg-extract
+            - cp /tmp/rg-extract/ripgrep-14.1.1-aarch64-unknown-linux-gnu/rg /output/bin/rg
+            - chmod +x /output/bin/rg
+
+    # gemini-cli is a Node program. Ship Node so the agent works against any
+    # substrate (asymmetric composition — see docs/ENVIRONMENT.md).
+    - name: node
+      version: "20.18.1"
+      description: Official Node.js binary distribution (glibc closure)
+      image: debian:bookworm-slim
+      linkage: closure
+      abi:
+        libc: glibc
+        libc_version: ">=2.28"
+      provides:
+        binaries: [node, npm, npx, corepack]
+      install:
+        - target: linux/amd64
+          run:
+            - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils
+            - curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz -o /tmp/node.tar.xz
+            - mkdir -p /tmp/node-extract && tar -xJf /tmp/node.tar.xz -C /tmp/node-extract --strip-components=1
+            - mkdir -p /output/bin /output/lib /output/include /output/share
+            - cp -a /tmp/node-extract/bin/. /output/bin/
+            - cp -a /tmp/node-extract/lib/. /output/lib/
+            - cp -a /tmp/node-extract/include/. /output/include/
+            - cp -a /tmp/node-extract/share/. /output/share/
+        - target: linux/arm64
+          run:
+            - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates xz-utils
+            - curl -fsSL https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-arm64.tar.xz -o /tmp/node.tar.xz
+            - mkdir -p /tmp/node-extract && tar -xJf /tmp/node.tar.xz -C /tmp/node-extract --strip-components=1
+            - mkdir -p /output/bin /output/lib /output/include /output/share
+            - cp -a /tmp/node-extract/bin/. /output/bin/
+            - cp -a /tmp/node-extract/lib/. /output/lib/
+            - cp -a /tmp/node-extract/include/. /output/include/
+            - cp -a /tmp/node-extract/share/. /output/share/
+
+  build:
+    # node:20-bookworm-slim has node + npm preinstalled — much faster than
+    # ubuntu:22.04 + apt-get install nodejs npm. The bundled `gemini.js`
+    # the npm package ships is self-contained (esbuild output), so we only
+    # need to relocate `node_modules/@google/gemini-cli` and write a
+    # launcher; no native deps to worry about.
+    image: node:20-bookworm-slim
+    cacheSalt: gemini-cli-0.41.2-rg-vendored
+    run:
+      - |
+        set -euo pipefail
+        VERSION=0.41.2
+        mkdir -p /tmp/install /output/lib /output/bin
+        npm install -g \
+          --prefix /tmp/install \
+          --no-audit --no-fund --no-progress \
+          "@google/gemini-cli@$VERSION"
+        cp -a /tmp/install/lib/node_modules /output/lib/
+        # Launcher resolves to the path under /bunsen/artifacts (the
+        # read-only mount where install.build outputs land at run time).
+        cat > /output/bin/gemini <<'WRAPPER'
+        #!/bin/sh
+        exec node /bunsen/artifacts/lib/node_modules/@google/gemini-cli/bundle/gemini.js "$@"
+        WRAPPER
+        chmod +x /output/bin/gemini
+
+        # Place ripgrep into the SEA-layout location gemini-cli looks for
+        # first. gemini-cli's ripGrep.ts hard-codes this path — it does
+        # NOT consult $PATH, so the install.deps PATH mount alone isn't
+        # sufficient. See google-gemini/gemini-cli#26541.
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64) NODE_ARCH=x64 ;;
+          aarch64) NODE_ARCH=arm64 ;;
+          *) echo "Unsupported architecture for ripgrep: $ARCH" >&2; exit 1 ;;
+        esac
+        RG_VENDOR_DIR=/output/lib/node_modules/@google/gemini-cli/bundle/vendor/ripgrep
+        mkdir -p "$RG_VENDOR_DIR"
+        cp /bunsen/deps/ripgrep/bin/rg "$RG_VENDOR_DIR/rg-linux-$NODE_ARCH"
+        chmod +x "$RG_VENDOR_DIR/rg-linux-$NODE_ARCH"
+  configure:
+    - run: |
+        # Skip the Gemini CLI's first-run auth picker. Without this file,
+        # the CLI prompts for an auth method even when GEMINI_API_KEY is in
+        # env — see google-gemini/gemini-cli#3144. We also bake in the
+        # model name so headless invocations don't need a --model flag from
+        # the orchestrator. `bn run --model <id>` sets GEMINI_MODEL to swap
+        # tiers without rewriting argv.
+        #
+        # Writes to $BUNSEN_AGENT_HOME (the runtime sets this to the
+        # execution user's home, root or non-root). The runtime chowns
+        # this directory to the execution user after configure runs.
+        MODEL="${GEMINI_MODEL:-gemini-2.5-pro}"
+        mkdir -p "$BUNSEN_AGENT_HOME/.gemini"
+        # Schema: gemini-cli 0.41+ uses a nested settings shape
+        # (`security.auth.selectedType`, `model.name`, etc.) — not the flat
+        # `selectedAuthType` from older versions referenced in some docs.
+        # See packages/cli/src/config/settingsSchema.ts at the pinned tag.
+        cat > "$BUNSEN_AGENT_HOME/.gemini/settings.json" <<EOF
+        {
+          "security": {
+            "auth": {
+              "selectedType": "gemini-api-key"
+            }
+          },
+          "model": {
+            "name": "$MODEL"
+          },
+          "general": {
+            "disableAutoUpdate": true,
+            "disableUpdateNag": true,
+            "checkpointing": {
+              "enabled": false
+            }
+          },
+          "ui": {
+            "hideTips": true,
+            "hideBanner": true
+          }
+        }
+        EOF
+
+entrypoint:
+  command: gemini
+  # Guaranteed args appended to every invocation.
+  # --yolo: auto-approve every tool call (the Docker container is the
+  #         sandbox; gemini-cli's permission prompts would otherwise hang
+  #         a non-TTY run).
+  # --skip-trust: bypass gemini-cli's "trusted folders" check, which
+  #         otherwise downgrades --yolo to default approval mode in any
+  #         workspace not pre-trusted from an interactive session. The
+  #         container IS the sandbox; trust is already established at the
+  #         Bunsen level.
+  args:
+    - --yolo
+    - --skip-trust
+  help: gemini --help
+
+# Direct mode — `gemini -p <prompt>` is fully non-interactive. With
+# --yolo there are no permission prompts, so no supervisor is needed.
+interaction:
+  mode: direct
+
+# Gemini reads its model from the settings.json the configure step writes from
+# GEMINI_MODEL. `bn run <exp> gemini-cli --model <id>` sets it at CLI
+# precedence; with no flag, `default` is used.
+model:
+  env: GEMINI_MODEL
+  default: gemini-2.5-pro
+
+defaults:
+  env:
+    # gemini-cli warns "256-color support not detected" when TERM is unset,
+    # then warns again about "true color (24-bit) support" if only TERM is
+    # set. Both env vars together silence both warnings without otherwise
+    # changing behavior.
+    TERM: xterm-256color
+    COLORTERM: truecolor
+
+examples:
+  - prompt: Fix the bug in the authentication module
+    invocation: gemini -p "Fix the bug in the authentication module"
+
+# Behavioral overlays only — pick the model with `--model`
+# (e.g. `gemini-cli --model gemini-2.5-flash`).
+variants:
+  json:
+    description: |
+      Headless mode emitting `--output-format=json` (single JSON object) for
+      downstream tooling that wants structured output. The default text
+      format is fine for most experiments.
+    entrypoint:
+      args:
+        - --yolo
+        - --skip-trust
+        - --output-format
+        - json

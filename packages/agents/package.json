@@ -1,0 +1,49 @@
+{
+  "name": "@bunsen-dev/agents",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal platform agents (orchestrator, scorer, supervisor) for Bunsen. Not part of the public API.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "runtime"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/build-bundles.mjs bundles",
+    "build:bundles": "node scripts/build-bundles.mjs all",
+    "build:bundles:orchestrator": "node scripts/build-bundles.mjs orchestrator",
+    "build:bundles:scorer": "node scripts/build-bundles.mjs scorer",
+    "build:bundles:gitignore-filter": "node scripts/build-bundles.mjs gitignore-filter",
+    "build:bundles:runtime": "node scripts/build-bundles.mjs runtime",
+    "clean": "rm -rf dist runtime .node-cache *.tsbuildinfo",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@bunsen-dev/diff-filter": "workspace:*",
+    "@bunsen-dev/types": "workspace:*",
+    "ignore": "^5.3.0",
+    "js-yaml": "^4.1.0",
+    "playwright": "^1.57.0",
+    "undici": "^7.21.0",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "esbuild": "^0.24.0",
+    "tar": "^7.4.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  }
+}

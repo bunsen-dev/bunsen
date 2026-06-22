@@ -1,0 +1,46 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: portability-smoke
+description: |
+  Portability smoke test for the asymmetric-ownership model.
+
+  The experiment image is vanilla debian:bookworm-slim with no Node, no
+  Python, no Bunsen image conveniences. An agent that ships its runtime
+  via install.deps (a sealed closure) should still work here — and an
+  agent that depends on substrate Node should fail. That asymmetry is
+  exactly what this smoke test validates.
+
+task:
+  prompt: |-
+    Create a file at /workspace/hello.txt containing exactly the text:
+    Hello, world!
+
+    Nothing else. No newline tricks, no extra text.
+
+environment:
+  image:
+    dockerfile: ./Dockerfile
+  user: user
+
+evaluation:
+  container: agent
+  criteria:
+    - id: hello-file-correct
+      title: hello.txt contains the right text
+      type: script
+      scores:
+        - 0
+        - 1
+      gate:
+        ifBelow: 1
+      run: |
+        set -e
+        test -f /workspace/hello.txt || { echo "missing /workspace/hello.txt"; exit 1; }
+        actual=$(cat /workspace/hello.txt)
+        expected="Hello, world!"
+        if [ "$actual" = "$expected" ]; then
+          echo "match"
+          exit 0
+        fi
+        echo "mismatch: got '$actual', want '$expected'"
+        exit 1

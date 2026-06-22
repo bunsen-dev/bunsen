@@ -1,0 +1,171 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: shader-background
+description: Build an interactive WebGL shader background using React Three Fiber and TypeScript
+task:
+  prompt: |-
+    Build a visually impressive, interactive shader background using React Three Fiber
+    and TypeScript. The shader should respond to mouse movement, creating an engaging
+    visual effect suitable for a hero section or landing page background.
+
+    **IMPORTANT: This must be built with TypeScript (.tsx files, strict mode).**
+    React Three Fiber has complex types that require careful handling.
+
+    **Requirements:**
+
+    1. **Shader Effect**
+       - Create a custom GLSL shader (vertex + fragment)
+       - The effect should be visually interesting (not just a solid color)
+       - Consider effects like:
+         - Flowing gradient waves
+         - Perlin/simplex noise patterns
+         - Metaballs or organic blobs
+         - Aurora borealis style ribbons
+         - Particle fields
+       - The shader should animate continuously (time-based)
+
+    2. **Mouse Interaction**
+       - The shader should respond to mouse position
+       - Mouse movement should influence the visual effect (displacement, color, speed, etc.)
+       - The interaction should feel smooth and responsive
+       - Consider easing/lerping mouse position for smoother transitions
+
+    3. **Technical Stack (Required)**
+       - React with TypeScript (strict mode)
+       - React Three Fiber (@react-three/fiber)
+       - @react-three/drei for helpers (optional but recommended)
+       - Custom shader material (using shaderMaterial or extending Material)
+       - Proper TypeScript types for all R3F components
+
+    4. **Performance**
+       - Maintain 60fps on modern hardware
+       - Use appropriate uniforms (don't recalculate in shader unnecessarily)
+       - Clean up resources on unmount
+
+    5. **Visual Polish**
+       - The effect should look professional, not like a demo/tutorial
+       - Colors should be harmonious
+       - Consider adding subtle depth or parallax effects
+       - Full viewport coverage (background fills the screen)
+
+    **Technical Requirements:**
+    - Use Vite with React + TypeScript template
+    - Include a dev server that can be started with `npm run dev`
+    - The app should run on port 5173 (Vite default)
+    - tsconfig.json should have "strict": true
+    - All files should be .tsx (not .jsx)
+    - No TypeScript errors (no @ts-ignore, no 'any' escape hatches)
+
+    **Deliverables:**
+    - A working web application in the /workspace directory
+    - package.json with dev script and correct dependencies
+    - tsconfig.json with strict mode
+    - Custom shader code (can be inline strings or separate .glsl files)
+    - All TypeScript source files
+
+    **Hints:**
+    - React Three Fiber's types can be tricky. You may need to:
+      - Extend Three.js types for custom materials
+      - Use `extend()` to register custom components
+      - Properly type uniform refs
+    - For mouse tracking, consider using @react-three/drei's usePointer or native events
+    - Time uniform should be updated in useFrame
+workspace:
+  sources:
+    - path: ./workspace
+environment:
+  image:
+    base: bunsen/visual
+run:
+  timeout: 1h
+evaluation:
+  criteria:
+    - id: typescript-correctness
+      title: TypeScript Correctness
+      type: agent
+      scores:
+        - 0
+        - 1
+      timeout: 10m
+      gate:
+        ifBelow: 1
+      instructions: |
+        Verify TypeScript is used correctly:
+        - Run `npm run build` or `npx tsc --noEmit` to check for type errors
+        - Verify tsconfig.json has "strict": true
+        - Check that all source files are .tsx (not .jsx)
+
+        Score 1.0 if no TypeScript errors, 0.0 if there are type errors.
+    - id: visual-quality
+      title: Visual Quality
+      type: browser-agent
+      scores:
+        - 0
+        - 0.25
+        - 0.5
+        - 0.75
+        - 1
+      timeout: 10m
+      instructions: |
+        Start the dev server and evaluate the shader effect visually:
+        - Take a screenshot of the running shader
+        - Verify it's not blank, solid color, or default R3F demo
+        - Evaluate: Is the effect visually impressive and unique?
+        - Are colors harmonious and pleasing?
+        - Does the animation run smoothly?
+        - Does it look professional (not tutorial-quality)?
+
+        Score 0.25 for basic shader, 0.5 for decent effect, 0.75 for polished,
+        1.0 for impressive/beautiful shader art.
+    - id: mouse-interactivity
+      title: Mouse Interactivity
+      type: browser-agent
+      scores:
+        - 0
+        - 0.5
+        - 1
+      timeout: 10m
+      instructions: |
+        Verify the shader responds to mouse movement:
+        - Take a screenshot with mouse at center
+        - Move mouse to corner, take another screenshot
+        - Compare: Does the visual effect change based on mouse position?
+        - Is the interaction smooth and responsive?
+
+        Score 1.0 if interaction is clear and smooth, 0.5 if subtle or laggy,
+        0.0 if no mouse interaction detected.
+    - id: shader-code-quality
+      title: Shader Code Quality
+      type: agent
+      timeout: 10m
+      instructions: |
+        Review the GLSL shader code:
+        - Vertex and fragment shaders are present and valid
+        - Uniforms are properly declared (time, mouse position, resolution)
+        - Code uses appropriate techniques (noise functions, math operations)
+        - No obvious inefficiencies (calculations that should be uniforms)
+        - Shader is readable and reasonably commented
+    - id: react-three-fiber-integration
+      title: React Three Fiber Integration
+      type: agent
+      weight: 0.5
+      timeout: 10m
+      instructions: |
+        Review the R3F integration:
+        - Proper use of useFrame for animation
+        - Correct uniform management with refs
+        - Custom material properly defined and typed
+        - Resources cleaned up on unmount (if applicable)
+        - No React anti-patterns
+    - id: interactive-experience
+      title: Interactive Experience
+      type: aggregate
+      weight: 0
+      needs:
+        - visual-quality
+        - mouse-interactivity
+      aggregate:
+        function: min
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

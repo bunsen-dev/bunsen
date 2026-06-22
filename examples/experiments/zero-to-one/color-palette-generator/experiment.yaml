@@ -1,0 +1,186 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: color-palette-generator
+description: Build a polished color palette generator web application from scratch
+task:
+  prompt: |-
+    Build a color palette generator web application from scratch. The app should
+    generate harmonious color palettes and allow users to copy colors to clipboard.
+
+    **Requirements:**
+
+    1. **Palette Display**
+       - Display 5 color swatches in a row (or responsive grid)
+       - Each swatch should be large and visually prominent
+       - Show the hex code for each color on or near the swatch
+       - Colors should be visually harmonious (use color theory: complementary,
+         analogous, triadic, or other schemes)
+
+    2. **Generation**
+       - "Generate" button creates a new random palette
+       - Spacebar should also generate a new palette (keyboard shortcut)
+       - Option to "lock" individual colors so they persist across regenerations
+       - Locked colors should be visually indicated (lock icon or border)
+
+    3. **Copy to Clipboard**
+       - Click on a color swatch to copy its hex code
+       - Show visual feedback when copied (toast notification, animation, etc.)
+       - Include a "Copy All" button that copies all hex codes
+
+    4. **Visual Polish**
+       - Clean, minimal design that lets the colors be the focus
+       - Smooth animations for palette transitions
+       - Responsive design (stacked on mobile, row on desktop)
+       - Consider dark/light mode or a neutral background
+
+    5. **Export Options**
+       - Export palette as CSS variables
+       - Export as JSON
+       - (Bonus) Export as image/PNG
+
+    **Technical Requirements:**
+    - Use any modern JavaScript framework (React, Vue, Svelte) or vanilla JS
+    - Include a dev server that can be started with `npm run dev` or similar
+    - The app should run on port 3000 or 5173 (Vite default)
+
+    **Deliverables:**
+    - A working web application in the /workspace directory
+    - package.json with dev script
+    - All source code and assets
+workspace:
+  sources:
+    - path: ./workspace
+environment:
+  image:
+    base: bunsen/visual
+run:
+  timeout: 30m
+evaluation:
+  criteria:
+    - id: core-functionality
+      title: Core Functionality
+      type: browser-agent
+      scores:
+        - 0
+        - 0.5
+        - 1
+      timeout: 10m
+      instructions: |
+        Start the dev server and verify core functionality:
+        - 5 color swatches are displayed
+        - Click Generate button and verify colors change
+        - Each swatch shows its hex code (format: #RRGGBB)
+
+        Score 1.0 if all core features work, 0.5 if partial functionality,
+        0.0 if palette doesn't display or generate.
+    - id: color-harmony
+      title: Color Harmony
+      type: browser-agent
+      scores:
+        - 0
+        - 0.5
+        - 1
+      timeout: 10m
+      instructions: |
+        Generate several palettes and evaluate color harmony:
+        - Do the colors look intentionally chosen (not random)?
+        - Are palettes harmonious (complementary, analogous, triadic, etc.)?
+        - Would these palettes work well in a real design?
+
+        Score 1.0 if colors are consistently harmonious, 0.5 if sometimes
+        harmonious, 0.0 if colors appear random.
+    - id: interaction-features
+      title: Interaction Features
+      type: browser-agent
+      scores:
+        - 0
+        - 0.5
+        - 1
+      timeout: 10m
+      instructions: |
+        Test interactive features:
+        - Click a swatch to copy (verify toast/feedback appears)
+        - Lock a color and regenerate (verify locked color persists)
+        - Press spacebar to generate new palette
+
+        Score 1.0 if all interactions work, 0.5 if some work,
+        0.0 if interactions are broken.
+    - id: visual-design
+      title: Visual Design
+      type: browser-agent
+      scores:
+        - 0
+        - 0.25
+        - 0.5
+        - 0.75
+        - 1
+      timeout: 10m
+      instructions: |
+        Evaluate the visual design:
+        - Clean, minimal interface that highlights the colors
+        - Swatches are large and prominent
+        - Hex codes are readable (good contrast)
+        - Lock icons/indicators are clear
+        - Smooth animations on generate/copy
+
+        Score 0.25 for basic styling, 0.5 for decent design, 0.75 for polished,
+        1.0 for impressive design quality.
+    - id: responsive-layout
+      title: Responsive Layout
+      type: browser-agent
+      weight: 0.5
+      scores:
+        - 0
+        - 0.5
+        - 1
+      timeout: 10m
+      instructions: |
+        Test at different viewport sizes:
+        - Desktop (1280px): Swatches in a row, well-proportioned
+        - Mobile (375px): Layout adapts (stacked or grid)
+
+        Score 1.0 if fully responsive, 0.5 if somewhat usable on mobile,
+        0.0 if broken on mobile.
+    - id: color-algorithm
+      title: Color Algorithm
+      type: agent
+      weight: 0.5
+      timeout: 10m
+      instructions: |
+        Review the color generation algorithm:
+        - Uses proper color theory (HSL manipulation, color wheel relationships)
+        - Not just random RGB values
+        - Lock feature implementation is sound
+        - Export functions (CSS variables, JSON) work correctly
+    - id: functional-completeness
+      title: Functional Completeness
+      type: aggregate
+      weight: 0
+      needs:
+        - core-functionality
+        - interaction-features
+      aggregate:
+        function: all
+    - id: visual-excellence
+      title: Visual Excellence
+      type: aggregate
+      weight: 0
+      needs:
+        - color-harmony
+        - visual-design
+        - responsive-layout
+      aggregate:
+        function: weighted_average
+    - id: user-experience-quality
+      title: User Experience Quality
+      type: aggregate
+      weight: 0
+      needs:
+        - core-functionality
+        - interaction-features
+        - visual-design
+      aggregate:
+        function: min
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

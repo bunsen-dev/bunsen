@@ -1,0 +1,39 @@
+$schema: https://schemas.bunsen.dev/agent.v1.json
+version: v1
+name: echo-agent
+description: |
+  A simple test agent that echoes the task back.
+  Useful for testing the platform without any AI calls.
+
+  Test-only deviation: this agent intentionally relies on substrate Python
+  (stdlib only) rather than shipping its own via install.deps. Portability
+  is not load-bearing for a demo agent — it just needs Python on PATH.
+  Real agents should ship their own runtime (see basic-coding-agent for the
+  python-build-standalone pattern).
+
+install:
+  source:
+    type: local
+
+entrypoint:
+  command: python src/main.py
+
+interaction:
+  mode: direct
+
+examples:
+  - prompt: Do something
+    invocation: python /agent/src/main.py "Do something"
+
+variants:
+  verbose:
+    description: Echo with verbose output
+    entrypoint:
+      args:
+        - --verbose
+
+  quiet:
+    description: Minimal output
+    defaults:
+      env:
+        QUIET_MODE: "true"

@@ -1,0 +1,51 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: fix-the-bug
+description: Fix a simple bug in a Python CLI tool
+task:
+  prompt: |-
+    The code in /workspace has a bug. When you run `python main.py`,
+    it throws a TypeError on line 12.
+
+    Fix the bug and verify your fix by running the tests with `pytest`.
+
+    The fix should be minimal - only change what's necessary.
+workspace:
+  sources:
+    - path: ./workspace
+environment:
+  image:
+    base: bunsen/headless
+  requires:
+    packages:
+      pip:
+        - pytest
+evaluation:
+  criteria:
+    - id: tests-pass
+      title: Tests Pass
+      type: script
+      scores:
+        - 0
+        - 1
+      gate:
+        ifBelow: 1
+      run: cd /workspace && pytest --tb=short
+    - id: minimal-changes
+      title: Minimal Changes
+      type: judge
+      instructions: |
+        Review the diff to verify minimal changes:
+        - Only the bug fix is included (no unrelated refactoring)
+        - No unnecessary whitespace or formatting changes
+        - No added comments, docstrings, or other additions
+        - The fix addresses the root cause directly
+    - id: code-quality
+      title: Code Quality
+      type: judge
+      weight: 0.5
+      instructions: |
+        Review the quality of the fix:
+        - Fix is idiomatic Python
+        - Solution is correct (not a workaround or hack)
+        - No new bugs introduced

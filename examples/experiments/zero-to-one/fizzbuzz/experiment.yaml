@@ -1,0 +1,71 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: fizzbuzz
+description: Implement FizzBuzz with code-based evaluation
+task:
+  prompt: |-
+    Create a Python program in /workspace/fizzbuzz.py that implements FizzBuzz.
+
+    The program should:
+    1. Define a function `fizzbuzz(n)` that returns a list of strings for numbers 1 to n
+    2. For multiples of 3, use "Fizz"
+    3. For multiples of 5, use "Buzz"
+    4. For multiples of both 3 and 5, use "FizzBuzz"
+    5. For other numbers, use the string representation of the number
+
+    Also create a test file /workspace/test_fizzbuzz.py with pytest tests.
+
+    When run as a script (`python fizzbuzz.py`), it should print FizzBuzz for 1-100.
+workspace:
+  sources:
+    - path: ./workspace
+environment:
+  image:
+    base: bunsen/headless
+  requires:
+    packages:
+      pip:
+        - pytest
+evaluation:
+  criteria:
+    - id: program-runs
+      title: Program Runs
+      type: script
+      scores:
+        - 0
+        - 1
+      gate:
+        ifBelow: 1
+      run: cd /workspace && python fizzbuzz.py > /dev/null
+    - id: correct-output
+      title: Correct Output
+      type: script
+      gate:
+        ifBelow: 1
+      run: python /bunsen/verifiers/check_fizzbuzz.py
+    - id: tests-pass
+      title: Tests Pass
+      type: script
+      scores:
+        - 0
+        - 1
+      run: cd /workspace && pytest -v --tb=short
+    - id: code-quality
+      title: Code Quality
+      type: judge
+      weight: 0.5
+      instructions: |
+        Review the code quality:
+        - Clean, readable implementation
+        - Appropriate use of Python idioms
+        - Tests cover edge cases (0, 1, 15, etc.)
+    - id: overall
+      title: Overall
+      type: aggregate
+      weight: 0
+      needs:
+        - program-runs
+        - correct-output
+        - tests-pass
+      aggregate:
+        function: all

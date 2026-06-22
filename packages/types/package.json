@@ -1,0 +1,47 @@
+{
+  "name": "@bunsen-dev/types",
+  "version": "0.1.0",
+  "description": "Type definitions for Bunsen",
+  "author": "Matthew Job Granmoe",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bunsen-dev/bunsen.git",
+    "directory": "packages/types"
+  },
+  "homepage": "https://bunsen.dev",
+  "bugs": "https://github.com/bunsen-dev/bunsen/issues",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "schemas",
+    "LICENSE",
+    "LICENSING.md",
+    "THIRD_PARTY.md"
+  ],
+  "scripts": {
+    "build": "tsc && mkdir -p dist/schemas && cp schemas/*.json dist/schemas/",
+    "prepack": "cp ../../LICENSE ../../LICENSING.md ../../THIRD_PARTY.md .",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  }
+}

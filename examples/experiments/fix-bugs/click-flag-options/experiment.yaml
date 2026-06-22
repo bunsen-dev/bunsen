@@ -1,0 +1,86 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: click-flag-options
+description: Fix Click handling of options with mixed flag settings
+task:
+  prompt: |-
+    The Click CLI library has a bug in how it handles options that set both
+    `is_flag=False` and `flag_value=...`.
+
+    Example that should work but doesn't:
+    ```python
+    @click.option('--verbose', is_flag=False, flag_value='debug', default='info')
+    def cli(verbose):
+        # --verbose with no arg should give 'debug'
+        # --verbose=warn should give 'warn'
+        # no flag should give 'info'
+        pass
+    ```
+
+    The current implementation doesn't correctly handle this edge case where
+    a user explicitly sets `is_flag=False` but still wants flag-style behavior
+    with a default flag value.
+
+    Find and fix the bug in Click's option handling code. Run `pytest tests/`
+    to verify your fix doesn't break existing functionality.
+workspace:
+  sources:
+    - path: ./workspace
+  setup:
+    - run: pip install -e ".[dev]"
+environment:
+  image:
+    base: bunsen/headless
+evaluation:
+  criteria:
+    - id: tests-pass
+      title: Tests Pass
+      type: agent
+      scores:
+        - 0
+        - 1
+      instructions: |
+        Run `pytest tests/` to verify:
+        - All existing Click tests still pass
+        - New test for is_flag=False with flag_value passes
+
+        Score 1.0 if all tests pass, 0.0 if any tests fail.
+    - id: fix-correctness
+      title: Fix Correctness
+      type: judge
+      instructions: |
+        Review the fix for correctness:
+        - --verbose with no arg gives flag_value ('debug')
+        - --verbose=warn gives 'warn'
+        - No flag gives default ('info')
+        - Fix handles the is_flag=False + flag_value combination
+    - id: click-understanding
+      title: Click Understanding
+      type: judge
+      instructions: |
+        Does the fix show understanding of Click's option system?
+        - Correctly identifies where option parsing handles flags
+        - Understands the interaction between is_flag, flag_value, and default
+        - Fix is consistent with Click's overall design philosophy
+        - Doesn't break other flag/option combinations
+    - id: test-coverage
+      title: Test Coverage
+      type: judge
+      instructions: |
+        Review the added tests:
+        - Test covers the is_flag=False + flag_value case
+        - Test verifies all three scenarios (no flag, flag alone, flag with value)
+        - Test follows existing Click test patterns
+        - Test provides good regression coverage
+    - id: minimal-changes
+      title: Minimal Changes
+      type: judge
+      weight: 0.5
+      instructions: |
+        Review the diff for minimality:
+        - Changes only to option handling code
+        - No unrelated refactoring
+        - Fix is focused and surgical
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

@@ -1,0 +1,96 @@
+name: Publish npm packages
+
+# Publishes the three public packages — @bunsen-dev/types, @bunsen-dev/sdk, @bunsen-dev/cli —
+# to npm with SLSA provenance. The internal packages (@bunsen-dev/runtime,
+# @bunsen-dev/agents, @bunsen-dev/diff-filter) are marked "private": true and
+# `pnpm -r publish` skips them automatically.
+#
+# How auth works here: pnpm packs each public package (rewriting `workspace:*`
+# to real versions) and shells out to the `npm` CLI to upload. The npm CLI is
+# what performs both provenance generation and OIDC "Trusted Publishing", so we
+# pin a modern npm (>= 11.5.1) on the runner below.
+#
+# ── One-time setup that must happen OUTSIDE this file ───────────────────────────
+#   1. (Recommended) On npmjs.com, configure a Trusted Publisher for EACH public
+#      package (Settings → Trusted Publisher) pointing at:
+#         repo: bunsen-dev/bunsen   workflow: .github/workflows/publish-npm.yaml
+#      Once configured AND the runner npm is >= 11.5.1 (ensured below), the
+#      `id-token: write` permission makes publishing TOKENLESS.
+#   2. Enable 2FA on the bunsen-dev npm org (required-for-write).
+#   3. Until Trusted Publishing is configured, publishing requires an automation
+#      `NPM_TOKEN` org secret (read via NODE_AUTH_TOKEN below). The token stays
+#      wired as a fallback; it is simply unused once tokenless OIDC is live.
+#
+# `provenance: true` is set in each package's publishConfig (plus
+# NPM_CONFIG_PROVENANCE below), so provenance + Sigstore attestations are
+# generated automatically on publish.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build + pack only (do not publish)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # OIDC: npm Trusted Publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        # Version comes from the root package.json "packageManager" field
+        # (pnpm@9.1.1). Do NOT also set `version:` here — pnpm/action-setup
+        # errors with "Multiple versions of pnpm specified" when both exist.
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Ensure a provenance/OIDC-capable npm
+        # Node 22 bundles npm 10.x, which lacks provenance + Trusted Publishing.
+        # pnpm delegates the actual upload to the `npm` CLI, so a modern npm here
+        # is what enables both. Required for the tokenless OIDC path.
+        run: npm install -g npm@latest && npm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        # `pnpm -r build` builds in topological order; @bunsen-dev/agents' build emits
+        # the platform .cjs bundles, and @bunsen-dev/cli's build bundles host code and
+        # assembles dist/assets/ (agent bundles + proxy + base-image Dockerfiles).
+        run: pnpm -r build
+
+      - name: Pack (dry run)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        # `pnpm pack` is single-package only — combining it with `--filter` makes pnpm
+        # attempt a recursive run and fail with "Unknown option: 'recursive'". Pack each
+        # public package in its own dir instead (resolves workspace:* + runs prepack,
+        # mirroring what `pnpm -r publish` does at release time).
+        run: |
+          for pkg in types sdk cli; do
+            echo "── packing @bunsen-dev/$pkg ──"
+            ( cd "packages/$pkg" && pnpm pack )
+          done
+
+      - name: Publish public packages with provenance
+        if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
+        # `pnpm -r publish` walks the workspace in topological order
+        # (types → sdk → cli) and skips every "private": true package.
+        run: pnpm -r publish --access public --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

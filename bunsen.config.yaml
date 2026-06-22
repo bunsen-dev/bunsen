@@ -1,0 +1,27 @@
+$schema: https://schemas.bunsen.dev/project.v1.json
+version: v1
+name: agent-lab
+
+paths:
+  experiments:
+    - examples/experiments
+  agents:
+    - examples/agents
+
+# Terminal Bench is consumed as an external suite. The canonical id is derived
+# from the clone URL (github.com/bunsen-dev/terminal-bench); `as: terminal-bench`
+# is just a local alias for `bn run terminal-bench/<task>`. The cache is
+# managed by `bn suites add/update` under `.bunsen/suites/`.
+suites:
+  - source:
+      type: git
+      url: https://github.com/bunsen-dev/terminal-bench.git
+    as: terminal-bench
+
+defaults:
+  envFiles:
+    - .env
+  passEnv:
+    - ANTHROPIC_API_KEY
+    - OPENAI_API_KEY
+    - GEMINI_API_KEY

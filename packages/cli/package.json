@@ -1,0 +1,60 @@
+{
+  "name": "@bunsen-dev/cli",
+  "version": "0.1.0",
+  "description": "CLI for Bunsen — a general-purpose experiment runner for agentic systems",
+  "author": "Matthew Job Granmoe",
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bunsen-dev/bunsen.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://bunsen.dev",
+  "bugs": "https://github.com/bunsen-dev/bunsen/issues",
+  "bin": {
+    "bn": "./dist/bin.js",
+    "bunsen": "./dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "LICENSING.md",
+    "THIRD_PARTY.md"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "cp ../../LICENSE ../../LICENSING.md ../../THIRD_PARTY.md .",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@braintrust/lingua": "^0.1.0",
+    "better-sqlite3": "^12.1.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "dockerode": "^4.0.0",
+    "ignore": "^7.0.5",
+    "js-yaml": "^4.1.0",
+    "ora": "^8.0.0",
+    "ulid": "^3.0.2"
+  },
+  "devDependencies": {
+    "@bunsen-dev/agents": "workspace:*",
+    "@bunsen-dev/runtime": "workspace:*",
+    "@bunsen-dev/types": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@bunsen-dev/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal execution engine for Bunsen. Not part of the public API — use @bunsen-dev/sdk instead.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && mkdir -p dist/assets/proxy && cp src/proxy/*.py dist/assets/proxy/ && cp src/proxy/*.json dist/assets/proxy/",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run && pnpm test:proxy",
+    "test:watch": "vitest",
+    "test:proxy": "python3 src/proxy/ai_capture_test.py",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@braintrust/lingua": "^0.1.0",
+    "@bunsen-dev/diff-filter": "workspace:*",
+    "@bunsen-dev/types": "workspace:*",
+    "better-sqlite3": "^12.1.0",
+    "dockerode": "^4.0.0",
+    "ignore": "^7.0.5",
+    "js-yaml": "^4.1.0",
+    "ulid": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/dockerode": "^3.3.0",
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  }
+}

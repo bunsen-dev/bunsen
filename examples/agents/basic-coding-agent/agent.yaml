@@ -1,0 +1,79 @@
+$schema: https://schemas.bunsen.dev/agent.v1.json
+version: v1
+name: basic-coding-agent
+description: |
+  A minimal but functional coding agent with file and bash tools.
+
+  Tools:
+  - list_files: List directory contents
+  - read_file: Read file contents
+  - edit_file: Find and replace text in files
+  - bash: Run shell commands
+
+install:
+  source:
+    type: local
+
+  # The agent runs `python /agent/main.py` and requires the `anthropic`
+  # package. Ship Python + the package via `install.deps`
+  # (python-build-standalone) so the agent works against any substrate —
+  # including images with no Python at all.
+  deps:
+    - name: python
+      version: "3.11.10"
+      description: |
+        Astral python-build-standalone distribution (glibc closure).
+        Bundles the runtime, stdlib, and the `anthropic` package preinstalled
+        into the dep's site-packages so the agent runs without any pip step
+        at run time.
+      image: debian:bookworm-slim
+      linkage: closure
+      abi:
+        libc: glibc
+        libc_version: ">=2.31"
+      provides:
+        binaries: [python, python3, pip, pip3]
+      install:
+        - target: linux/amd64
+          run:
+            - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+            - curl -fsSL https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.11.10+20241016-x86_64-unknown-linux-gnu-install_only.tar.gz -o /tmp/py.tar.gz
+            - mkdir -p /tmp/py-extract && tar -xzf /tmp/py.tar.gz -C /tmp/py-extract
+            - mkdir -p /output/bin /output/lib
+            - cp -a /tmp/py-extract/python/bin/. /output/bin/
+            - cp -a /tmp/py-extract/python/lib/. /output/lib/
+            - /output/bin/pip3 install --no-cache-dir --target /output/lib/python3.11/site-packages anthropic
+        - target: linux/arm64
+          run:
+            - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl ca-certificates
+            - curl -fsSL https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.11.10+20241016-aarch64-unknown-linux-gnu-install_only.tar.gz -o /tmp/py.tar.gz
+            - mkdir -p /tmp/py-extract && tar -xzf /tmp/py.tar.gz -C /tmp/py-extract
+            - mkdir -p /output/bin /output/lib
+            - cp -a /tmp/py-extract/python/bin/. /output/bin/
+            - cp -a /tmp/py-extract/python/lib/. /output/lib/
+            - /output/bin/pip3 install --no-cache-dir --target /output/lib/python3.11/site-packages anthropic
+
+entrypoint:
+  command: python /agent/main.py
+
+interaction:
+  mode: direct
+
+# main.py reads its model from AGENT_MODEL. `bn run <exp> basic-coding-agent
+# --model <id>` sets it at CLI precedence; with no flag, `default` is used.
+model:
+  env: AGENT_MODEL
+  default: claude-sonnet-4-6
+
+examples:
+  - prompt: Fix the bug in main.py
+    invocation: python /agent/main.py "Fix the bug in main.py"
+
+# Behavioral overlays only — pick the model with `--model`
+# (e.g. `basic-coding-agent --model claude-haiku-4-5`).
+variants:
+  quick:
+    description: Limited to 5 turns for quick tests
+    defaults:
+      env:
+        AGENT_MAX_TURNS: "5"

@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.bunsen.dev/project.v1.json",
+  "title": "Bunsen Project Config (v1)",
+  "description": "Authoritative schema for bunsen.config.yaml v1. See docs/PROJECT_CONFIG.md.",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": "v1" },
+    "name": { "type": "string" },
+
+    "paths": { "$ref": "#/$defs/paths" },
+    "suites": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/suiteEntry" }
+    },
+    "storage": { "$ref": "#/$defs/storage" },
+    "defaults": { "$ref": "#/$defs/defaults" },
+    "registries": { "$ref": "#/$defs/registries" }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "duration": { "type": "string", "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h)$" },
+    "platform": { "type": "string", "enum": ["linux/amd64", "linux/arm64"] },
+
+    "paths": {
+      "type": "object",
+      "properties": {
+        "experiments": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "agents": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "precedence": {
+          "type": "string",
+          "enum": ["local", "suites"]
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "suiteEntry": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": { "$ref": "#/$defs/suiteSource" },
+        "as": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "cacheDir": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "suiteSource": {
+      "type": "object",
+      "required": ["type", "url"],
+      "properties": {
+        "type": { "const": "git" },
+        "url": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "storage": {
+      "type": "object",
+      "properties": {
+        "root": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "run": { "$ref": "#/$defs/runDefaults" },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "passEnv": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "envFiles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "runDefaults": {
+      "type": "object",
+      "properties": {
+        "timeout": { "$ref": "#/$defs/duration" },
+        "platform": {
+          "oneOf": [
+            { "const": "auto" },
+            { "$ref": "#/$defs/platform" }
+          ]
+        },
+        "capture": { "$ref": "#/$defs/capture" },
+        "supervisor": { "$ref": "#/$defs/supervisor" }
+      },
+      "additionalProperties": false
+    },
+
+    "capture": {
+      "type": "object",
+      "properties": {
+        "traces": { "type": "boolean" },
+        "recording": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+
+    "supervisor": {
+      "type": "object",
+      "properties": {
+        "stallTimeout": { "$ref": "#/$defs/duration" },
+        "maxCheckInterval": { "$ref": "#/$defs/duration" }
+      },
+      "additionalProperties": false
+    },
+
+    "registries": {
+      "type": "object",
+      "properties": {
+        "images": { "$ref": "#/$defs/imageRegistry" }
+      },
+      "additionalProperties": false
+    },
+
+    "imageRegistry": {
+      "type": "object",
+      "properties": {
+        "headless": { "type": "string", "minLength": 1 },
+        "browser": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

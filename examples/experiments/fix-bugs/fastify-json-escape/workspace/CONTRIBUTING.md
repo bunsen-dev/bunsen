@@ -1,0 +1,169 @@
+# Fastify is an OPEN Open Source Project
+
+## What?
+
+Individuals making significant and valuable contributions are given
+commit-access to the project to contribute as they see fit. This project is more
+like an open wiki than a standard guarded open source project.
+
+See our [informal contributing guide](./docs/Guides/Contributing.md) for more
+details on contributing to this project.
+
+### I want to be a collaborator!
+
+If you think you meet the above criteria and we have not invited you yet, we are
+sorry! Feel free to reach out to a [Lead
+Maintainer](https://github.com/fastify/fastify#team) privately with a few links
+to your valuable contributions. Read the [GOVERNANCE](GOVERNANCE.md) to get more
+information.
+
+## Rules
+
+There are a few basic ground rules for contributors:
+
+1. **No `--force` pushes** on `main` or modifying the Git history in any way
+   after a PR has been merged.
+1. **Non-main branches** ought to be used for ongoing work.
+1. **External API changes and significant modifications** ought to be subject to
+   an **internal pull request** to solicit feedback from other contributors.
+1. Internal pull requests to solicit feedback are *encouraged* for any other
+   non-trivial contribution but are left to the discretion of the contributor.
+1. Contributors should attempt to adhere to the prevailing code style.
+1. At least two contributors, or one core member, must approve pull requests
+   before merging.
+1. All integrated CI services must be green before a pull request can be merged.
+1. A lead maintainer must merge SemVer-major changes in this repository.
+1. If it is not possible to reach a consensus in a pull request, the decision
+   is left to the lead maintainer's team.
+
+### Fastify previous versions
+
+Every version of Fastify has its own branch. All Fastify related
+changes should be based on the corresponding branch.
+
+We have a [Long Term Support](./docs/Reference/LTS.md) policy that defines
+the organization's efforts for each Fastify's version.
+
+|Version|Branch|
+|-------|------|
+**v1.x**|[branch 1.x](https://github.com/fastify/fastify/tree/1.x)|
+**v2.x**|[branch 2.x](https://github.com/fastify/fastify/tree/2.x)|
+**v3.x**|[branch 3.x](https://github.com/fastify/fastify/tree/3.x)|
+**v4.x**|[branch 4.x](https://github.com/fastify/fastify/tree/4.x)|
+
+## Releases
+
+Declaring formal releases remains the prerogative of the lead maintainers. Do
+not bump version numbers in pull requests.
+
+## Plugins
+
+Contributors to Fastify plugins must follow the same rules as the main Fastify repository,
+ with a few adjustments:
+
+1. Any member can publish a release.
+1. The plugin version must follow the [semver](https://semver.org/)
+   specification.
+1. The Node.js compatibility must match with Fastify's main branch.
+1. The new release must have the changelog information stored in the GitHub
+     release. For this we suggest adopting a tool like
+     [`releasify`](https://github.com/fastify/releasify) to achieve this.
+1. PR opened by bots (like Dependabot) can be merged if the CI is green and the
+   Node.js versions supported are the same as the plugin.
+
+## Changes to this arrangement
+
+This is an experiment and feedback is welcome! This document may also be subject
+to pull requests or changes by contributors where you believe you have something
+valuable to add or change.
+
+# Fastify Organization Structure
+
+The Fastify structure is detailed in the [GOVERNANCE](GOVERNANCE.md) document.
+
+### Onboarding Collaborators
+
+Welcome to the team! We are happy to have you. Before you start, please complete
+the following tasks:
+1. Set up 2 factor authentication for GitHub and NPM
+    - [GitHub
+    2FA](https://help.github.com/en/articles/securing-your-account-with-two-factor-authentication-2fa)
+    - [NPM 2FA](https://docs.npmjs.com/about-two-factor-authentication)
+2. Choose which team to join *(more than one is ok!)* based on how you want to
+   help.
+    - Core team: maintains core Fastify and its documentation
+    - Plugins team: maintains Fastify's plugins and its ecosystem
+3. Open a pull request to
+   [`fastify/fastify:HEAD`](https://github.com/fastify/fastify/pulls) that adds
+   your name, username, and email to the team you have chosen in the
+   [README.md](./README.md) and [package.json](./package.json) *(if you are part
+   of the core team)* files. The member lists are sorted alphabetically by last
+   name; make sure to add your name in the proper order.
+4. Open a pull request to
+   [`fastify/website:HEAD`](https://github.com/fastify/website/pulls) adding
+   yourself to the
+   [team.yml](https://github.com/fastify/website/blob/HEAD/static/data/team.yml)
+   file. This list is also sorted alphabetically so make sure to add your name
+   in the proper order. Use your GitHub profile icon for the `picture:` field.
+5. Read the [pinned announcements](https://github.com/orgs/fastify/discussions/categories/announcements)
+   to be updated with the organization’s news.
+6. The person who does the onboarding must open a pull request to
+   [`fastify/org-admin`](https://github.com/fastify/org-admin?tab=readme-ov-file#org-admin) 
+   so an admin can add the new member to the
+   [npm org](https://www.npmjs.com/org/fastify) and the GitHub Team,
+   so that the new joiner can help maintain the official plugins.
+8. Optionally, the person can be added as an Open Collective member
+   by the lead team.
+
+### Offboarding Collaborators
+
+We are thankful to you and we are really glad to have worked with you. We'd be
+really happy to see you here again if you want to come back, but for now the
+person that did the onboarding must:
+1. Ask the collaborator if they want to stay or not.
+1. If the collaborator can't work with us anymore, they should:
+  1. Open a pull request to
+     [`fastify/fastify:HEAD`](https://github.com/fastify/fastify/pulls) and move
+     themselves to the *Past Collaborators* section.
+  2. Open a pull request to
+     [`fastify/website:HEAD`](https://github.com/fastify/website/pulls) and move
+     themselves to the *Past Collaborators* section in the
+     [team.yml](https://github.com/fastify/website/blob/HEAD/static/data/team.yml)
+     file.
+
+The person that did the onboarding must:
+1. If the collaborator does not reply to the ping in a reasonable time, open the
+   pull requests described above.
+2. Open a pull request to [`fastify/org-admin`](https://github.com/fastify/org-admin?tab=readme-ov-file#org-admin)
+   so an admin will:
+  1. Remove the collaborator from the Fastify teams on GitHub.
+  2. Remove the collaborator from the [npm
+   org](https://www.npmjs.com/org/fastify).
+  3. Remove the collaborator from the Azure team.
+  4. Remove the collaborator from the Open Collective members.
+
+-----------------------------------------
+
+<a id="developers-certificate-of-origin"></a>
+## Developer's Certificate of Origin 1.1
+
+By making a contribution to this project, I certify that:
+
+* (a) The contribution was created in whole or in part by me and I have the
+  right to submit it under the open source license indicated in the file; or
+
+* (b) The contribution is based upon previous work that, to the best of my
+  knowledge, is covered under an appropriate open source license and I have the
+  right under that license to submit that work with modifications, whether
+  created in whole or in part by me, under the same open source license (unless
+  I am permitted to submit under a different license), as indicated in the file;
+  or
+
+* (c) The contribution was provided directly to me by some other person who
+  certified (a), (b) or (c) and I have not modified it.
+
+* (d) I understand and agree that this project and the contribution are public
+  and that a record of the contribution (including all personal information I
+  submit with it, including my sign-off) is maintained indefinitely and may be
+  redistributed consistent with this project or the open source license(s)
+  involved.

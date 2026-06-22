@@ -1,0 +1,108 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: vercel-ai-xai-errors
+description: Fix xAI error handling when API returns errors with HTTP 200 status
+task:
+  prompt: |-
+    The Vercel AI SDK's xAI provider has a bug where error responses from the xAI API
+    are not properly handled when they come with HTTP 200 status codes.
+
+    The xAI API sometimes returns error responses like this with a 200 status:
+    ```json
+    {"code":"The service is currently unavailable","error":"Timed out waiting for first token"}
+    ```
+
+    Instead of detecting this as an error, the SDK tries to parse it as a valid response,
+    resulting in confusing validation errors like:
+    ```
+    Type validation failed: Value: {"code":"The service is currently unavailable"...}
+    Error message: [{"expected":"array","code":"invalid_type","path":["choices"],
+    "message":"Invalid input: expected array, received undefined"}]
+    ```
+
+    The fix should be in `packages/xai/src/xai-chat-language-model.ts`. Both the
+    `doGenerate` and `doStream` methods need to detect error responses and throw
+    a proper `APICallError` with the actual error message.
+
+    Find and fix this bug. The fix should:
+    1. Detect error responses (check for `code` and `error` fields in response)
+    2. Throw `APICallError` with the actual error message from xAI
+    3. Mark service unavailable errors as retryable
+    4. Handle both generate and stream scenarios
+    5. Add tests for both generate and stream error cases
+
+    Run `pnpm test --filter @ai-sdk/xai` to verify your fix.
+workspace:
+  sources:
+    - path: ./workspace
+  setup:
+    - run: pnpm install
+      timeout: 15m
+environment:
+  image:
+    base: bunsen/headless
+  requires:
+    packages:
+      npm:
+        - pnpm
+evaluation:
+  criteria:
+    - id: tests-pass
+      title: Tests Pass
+      type: agent
+      scores:
+        - 0
+        - 1
+      instructions: |
+        Run `pnpm test --filter @ai-sdk/xai` to verify:
+        - All existing tests still pass
+        - New tests for error handling pass
+
+        Score 1.0 if all tests pass, 0.0 if any tests fail.
+    - id: both-methods-handled
+      title: Both Methods Handled
+      type: judge
+      scores:
+        - 0
+        - 0.5
+        - 1
+      instructions: |
+        Review the diff to verify both methods are fixed:
+        - doGenerate method detects error responses with 200 status
+        - doStream method detects error responses with 200 status
+        - Both throw APICallError with the actual xAI error message
+
+        Score 1.0 if both methods handled, 0.5 if only one,
+        0.0 if neither.
+    - id: error-handling-quality
+      title: Error Handling Quality
+      type: judge
+      instructions: |
+        Review the error handling implementation:
+        - Checks for `code` and `error` fields in response body
+        - Throws APICallError (not generic Error)
+        - Error message includes the actual xAI error text
+        - Service unavailable errors marked as retryable
+        - Pattern matches existing SDK error handling conventions
+    - id: test-coverage
+      title: Test Coverage
+      type: judge
+      instructions: |
+        Review the added tests:
+        - Test for doGenerate error handling exists
+        - Test for doStream error handling exists
+        - Tests verify APICallError is thrown
+        - Tests verify error message content
+        - Tests follow existing test patterns in the codebase
+    - id: minimal-changes
+      title: Minimal Changes
+      type: judge
+      weight: 0.5
+      instructions: |
+        Review the diff for minimality:
+        - Only changes necessary for the fix
+        - No unrelated refactoring
+        - Follows existing code patterns in the file
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

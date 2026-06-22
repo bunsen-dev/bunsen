@@ -1,0 +1,89 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: click-context-sentinel
+description: Fix Click context exposing internal UNSET sentinel to callbacks
+task:
+  prompt: |-
+    The Click CLI library has a regression. Internal `UNSET` sentinel values
+    are being exposed to option callbacks instead of `None`.
+
+    When a user defines an option callback like this:
+    ```python
+    @click.option('--name', callback=my_callback)
+    def cli(name):
+        pass
+    ```
+
+    The callback receives the context object, but `ctx.params` contains
+    `UNSET` sentinel values for unset parameters instead of `None`.
+
+    This breaks downstream libraries like Flask that check `if param is None`.
+
+    Fix the bug so that:
+    1. Callbacks receive a context where `UNSET` values appear as `None`
+    2. Internal code can still access the real `UNSET` values when needed
+    3. Existing tests continue to pass
+
+    Run `pytest tests/` to verify your fix.
+workspace:
+  sources:
+    - path: ./workspace
+  setup:
+    - run: pip install -e ".[dev]"
+environment:
+  image:
+    base: bunsen/headless
+evaluation:
+  criteria:
+    - id: tests-pass
+      title: Tests Pass
+      type: agent
+      scores:
+        - 0
+        - 1
+      instructions: |
+        Run `pytest tests/` to verify:
+        - All existing Click tests still pass
+        - New test for UNSET sentinel handling passes
+
+        Score 1.0 if all tests pass, 0.0 if any tests fail.
+    - id: fix-correctness
+      title: Fix Correctness
+      type: judge
+      instructions: |
+        Review the fix for correctness:
+        - Callbacks receive context where ctx.params shows None (not UNSET)
+        - Internal Click code can still access real UNSET values when needed
+        - Fix handles the case where options have callbacks
+        - Fix doesn't break Flask and other downstream libraries
+    - id: api-compatibility
+      title: API Compatibility
+      type: judge
+      instructions: |
+        Does the fix preserve the expected API?
+        - External API contract unchanged (params appear as None for unset)
+        - Internal UNSET sentinel still works for Click's logic
+        - No changes to public method signatures
+        - Backwards compatible with existing Click usage
+    - id: test-coverage
+      title: Test Coverage
+      type: judge
+      instructions: |
+        Review the added tests:
+        - Test verifies callbacks see None (not UNSET) for unset params
+        - Test covers the edge case described in the task
+        - Test follows existing Click test patterns
+        - Test provides good regression coverage
+    - id: code-quality
+      title: Code Quality
+      type: judge
+      weight: 0.5
+      instructions: |
+        Is the solution clean and maintainable?
+        - Fix is minimal and focused
+        - Code is readable and follows Click's style
+        - No hacky workarounds
+        - Solution is robust to edge cases
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

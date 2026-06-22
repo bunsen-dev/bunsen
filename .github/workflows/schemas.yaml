@@ -1,0 +1,38 @@
+name: Schemas
+
+# Guards the schemas published at schemas.bunsen.dev (served by apps/web from
+# packages/types/schemas — see apps/web/scripts/sync-schemas.mjs). Fails if any
+# of the four schemas is missing, is invalid JSON, or has a $id that no longer
+# matches its frozen https://schemas.bunsen.dev/<name>.v1.json URL. The .v1.json
+# ids are frozen: a schema change becomes v2, never an in-place edit.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/types/schemas/**"
+      - "apps/web/scripts/sync-schemas.mjs"
+      - ".github/workflows/schemas.yaml"
+  pull_request:
+    paths:
+      - "packages/types/schemas/**"
+      - "apps/web/scripts/sync-schemas.mjs"
+      - ".github/workflows/schemas.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify schemas (presence, validity, frozen $ids)
+        run: node apps/web/scripts/sync-schemas.mjs --check

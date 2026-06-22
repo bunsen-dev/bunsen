@@ -1,0 +1,99 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: anthropic-stream-errors
+description: Fix uncatchable stream errors in Anthropic TypeScript SDK
+task:
+  prompt: |-
+    The Anthropic TypeScript SDK has a bug where errors from `messages.stream().withResponse()`
+    are uncatchable. When using the streaming API with `.withResponse()`, errors exhibit
+    strange dual behavior: they are caught by try-catch blocks BUT also thrown as uncaught
+    exceptions that crash the Node.js process.
+
+    For example, this code:
+    ```typescript
+    try {
+      const { data: stream } = await anthropic.messages
+        .stream({
+          max_tokens: 1,
+          messages: [],  // invalid - will cause an error
+          model: 'claude-sonnet-4-5',
+        })
+        .withResponse();
+    } catch (e) {
+      console.log('Caught:', e);  // This runs...
+    }
+    // ...but the error ALSO triggers process.on('uncaughtException')!
+    ```
+
+    The issue is in `src/lib/MessageStream.ts`. The error handling doesn't properly
+    track when a catching promise has been created, so errors propagate both to the
+    catch block AND as unhandled rejections.
+
+    Find and fix this bug. The fix should:
+    1. Ensure errors are only thrown once (caught by try-catch, not also uncaught)
+    2. Work for both `.withResponse()` and other promise-returning methods
+    3. Add a test to verify the fix
+
+    Run `npm test` to verify your fix doesn't break existing tests.
+workspace:
+  sources:
+    - path: ./workspace
+  setup:
+    - run: npm install
+environment:
+  image:
+    base: bunsen/headless
+evaluation:
+  criteria:
+    - id: tests-pass
+      title: Tests Pass
+      type: agent
+      scores:
+        - 0
+        - 1
+      instructions: |
+        Run `npm test` to verify:
+        - All existing tests still pass
+        - New test for withResponse() error handling passes
+
+        Score 1.0 if all tests pass, 0.0 if any tests fail.
+    - id: fix-correctness
+      title: Fix Correctness
+      type: agent
+      instructions: |
+        Review the fix in MessageStream.ts:
+        - Errors caught by try-catch should NOT also trigger uncaught exception
+        - The fix properly tracks when a catching promise exists
+        - Error propagation is handled correctly for all promise-returning methods
+        - The fix doesn't break normal error handling flow
+    - id: root-cause-understanding
+      title: Root Cause Understanding
+      type: agent
+      instructions: |
+        Does the fix address the root cause?
+        - The issue is errors propagating to both catch handler AND uncaught
+        - Fix should track whether an error handler is attached
+        - Fix should prevent double-emission of the error
+        - Not just a workaround (e.g., swallowing errors)
+    - id: test-coverage
+      title: Test Coverage
+      type: agent
+      instructions: |
+        Review the added test:
+        - Test specifically covers the withResponse() error case
+        - Test verifies errors are catchable
+        - Test verifies no uncaught exception is thrown
+        - Test follows existing test patterns in the SDK
+    - id: minimal-changes
+      title: Minimal Changes
+      type: agent
+      weight: 0.5
+      instructions: |
+        Review the diff for minimality:
+        - Changes focused on MessageStream.ts (and test file)
+        - No unrelated refactoring
+        - No changes to public API surface
+        - Follows existing code style
+  report:
+    instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    needs: all

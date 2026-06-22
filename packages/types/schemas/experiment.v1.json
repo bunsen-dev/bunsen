@@ -1,0 +1,423 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.bunsen.dev/experiment.v1.json",
+  "title": "Bunsen Experiment (v1)",
+  "description": "Authoritative schema for experiment.yaml v1. See docs/EXPERIMENT_YAML.md.",
+  "type": "object",
+  "required": ["version", "name", "task", "environment", "evaluation"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": "v1" },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "description": { "type": "string" },
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "task": { "$ref": "#/$defs/task" },
+    "workspace": { "$ref": "#/$defs/workspace" },
+    "environment": { "$ref": "#/$defs/environment" },
+    "run": { "$ref": "#/$defs/run" },
+    "evaluation": { "$ref": "#/$defs/evaluation" },
+    "env": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "passEnv": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "variants": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/variant" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "duration": { "type": "string", "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h)$" },
+    "platform": { "type": "string", "enum": ["linux/amd64", "linux/arm64"] },
+    "executionUser": { "type": "string", "enum": ["user", "root"] },
+    "runtimeName": { "type": "string", "enum": ["node", "python", "go", "rust", "ruby"] },
+
+    "task": {
+      "type": "object",
+      "required": ["prompt"],
+      "properties": {
+        "prompt": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "step": {
+      "oneOf": [
+        { "$ref": "#/$defs/runStep" },
+        { "$ref": "#/$defs/writeFileStep" }
+      ]
+    },
+
+    "runStep": {
+      "type": "object",
+      "required": ["run"],
+      "properties": {
+        "run": { "type": "string", "minLength": 1 },
+        "as": { "$ref": "#/$defs/executionUser" },
+        "timeout": { "$ref": "#/$defs/duration" }
+      },
+      "additionalProperties": false
+    },
+
+    "writeFileStep": {
+      "type": "object",
+      "required": ["writeFile"],
+      "properties": {
+        "writeFile": { "type": "string", "minLength": 1 },
+        "from": { "type": "string", "minLength": 1 },
+        "content": { "type": "string" },
+        "as": { "$ref": "#/$defs/executionUser" },
+        "timeout": { "$ref": "#/$defs/duration" }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        { "required": ["from"] },
+        { "required": ["content"] }
+      ]
+    },
+
+    "workspaceSource": {
+      "type": "object",
+      "oneOf": [
+        { "required": ["path"] },
+        { "required": ["imagePath"] }
+      ],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "imagePath": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "workspace": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/workspaceSource" }
+        },
+        "setup": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/step" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "packages": {
+      "type": "object",
+      "properties": {
+        "apt": { "type": "array", "items": { "type": "string" } },
+        "npm": { "type": "array", "items": { "type": "string" } },
+        "pip": { "type": "array", "items": { "type": "string" } },
+        "cargo": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+
+    "runtimes": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/runtimeName" },
+      "additionalProperties": { "type": "string" }
+    },
+
+    "requires": {
+      "type": "object",
+      "properties": {
+        "runtimes": { "$ref": "#/$defs/runtimes" },
+        "packages": { "$ref": "#/$defs/packages" }
+      },
+      "additionalProperties": false
+    },
+
+    "environmentImage": {
+      "type": "object",
+      "oneOf": [
+        { "required": ["base"] },
+        { "required": ["dockerfile"] }
+      ],
+      "properties": {
+        "base": { "type": "string", "minLength": 1 },
+        "dockerfile": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "environment": {
+      "type": "object",
+      "required": ["image"],
+      "properties": {
+        "image": { "$ref": "#/$defs/environmentImage" },
+        "requires": { "$ref": "#/$defs/requires" },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/platform" }
+        },
+        "user": { "$ref": "#/$defs/executionUser" }
+      },
+      "additionalProperties": false
+    },
+
+    "run": {
+      "type": "object",
+      "properties": {
+        "timeout": { "$ref": "#/$defs/duration" },
+        "platform": {
+          "oneOf": [
+            { "const": "auto" },
+            { "$ref": "#/$defs/platform" }
+          ]
+        },
+        "artifactCaptureTimeout": { "$ref": "#/$defs/duration" }
+      },
+      "additionalProperties": false
+    },
+
+    "allowedScores": {
+      "oneOf": [
+        { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } },
+        {
+          "type": "object",
+          "propertyNames": { "pattern": "^-?\\d+(?:\\.\\d+)?$" },
+          "additionalProperties": { "type": "string" }
+        }
+      ]
+    },
+
+    "criterionNeeds": {
+      "oneOf": [
+        { "const": "all" },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ]
+    },
+
+    "criterionGate": {
+      "type": "object",
+      "required": ["ifBelow"],
+      "properties": {
+        "ifBelow": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+
+    "criterionBase": {
+      "required": ["id", "title", "type"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "title": { "type": "string", "minLength": 1 },
+        "type": { "type": "string" },
+        "timeout": { "$ref": "#/$defs/duration" },
+        "weight": { "type": "number", "minimum": 0 },
+        "scores": { "$ref": "#/$defs/allowedScores" },
+        "needs": { "$ref": "#/$defs/criterionNeeds" },
+        "gate": { "$ref": "#/$defs/criterionGate" }
+      }
+    },
+
+    "scriptCriterion": {
+      "allOf": [
+        { "$ref": "#/$defs/criterionBase" },
+        {
+          "required": ["run"],
+          "properties": {
+            "type": { "const": "script" },
+            "run": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "judgeCriterion": {
+      "allOf": [
+        { "$ref": "#/$defs/criterionBase" },
+        {
+          "required": ["instructions"],
+          "properties": {
+            "type": { "const": "judge" },
+            "instructions": { "type": "string", "minLength": 1 },
+            "evidence": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["diff", "logs", "traces"] }
+            },
+            "scorer": {
+              "type": "object",
+              "properties": { "model": { "type": "string" } },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "agentScorer": {
+      "type": "object",
+      "properties": {
+        "model": { "type": "string" },
+        "tools": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+
+    "agentCriterion": {
+      "allOf": [
+        { "$ref": "#/$defs/criterionBase" },
+        {
+          "required": ["instructions"],
+          "properties": {
+            "type": { "const": "agent" },
+            "instructions": { "type": "string", "minLength": 1 },
+            "scorer": { "$ref": "#/$defs/agentScorer" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "browserAgentCriterion": {
+      "allOf": [
+        { "$ref": "#/$defs/criterionBase" },
+        {
+          "required": ["instructions"],
+          "properties": {
+            "type": { "const": "browser-agent" },
+            "instructions": { "type": "string", "minLength": 1 },
+            "scorer": { "$ref": "#/$defs/agentScorer" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "aggregateCriterion": {
+      "allOf": [
+        { "$ref": "#/$defs/criterionBase" },
+        {
+          "required": ["aggregate", "needs"],
+          "properties": {
+            "type": { "const": "aggregate" },
+            "needs": { "$ref": "#/$defs/criterionNeeds" },
+            "aggregate": {
+              "type": "object",
+              "required": ["function"],
+              "properties": {
+                "function": {
+                  "type": "string",
+                  "enum": ["weighted_average", "all", "any", "min", "max"]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "criterion": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/scriptCriterion" },
+        { "$ref": "#/$defs/judgeCriterion" },
+        { "$ref": "#/$defs/agentCriterion" },
+        { "$ref": "#/$defs/browserAgentCriterion" },
+        { "$ref": "#/$defs/aggregateCriterion" }
+      ]
+    },
+
+    "report": {
+      "type": "object",
+      "required": ["instructions"],
+      "properties": {
+        "model": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["diff", "logs", "traces"] }
+        },
+        "instructions": { "type": "string", "minLength": 1 },
+        "needs": { "$ref": "#/$defs/criterionNeeds" },
+        "timeout": { "$ref": "#/$defs/duration" }
+      },
+      "additionalProperties": false
+    },
+
+    "evaluation": {
+      "type": "object",
+      "required": ["criteria"],
+      "properties": {
+        "container": { "type": "string", "enum": ["dedicated", "agent"] },
+        "criteria": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/criterion" }
+        },
+        "report": { "$ref": "#/$defs/report" }
+      },
+      "additionalProperties": false
+    },
+
+    "variant": {
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "task": {
+          "type": "object",
+          "properties": {
+            "prompt": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "workspace": { "$ref": "#/$defs/workspace" },
+        "environment": {
+          "type": "object",
+          "properties": {
+            "image": { "$ref": "#/$defs/environmentImage" },
+            "requires": { "$ref": "#/$defs/requires" },
+            "platforms": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/platform" }
+            },
+            "user": { "$ref": "#/$defs/executionUser" }
+          },
+          "additionalProperties": false
+        },
+        "run": { "$ref": "#/$defs/run" },
+        "evaluation": {
+          "type": "object",
+          "properties": {
+            "container": { "type": "string", "enum": ["dedicated", "agent"] },
+            "criteria": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/criterion" }
+            },
+            "report": { "$ref": "#/$defs/report" }
+          },
+          "additionalProperties": false
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "passEnv": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
