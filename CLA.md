@@ -1,9 +1,5 @@
 # Bunsen Contributor License Agreement (CLA)
 
-> **Pending legal review and bot setup before it is enforced.** This text should be reviewed by counsel
-> before the repo goes public. Enforcement via **cla-assistant.io** — configured once the repo is public.
-> See [`tasks/make-public/done/LICENSE_FINALIZATION.md`](./tasks/make-public/done/LICENSE_FINALIZATION.md).
-
 Thank you for contributing to Bunsen. This lightweight CLA lets you keep ownership of your work while
 giving the maintainer the rights needed to ship Bunsen under its source-available license, offer separate
 commercial terms, and move the project to a future Bunsen entity.
