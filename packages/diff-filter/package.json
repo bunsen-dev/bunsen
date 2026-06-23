@@ -1,6 +1,6 @@
 {
   "name": "@bunsen-dev/diff-filter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Internal diff filtering utilities for Bunsen. Not part of the public API.",
   "type": "module",

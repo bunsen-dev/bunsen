@@ -1,6 +1,6 @@
 {
   "name": "@bunsen-dev/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Public TypeScript SDK for Bunsen",
   "author": "Matthew Job Granmoe",
   "license": "SEE LICENSE IN LICENSE",

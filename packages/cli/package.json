@@ -1,6 +1,6 @@
 {
   "name": "@bunsen-dev/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI for Bunsen — a general-purpose experiment runner for agentic systems",
   "author": "Matthew Job Granmoe",
   "license": "SEE LICENSE IN LICENSE",
