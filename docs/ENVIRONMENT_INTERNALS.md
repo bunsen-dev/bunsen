@@ -136,7 +136,39 @@ through the agent PATH.
 
 The agent ships binaries built somewhere else and expects them to run inside an
 arbitrary experiment image. What makes that safe is an explicit **ABI contract**,
-declared per dep via `linkage` (+ `abi`).
+declared per dep via `linkage` (+ `abi`). If those two words aren't already second
+nature, here's the mental model (skip to the table if they are).
+
+A compiled binary usually isn't self-contained. At startup it asks the OS to load
+the **shared libraries** it depends on — `.so` files — the most universal being the
+**C library (libc)**, which nearly every program calls for basics like memory, file
+I/O, and threads; a small **dynamic loader** wires those up when the process starts.
+**Linkage** is *how* a binary resolves them: **static** linking bakes every library
+(libc included) *into* the binary, so it runs anywhere with the right CPU and OS;
+**dynamic** linking leaves them out and resolves them from the target system at
+runtime — smaller, but only if the target actually provides compatible versions.
+
+That word *compatible* is what the **ABI (Application Binary Interface)** governs.
+The ABI is the low-level contract between a binary and what it links against:
+calling conventions, struct layouts, symbol versions, the path to the loader. Two
+systems can compile the same source yet expose incompatible ABIs, so a binary built
+against one refuses to load on the other. A `version 'GLIBC_2.34' not found` error,
+or a binary that "doesn't exist" even though the file is right there (the loader it
+names is missing) — those are ABI mismatches.
+
+In Bunsen this is load-bearing because of asymmetric composition: a dep is **built
+in one image but runs in a different one**. Two things vary across that gap. **CPU
+architecture** is pinned — each dep declares per-`target` builds (`linux/amd64`,
+`linux/arm64`), so the right binary is produced for the run platform. The **libc
+ABI** is the remaining variable, and it's exactly what `abi.libc` makes explicit:
+Bunsen runs into two libc implementations — **glibc** (Debian, Ubuntu, most images,
+including every Bunsen base image) and **musl** (Alpine) — and they are *not*
+interchangeable. A binary dynamically linked against glibc won't run on a musl-only
+image. Declaring `linkage`/`abi` is the author stating which ABI a binary expects,
+so "any agent × any experiment" stays honest instead of "works on the image I built
+against" — and so the contract can fold into the cache key.
+
+The three linkage classes:
 
 | `linkage` | Self-contained? | `abi` | Examples |
 |-----------|-----------------|-------|----------|
