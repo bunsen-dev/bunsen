@@ -41,8 +41,8 @@ bn run <experiment>[:variant] [agent][:variant] [options]
 
 ```bash
 bn run fix-the-bug claude-code
-bn run fix-the-bug claude-code --model claude-opus-4-7
-bn run fix-the-bug:hard claude-code:headless
+bn run fix-the-bug claude-code --model claude-opus-4-8
+bn run fix-the-bug:hard claude-code
 bn run terminal-bench/fix-permissions basic-coding-agent --platform linux/amd64
 ```
 

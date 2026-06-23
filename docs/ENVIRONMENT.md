@@ -138,11 +138,16 @@ install:
 entrypoint:
   command: claude
   args:
+    - -p
     - --dangerously-skip-permissions
+    - --no-session-persistence
+    - --output-format
+    - text
+    - --verbose
   help: claude --help
 
 interaction:
-  mode: supervised
+  mode: direct
 
 model:
   env: ANTHROPIC_MODEL
@@ -310,11 +315,16 @@ install:
 entrypoint:
   command: claude
   args:
+    - -p
     - --dangerously-skip-permissions
+    - --no-session-persistence
+    - --output-format
+    - text
+    - --verbose
   help: claude --help
 
 interaction:
-  mode: supervised
+  mode: direct
 
 # Declares the env var the harness reads its model from, so `bn run --model
 # <id>` (and the `default` below) can target it without a per-model variant.
@@ -352,9 +362,9 @@ its harness reads the model from in the top-level `model` block; the model id
 itself is chosen at the command line:
 
 ```bash
-bn run fix-the-bug claude-code --model claude-opus-4-7
+bn run fix-the-bug claude-code --model claude-opus-4-8
 bn run fix-the-bug gemini-cli --model gemini-2.5-flash
-bn run fix-the-bug claude-code:headless --model claude-opus-4-7   # model ⟂ variant
+bn run fix-the-bug claude-code:headed --model claude-opus-4-8   # model ⟂ variant
 ```
 
 `--model <id>` sets the agent's declared `model.env` variable. It rides the CLI

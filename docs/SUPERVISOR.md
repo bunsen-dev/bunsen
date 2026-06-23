@@ -8,7 +8,7 @@ The supervisor is one of Bunsen's three platform agents (orchestrator, superviso
 
 `interaction.mode` in `agent.yaml` selects how Bunsen drives the agent:
 
-- **`supervised`** — the agent runs inside tmux and the supervisor agent answers interactive prompts on its behalf. Use this for interactive CLI agents (like Claude Code) that present prompts and don't expose a flag to suppress all of them.
+- **`supervised`** — the agent runs inside tmux and the supervisor agent answers interactive prompts on its behalf. Use this for interactive CLI agents that present prompts and don't expose a flag to suppress all of them — for example, Claude Code's `headed` variant, which runs a live interactive session instead of `-p` print mode.
 - **`direct`** (default) — a straight exec with no tmux and no supervisor. Cheaper and simpler. Use it when the agent handles its own prompts, such as any `-p`/print-mode or auto-approve flow (e.g. `--dangerously-skip-permissions`).
 
 Many CLI agents present prompts that block automated execution — trust/safety confirmations ("Do you trust this folder?"), permission requests ("Allow this action?"), API-key selection menus, or bypass-permissions warnings. Without a supervisor, these stall the experiment indefinitely. Supervised mode watches for them and responds automatically.
@@ -19,21 +19,23 @@ Supervised mode requires `tmux` in the container. The Bunsen base images include
 
 ## Enabling supervised mode
 
-Set `interaction.mode: supervised` in the agent's `agent.yaml`:
+Set `interaction.mode: supervised` on the agent — at the base level, or on a
+variant. Claude Code defaults to `direct` (print mode) and ships supervised mode as
+its `headed` variant, which overrides the interaction mode and drops `-p` for a live
+interactive session:
 
 ```yaml
 $schema: https://schemas.bunsen.dev/agent.v1.json
 version: v1
 name: claude-code
-install:
-  source:
-    type: local
-entrypoint:
-  command: claude
-  args:
-    - --dangerously-skip-permissions
-interaction:
-  mode: supervised
+# Base entrypoint/interaction default to direct print mode (-p); omitted here.
+variants:
+  headed:
+    interaction:
+      mode: supervised
+    entrypoint:
+      args:
+        - --dangerously-skip-permissions   # interactive: no -p
 ```
 
 Bunsen automatically starts the supervisor process alongside the agent when `interaction.mode` is `supervised`. The supervisor uses a separate API key so its cost is tracked separately from the agent's. See [System Prompts & Agent Config Files](./SYSTEM_PROMPTS.md) for the full `agent.yaml` reference.

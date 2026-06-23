@@ -224,7 +224,7 @@ model:
   default: claude-sonnet-4-6
 ```
 
-`bn run <exp> <agent> --model claude-opus-4-7` sets that env var at CLI
+`bn run <exp> <agent> --model claude-opus-4-8` sets that env var at CLI
 precedence, overriding any value a variant set. **Do not author per-model
 variants** — that's what this axis is for. See the
 [Glossary](./GLOSSARY.md#configuration).
@@ -283,12 +283,12 @@ nested `variants`.
 
 ```yaml
 variants:
-  headless:
-    description: Non-interactive print mode; no supervisor needed.
+  headed:
+    description: Interactive supervised mode; runs in a supervisor-driven tmux session.
     interaction:
-      mode: direct
+      mode: supervised
     entrypoint:
-      args: [-p, --dangerously-skip-permissions, --output-format, text]
+      args: [--dangerously-skip-permissions]
 
   cautious:
     description: Drop a system prompt in via a writeFile step appended to configure.
@@ -307,7 +307,7 @@ Append `:<variant>` to the agent argument:
 ```bash
 bn run <experiment> <agent>:<variant>
 # e.g.
-bn run fix-the-bug claude-code:headless --model claude-opus-4-7
+bn run fix-the-bug claude-code:headed --model claude-opus-4-8
 ```
 
 (Experiments have their own independent variants, selected the same way on the

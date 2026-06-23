@@ -26,7 +26,7 @@ This avoids mixed-architecture failures where the experiment image, mounted runt
 Use `--platform` on Docker-backed commands:
 
 ```bash
-bn run password-recovery claude-code:headless --platform linux/amd64
+bn run password-recovery claude-code --platform linux/amd64
 bn agents build claude-code --platform linux/arm64 --format json
 ```
 
@@ -128,7 +128,7 @@ bn cache list
 Run the same experiment on a forced target platform:
 
 ```bash
-bn run password-recovery claude-code:headless --platform linux/amd64
+bn run password-recovery claude-code --platform linux/amd64
 ```
 
 When the target platform cannot be supported by the image, runtime, or agent build configuration, Bunsen fails early with a platform-specific compatibility error instead of a later `exec` failure.

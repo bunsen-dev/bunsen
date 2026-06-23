@@ -126,7 +126,7 @@ A source checkout includes sample agents and experiments under `examples/`:
 | -------------------- | ------------------------------------------------------------------- | -------- |
 | `echo-agent`         | Minimal test agent (no LLM) — echoes the task, for smoke tests.     | `--example` |
 | `basic-coding-agent` | Full coding agent with file/bash tools (ships its own Python).      |          |
-| `claude-code`        | Claude Code — Anthropic's agentic CLI; supervised mode, non-root.   | ✓        |
+| `claude-code`        | Claude Code — Anthropic's agentic CLI; headless by default (`:headed` for supervised), non-root. | ✓        |
 | `claude-sdk-agent`   | Claude Agent SDK wrapper; programmatic tool allowlist, runs as root.|          |
 | `codex-cli`          | OpenAI Codex CLI.                                                   | ✓        |
 | `gemini-cli`         | Google Gemini CLI (Gemini Direct API).                             | ✓        |

@@ -12,6 +12,10 @@ description: |
 
   Uses --dangerously-skip-permissions for autonomous operation.
 
+  Defaults to non-interactive print mode (-p) with direct execution — fastest and
+  most reliable for automated runs, no supervisor needed. Use the `headed` variant
+  (`claude-code:headed`) for an interactive, supervisor-driven tmux session.
+
 install:
   source:
     type: local
@@ -49,16 +53,24 @@ install:
 
 entrypoint:
   command: claude
-  # Guaranteed args appended to every invocation.
+  # Guaranteed args appended to every invocation. The default is non-interactive
+  # print mode (-p): Claude Code runs as a script and exits, no supervisor needed.
   # --dangerously-skip-permissions skips permission prompts for any actions Claude Code takes.
-  # This works because Bunsen runs agents as non-root user (Claude Code blocks this flag for root).
-  # --no-session-persistence is only valid in print mode (-p), so it is set on headless variants only.
+  # This works because Bunsen runs agents as non-root user (Claude Code blocks this flag for root;
+  # use the `auto` variant for experiments that run as root).
+  # --no-session-persistence is only valid in print mode (-p), the base's default.
   args:
+    - -p
     - --dangerously-skip-permissions
+    - --no-session-persistence
+    - --output-format
+    - text
+    - --verbose
 
-# Enable supervisor agent to drive Claude Code, navigating through any prompts it presents.
+# Direct execution: print mode runs to completion without an interactive session,
+# so no supervisor is required. The `headed` variant switches to supervised mode.
 interaction:
-  mode: supervised
+  mode: direct
 
 # Claude Code reads its model from ANTHROPIC_MODEL (the configure step above also
 # bakes it into .claude.json). `bn run <exp> claude-code --model <id>` sets this
@@ -73,35 +85,28 @@ examples:
     invocation: claude "Fix the bug in the authentication module"
 
 # Variants are behavioral overlays only — pick the model with `--model`, not a
-# variant. The one exception is `auto`, which pins Opus 4.7 because the
-# permission-mode auto classifier is only supported there.
+# variant. The exceptions are `headed` (switches to supervised mode) and `auto`
+# (pins Opus 4.8 because the permission-mode auto classifier is only supported on certain models).
 variants:
-  verbose:
-    description: Claude Code with verbose output
+  headed:
+    description: |
+      Interactive (supervised) mode. Claude Code runs in a tmux session driven by
+      the Bunsen supervisor, which navigates any interactive prompts it presents.
+      Slower than the default print mode, but useful for debugging the live
+      session. Requires tmux in the container image.
+    interaction:
+      mode: supervised
     entrypoint:
       args:
-        - --verbose
         - --dangerously-skip-permissions
 
   max-turns-10:
-    description: Limit to 10 conversation turns
-    entrypoint:
-      args:
-        - --max-turns
-        - "10"
-        - --dangerously-skip-permissions
-
-  headless:
-    description: |
-      Non-interactive print mode (-p). Runs as a script — no interactive
-      session, no supervisor needed. Fastest and most reliable for automated
-      runs. Pick the model with --model, e.g.
-      `claude-code:headless --model claude-opus-4-7`.
-    interaction:
-      mode: direct
+    description: Limit to 10 conversation turns (headless print mode).
     entrypoint:
       args:
         - -p
+        - --max-turns
+        - "10"
         - --dangerously-skip-permissions
         - --no-session-persistence
         - --output-format
@@ -110,9 +115,6 @@ variants:
 
   disable-background-tasks:
     description: Disables background task management so background processes survive after the agent exits. Use with evaluation.container:agent for service tasks.
-    entrypoint:
-      args:
-        - --dangerously-skip-permissions
     defaults:
       env:
         CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
@@ -138,17 +140,18 @@ variants:
   # that block by routing actions through Anthropic's auto-approval
   # classifier instead of the all-off skip switch.
   #
-  # IMPORTANT: auto-mode classification is only supported on Opus 4.7.
+  # IMPORTANT: auto-mode classification is only supported on certain models.
   # On Sonnet 4.6 or Opus 4.6, Claude Code accepts the `--permission-mode
   # auto` flag but the classifier does not engage — runs proceed in a
-  # degraded mode that does not match the documented semantics. If you
-  # override ANTHROPIC_MODEL on this variant, keep it on Opus 4.7.
+  # degraded mode that does not match the documented semantics. This variant
+  # pins Opus 4.8 as a known-good default; if you override ANTHROPIC_MODEL,
+  # keep it on a model that supports auto-mode classification.
   #
   # Direct + `-p` (print mode) because the auto classifier already handles
   # approvals without the supervisor, and supervisor mode requires tmux in
   # the container image — which not every TB experiment ships.
   auto:
-    description: Print mode with --permission-mode auto, Opus 4.7 (the only model the auto classifier supports). Works under root unlike --dangerously-skip-permissions.
+    description: Print mode with --permission-mode auto, pinned to Opus 4.8 (auto-mode classification is only supported on certain models). Works under root unlike --dangerously-skip-permissions.
     interaction:
       mode: direct
     entrypoint:
@@ -162,4 +165,4 @@ variants:
         - --verbose
     defaults:
       env:
-        ANTHROPIC_MODEL: claude-opus-4-7
+        ANTHROPIC_MODEL: claude-opus-4-8

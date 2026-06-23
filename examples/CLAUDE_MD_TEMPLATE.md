@@ -20,10 +20,10 @@ bn run <experiment> <agent>
 bn run <experiment> <agent> --record
 
 # Pick a model (sets the agent's declared model env var)
-bn run <experiment> <agent> --model claude-opus-4-7
+bn run <experiment> <agent> --model claude-opus-4-8
 
 # Run with a specific agent variant (behavioral)
-bn run <experiment> <agent>:headless
+bn run <experiment> <agent>:<variant>
 
 # Skip evaluation for faster testing
 bn run <experiment> <agent> --skip-eval
