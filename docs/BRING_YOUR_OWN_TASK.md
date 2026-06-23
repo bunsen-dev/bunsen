@@ -113,10 +113,14 @@ actually care about. `bn runs diff` shows exactly what the agent changed;
 
 - **Add an LLM `judge` criterion** for qualities a script can't check (clarity,
   approach) — see [Scorers & Evaluation](./SCORERS.md).
+- **Add a starter agent** — `bn agents add` drops the bundled `claude-code`,
+  `codex-cli`, and `gemini-cli` into `agents/` so you can run `bn run my-task
+  claude-code` immediately (set the provider key in `.env` first).
 - **Try different agents and models** — `bn run my-task <agent> --model <id>` —
   and compare with `bn runs compare`.
 - **Let your coding agent help author** — `bn skills install` ships authoring
   skills for Claude Code and Codex so they understand `experiment.yaml` and
   `agent.yaml`. See [Agent Skills](./SKILLS.md).
 - **Bring your own agent** — wrap a CLI, script, or package as an
-  [`agent.yaml`](./AGENT_YAML.md).
+  [`agent.yaml`](./AGENT_YAML.md) (the `bunsen-new-agent` skill helps), or
+  `bn agents add` a starter and edit it.

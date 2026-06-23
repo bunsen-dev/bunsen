@@ -193,6 +193,7 @@ function checkApiKeys(): CheckResult {
   const keys: string[] = [];
   if (process.env.ANTHROPIC_API_KEY) keys.push('ANTHROPIC_API_KEY');
   if (process.env.OPENAI_API_KEY) keys.push('OPENAI_API_KEY');
+  if (process.env.GEMINI_API_KEY) keys.push('GEMINI_API_KEY');
   if (process.env.BUNSEN_ANTHROPIC_API_KEY) keys.push('BUNSEN_ANTHROPIC_API_KEY');
 
   if (keys.length === 0) {
@@ -200,8 +201,8 @@ function checkApiKeys(): CheckResult {
       id: 'api_keys',
       label: 'AI API keys',
       status: 'warn',
-      detail: 'No ANTHROPIC_API_KEY / OPENAI_API_KEY / BUNSEN_ANTHROPIC_API_KEY set',
-      hint: 'Required for LLM scorers and platform agents. Add to `.env` or export in your shell.',
+      detail: 'No ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / BUNSEN_ANTHROPIC_API_KEY set',
+      hint: 'Required for LLM scorers and the starter agents (claude-code, codex-cli, gemini-cli). Add to `.env` or export in your shell.',
     };
   }
   return {

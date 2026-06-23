@@ -59,7 +59,18 @@ bn runs show               # score, cost, status
 bn runs open               # open the run in the local web viewer
 ```
 
-That's the whole loop. Next: **[Getting Started](./docs/GETTING_STARTED.md)**
+That's the whole loop. The `echo-agent` needs no API key, so `bn run hello-world
+echo-agent` works offline. To run a real coding agent, copy in a starter:
+
+```bash
+bn agents add              # add claude-code, codex-cli, gemini-cli (or `bn init --starter-agents`)
+bn run hello-world claude-code
+```
+
+Set the matching key in `.env` first (`ANTHROPIC_API_KEY` for claude-code,
+`OPENAI_API_KEY` for codex-cli, `GEMINI_API_KEY` for gemini-cli). The copied
+agents are yours to edit — pin a different CLI version, add a variant, swap the
+model. Next: **[Getting Started](./docs/GETTING_STARTED.md)**
 walks it in detail and forks into two paths —
 [Run a Terminal Bench Task](./docs/RUN_TERMINAL_BENCH.md) or
 [Bring Your Own Task](./docs/BRING_YOUR_OWN_TASK.md).
@@ -111,19 +122,25 @@ under [`docs/`](./docs)):
 
 A source checkout includes sample agents and experiments under `examples/`:
 
-| Agent                | Description                                                          |
-| -------------------- | ------------------------------------------------------------------- |
-| `echo-agent`         | Minimal test agent (no LLM) — echoes the task, for smoke tests.     |
-| `basic-coding-agent` | Full coding agent with file/bash tools (ships its own Python).      |
-| `claude-code`        | Claude Code — Anthropic's agentic CLI; supervised mode, non-root.   |
-| `claude-sdk-agent`   | Claude Agent SDK wrapper; programmatic tool allowlist, runs as root.|
-| `codex-cli`          | OpenAI Codex CLI.                                                   |
-| `gemini-cli`         | Google Gemini CLI (Gemini Direct API).                             |
+| Agent                | Description                                                          | Starter? |
+| -------------------- | ------------------------------------------------------------------- | -------- |
+| `echo-agent`         | Minimal test agent (no LLM) — echoes the task, for smoke tests.     | `--example` |
+| `basic-coding-agent` | Full coding agent with file/bash tools (ships its own Python).      |          |
+| `claude-code`        | Claude Code — Anthropic's agentic CLI; supervised mode, non-root.   | ✓        |
+| `claude-sdk-agent`   | Claude Agent SDK wrapper; programmatic tool allowlist, runs as root.|          |
+| `codex-cli`          | OpenAI Codex CLI.                                                   | ✓        |
+| `gemini-cli`         | Google Gemini CLI (Gemini Direct API).                             | ✓        |
+
+The three frontier coding CLIs marked **Starter** are also bundled inside the
+published `@bunsen-dev/cli`, so an npm-only install can drop them into a project
+with `bn agents add` (or `bn init --starter-agents`) — no checkout required. The others
+are checkout-only references to learn from.
 
 Any agent can be steered with a system prompt without changing the platform — see
-[System Prompts](./docs/SYSTEM_PROMPTS.md). To scaffold your own, use
-`bn new experiment <name>` / `bn new agent <name>` (see the
-[CLI Reference](./docs/CLI.md)).
+[System Prompts](./docs/SYSTEM_PROMPTS.md). To scaffold your own from a blank
+template, use `bn new agent <name>` (the `bunsen-new-agent` skill from `bn skills
+install` walks you through the `agent.yaml`); to start from a working one,
+`bn agents add` then edit (see the [CLI Reference](./docs/CLI.md)).
 
 ## Base images
 

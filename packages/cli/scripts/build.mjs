@@ -46,6 +46,7 @@ const agentsDist = path.join(repoRoot, 'packages/agents/dist');
 const proxySrc = path.join(repoRoot, 'packages/runtime/src/proxy');
 const imagesSrc = path.join(repoRoot, 'images');
 const skillsSrc = path.join(cliRoot, 'assets/skills');
+const exampleAgentsSrc = path.join(repoRoot, 'examples/agents');
 const genSkillReference = path.join(repoRoot, 'scripts/gen-skill-reference.mjs');
 
 const PLATFORM_BUNDLES = [
@@ -56,6 +57,14 @@ const PLATFORM_BUNDLES = [
   'proxy-bootstrap',
 ];
 const PROXY_ASSETS = ['ai_capture.py', 'model_prices.json'];
+
+// Curated starter agents shipped inside the CLI so `bn agents add` / `bn init
+// --agents` can scaffold a runnable agent into a fresh project. The canonical
+// definitions live in `examples/agents/`; this is the single list that decides
+// which ones travel in the published package. Keep it to the frontier coding
+// CLIs (single-binary / self-contained) — the heavier reference agents stay
+// checkout-only.
+const STARTER_AGENTS = ['claude-code', 'codex-cli', 'gemini-cli'];
 
 /**
  * esbuild plugin: inline only our own `@bunsen-dev/*` workspace packages; keep
@@ -82,6 +91,19 @@ function assertBundlesPresent() {
     console.error(
       `\n✗ Missing agent bundles: ${missing.map((n) => `${n}.cjs`).join(', ')}\n` +
         `  Build them first:  pnpm --filter @bunsen-dev/agents build:bundles\n`
+    );
+    process.exit(1);
+  }
+}
+
+function assertStarterAgentsPresent() {
+  const missing = STARTER_AGENTS.filter(
+    (name) => !fs.existsSync(path.join(exampleAgentsSrc, name, 'agent.yaml'))
+  );
+  if (missing.length > 0) {
+    console.error(
+      `\n✗ Missing starter agents under examples/agents/: ${missing.join(', ')}\n` +
+        `  Each STARTER_AGENTS entry must have an agent.yaml in examples/agents/<name>/.\n`
     );
     process.exit(1);
   }
@@ -152,9 +174,16 @@ function copyAssets() {
   //    (`bn skills install` reads these from getAssetDir()/skills at runtime.)
   fs.cpSync(skillsSrc, path.join(assetsDir, 'skills'), { recursive: true });
 
+  // 5. Curated starter agents → dist/assets/agents/<name>/*
+  //    (`bn agents add` / `bn init --agents` read these from getAssetDir()/agents.)
+  const agentsOut = path.join(assetsDir, 'agents');
+  for (const name of STARTER_AGENTS) {
+    fs.cpSync(path.join(exampleAgentsSrc, name), path.join(agentsOut, name), { recursive: true });
+  }
+
   const bundleCount = PLATFORM_BUNDLES.length;
   console.log(
-    `\nAssets assembled in dist/assets/ (${bundleCount} bundles, proxy addon + pricing, base-image Dockerfiles, skills).`
+    `\nAssets assembled in dist/assets/ (${bundleCount} bundles, proxy addon + pricing, base-image Dockerfiles, skills, ${STARTER_AGENTS.length} starter agents).`
   );
 }
 
@@ -177,6 +206,7 @@ function assertSkillReferenceFresh() {
 
 async function main() {
   assertBundlesPresent();
+  assertStarterAgentsPresent();
   assertSkillReferenceFresh();
   fs.rmSync(distDir, { recursive: true, force: true });
   fs.mkdirSync(distDir, { recursive: true });
