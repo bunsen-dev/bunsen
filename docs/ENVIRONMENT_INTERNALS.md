@@ -92,15 +92,24 @@ container. It applies to:
 - `install.configure`
 - `workspace.setup`
 - the **agent's** own execution
-- **agent-container** scorers (`evaluation.container: agent`), which reuse the agent container and its mounts
 
-It does **not** apply to the platform tools:
+It does **not** apply to the platform tools — the orchestrator, supervisor, and **scorers**:
 
 - the **orchestrator** and **supervisor** run as their own `docker exec` whose env carries **no PATH key at all** — so they inherit the *image's baseline* PATH, never `/bunsen/deps`.
-- the **dedicated scorer container** (the default) doesn't even mount `/bunsen/deps` or `/bunsen/artifacts`, so the agent's closure isn't reachable there at all.
+- **scorers** don't get the deps PATH either, and it's worth being precise about why. The scorer *engine* (`scorer.cjs`) is a platform tool launched on the platform node (`nodeCmd`). The *commands* it dispatches — a `script` criterion's `run:`, an agentic scorer's `run_command` — exec through `buildScorerExecOptions`, which sets the scorer's user and a few `BUNSEN_*` helper vars but **no** deps PATH, so they get the container's **baseline** PATH.
 
 The mechanism is just "separate `docker exec`, separate env." "Agent's tool is
 first on PATH" is true only *inside the agent's own process tree*.
+
+For scorers, the **dedicated vs. agent-container** choice is about *what's reachable*,
+not PATH. A **dedicated** scorer container (the default) is a fresh container from the
+experiment image and doesn't mount `/bunsen/deps` or `/bunsen/artifacts` at all.
+**Agent-container** scoring (`evaluation.container: agent`) runs the scorer inside the
+agent's own container, so it sees the agent's final `/workspace`, its running
+services, and anything it installed to standard locations (`/usr/bin`, site-packages —
+already on the baseline PATH). What's preserved is the agent's filesystem/process
+**state**, not its closure-dep PATH prefix: `/bunsen/deps/<name>/bin` is mounted but
+not auto-added to the scorer's PATH.
 
 ### How the platform finds *its* Node despite the agent's PATH
 
@@ -192,8 +201,8 @@ ones are skipped.
 | **orchestrator** | run container | root-ish exec | **baseline** (no agent PATH) | — | `nodeCmd /bunsen/lib/orchestrator.cjs`; env = platform key + `BUNSEN_*_PATH` + proxy; 1 LLM call → invocation |
 | **agent execution** | run container | execution user (`su bunsen`) or root | **agent PATH** | `/workspace` | the agent-under-test; full merged env + reserved `BUNSEN_*` |
 | **supervisor** | run container | exec | **baseline** | — | `nodeCmd /bunsen/lib/supervisor.cjs`, drives tmux; only in `supervised` mode |
-| scorer — **dedicated** (default) | separate scorer container, experiment image | execution user or root | **baseline** (no `/bunsen/deps`/`artifacts`) | — | mounts `/workspace` (RW copy) + `/workspace-source` (RO); `nodeCmd` for LLM scorers |
-| scorer — **agent container** (`evaluation.container: agent`) | the agent's container, via `docker exec` | the agent's execution user | **agent PATH** | — | preserves installed packages/services; verifiers see agent-installed tools |
+| scorer — **dedicated** (default) | separate scorer container, experiment image | execution user or root | **baseline** (no `/bunsen/deps`/`artifacts` mounted) | — | engine on `nodeCmd`; mounts `/workspace` (RW copy) + `/workspace-source` (RO) |
+| scorer — **agent container** (`evaluation.container: agent`) | the agent's container, via `docker exec` | the agent's execution user | **baseline** | — | engine on `nodeCmd`; sees the agent's final `/workspace`, services, and standard-location installs; deps mounted but not on PATH |
 
 The ordering exists for a reason: assembling `/workspace-source` and creating the
 `bunsen` user *before* `/workspace` is materialized means the chown is trivial and a

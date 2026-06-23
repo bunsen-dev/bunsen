@@ -389,8 +389,9 @@ and prints a notice that the variant's model was overridden.
   - `install.configure`
   - `workspace.setup`
   - agent execution
-  - scorer commands (only when `evaluation.container: agent` — dedicated scorer containers do not mount `/bunsen/deps` or `/bunsen/artifacts`; see [Scoring in the Agent Container](./AGENT_CONTAINER_SCORING.md))
   - `install.build` itself (so the agent's build script can use any binary a dep provides)
+
+Scorers do **not** run with this deps-prefixed PATH: the scorer engine is a platform tool, and the commands it runs (a `script` criterion, an agentic scorer's `run_command`) get the container's baseline PATH. `evaluation.container: agent` preserves the agent's filesystem/process *state* (installed packages, running services, final `/workspace`), not its closure-dep PATH — see [Scoring in the Agent Container](./AGENT_CONTAINER_SCORING.md) and [Environment Internals](./ENVIRONMENT_INTERNALS.md#path-semantics).
 
 This precedence is what makes asymmetric composition deterministic: tools the agent ships always shadow substrate-installed binaries with the same name. The cross-boundary shadow detector records each shadowing in the run manifest (see [Run Manifest & Events](./RUN_MANIFEST.md)).
 
