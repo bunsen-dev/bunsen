@@ -27,6 +27,7 @@
 import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as https from 'node:https';
 import * as tar from 'tar';
@@ -35,8 +36,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 
-const NODE_VERSION = '20.9.0';
-const TARGETS = ['linux-x64', 'linux-arm64'];
+// Single source of truth for the pinned Node runtime — shared with the host-side
+// resolver in @bunsen-dev/runtime (packages/runtime/src/node-runtime.ts). Read by
+// PATH (not imported) because this build script must not pull @bunsen-dev/runtime,
+// whose native deps can't be bundled (see packages/agents/CLAUDE.md).
+const MANIFEST = JSON.parse(
+  fs.readFileSync(path.resolve(ROOT, '../runtime/src/node-runtime-manifest.json'), 'utf8')
+);
+const NODE_VERSION = MANIFEST.version;
+const TARGETS = Object.keys(MANIFEST.targets);
 
 /**
  * Download a file from URL to destination
@@ -78,18 +86,31 @@ async function downloadFile(url, dest) {
  * Download and extract Node.js binary for target platform
  * Returns the path to the node binary
  */
+function sha256File(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+/** Verify a downloaded tarball against the manifest's pinned sha256. */
+function verifyTarball(tarballPath, expected, target) {
+  const actual = sha256File(tarballPath);
+  if (actual.toLowerCase() !== expected.toLowerCase()) {
+    fs.rmSync(tarballPath, { force: true });
+    throw new Error(
+      `Node ${target} tarball sha256 mismatch: expected ${expected}, got ${actual}. ` +
+        `Removed the bad download; re-run to fetch again.`
+    );
+  }
+}
+
 async function downloadNodeBinary(target) {
+  const entry = MANIFEST.targets[target];
+  if (!entry) throw new Error(`No node-runtime-manifest entry for target "${target}".`);
   const cacheDir = path.join(ROOT, '.node-cache');
   const runtimeDir = path.join(ROOT, 'runtime');
-  const [platform, arch] = target.split('-');
 
-  // Map our target names to Node.js naming convention
-  const nodeArch = arch === 'arm64' ? 'arm64' : 'x64';
-  const nodePlatform = platform;
-
-  const tarballName = `node-v${NODE_VERSION}-${nodePlatform}-${nodeArch}.tar.gz`;
+  const tarballName = `node-v${NODE_VERSION}-${target}.tar.gz`;
   const tarballPath = path.join(cacheDir, tarballName);
-  const extractDir = path.join(cacheDir, `node-v${NODE_VERSION}-${nodePlatform}-${nodeArch}`);
+  const extractDir = path.join(cacheDir, `node-v${NODE_VERSION}-${target}`);
   const nodeBinary = path.join(extractDir, 'bin', 'node');
   const outputPath = path.join(runtimeDir, `node-${target}`);
 
@@ -103,11 +124,13 @@ async function downloadNodeBinary(target) {
   fs.mkdirSync(cacheDir, { recursive: true });
   fs.mkdirSync(runtimeDir, { recursive: true });
 
-  // Download if not cached
+  // Download if not cached (URL comes from the manifest, not a template)
   if (!fs.existsSync(tarballPath)) {
-    const url = `https://nodejs.org/dist/v${NODE_VERSION}/${tarballName}`;
-    await downloadFile(url, tarballPath);
+    await downloadFile(entry.url, tarballPath);
   }
+  // Verify integrity against the pinned manifest sha — on a fresh download AND on
+  // a cache hit, so a corrupt/poisoned cache entry is rejected rather than shipped.
+  verifyTarball(tarballPath, entry.tarballSha256, target);
 
   // Extract if not already extracted
   if (!fs.existsSync(nodeBinary)) {
@@ -169,7 +192,7 @@ function bundleTypeScript(name) {
   const externalFlags = name === 'scorer' ? '--external:playwright --external:playwright-core' : '';
 
   execSync(
-    `npx esbuild ${entryPoint} --bundle --platform=node --format=cjs --outfile=${outFile} --target=node20 --inject:${shimPath} --define:import.meta.url=importMetaUrl ${externalFlags}`,
+    `npx esbuild ${entryPoint} --bundle --platform=node --format=cjs --outfile=${outFile} --target=${MANIFEST.esbuildTarget} --inject:${shimPath} --define:import.meta.url=importMetaUrl ${externalFlags}`,
     { cwd: ROOT, stdio: 'inherit' }
   );
 

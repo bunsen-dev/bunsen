@@ -111,7 +111,6 @@ import {
   writeFileInContainer,
   stopContainer,
   getPlatformBundlePath,
-  getNodeRuntimePath,
   isBunsenImage,
   ensureBunsenImage,
   archToRunPlatform,
@@ -124,6 +123,7 @@ import {
   type PersistentContainer,
   type ExecResult,
 } from './container.js';
+import { resolveContainerNodeRuntime } from './node-runtime.js';
 
 /**
  * Thrown out of `executeRun` when the run was canceled mid-flight (either by
@@ -893,11 +893,14 @@ export async function executeRun(
     const hasSupervisorBundle = fs.existsSync(supervisorBundlePath);
     const hasGitignoreFilterBundle = fs.existsSync(gitignoreFilterBundlePath);
 
-    // Check if we need the Node.js runtime (for custom images or custom Dockerfiles)
+    // For custom / non-bunsen base images, the platform tools (orchestrator,
+    // supervisor, scorers) need a Node interpreter inside the container; Bunsen
+    // mounts its own at /bunsen/runtime/node. The host path is resolved once at
+    // the single await gate below (asset / from-source / host-cache / verified
+    // download) and threaded to every consumer.
     const baseImage = resolvedEnv.baseImage;
     const needsNodeRuntime = experiment.hasDockerfile || !isBunsenImage(baseImage);
-    const nodeRuntimePath = getNodeRuntimePath(runPlatform);
-    const hasNodeRuntime = fs.existsSync(nodeRuntimePath);
+    let nodeRuntimePath: string | undefined;
 
     if (!skipOrchestration && !hasOrchestratorBundle) {
       throw new Error(
@@ -941,18 +944,16 @@ export async function executeRun(
       log(`Supervisor bundle not found at ${supervisorBundlePath}, interactive prompt handling disabled`);
     }
 
-    // For custom images, we need the Node.js runtime. These per-platform Node
-    // binaries are not shipped in the interim npm `@bunsen-dev/cli` (tens of MB
-    // each), so custom-Dockerfile / non-bunsen-base-image experiments require a
-    // from-source checkout for now. bunsen-base-image experiments (the common
-    // case) need no Node runtime and work from the npm install.
-    if (needsNodeRuntime && !hasNodeRuntime && (!skipOrchestration || !skipEvaluation)) {
-      throw new Error(
-        `Node.js runtime for ${runPlatform} not found at ${nodeRuntimePath}. ` +
-          `This experiment uses a custom/non-bunsen base image, which the interim ` +
-          `npm CLI does not bundle the Node runtime for. Use a from-source checkout ` +
-          `and run 'pnpm build:bundles:runtime' in packages/agents to download it.`
-      );
+    // For custom / non-bunsen images, resolve the Node runtime Bunsen mounts at
+    // /bunsen/runtime/node. This is the single authoritative gate: on success
+    // every /bunsen/runtime/node consumer below is safe by construction; on
+    // failure resolveContainerNodeRuntime throws an actionable error (offline +
+    // uncached, etc.). The condition is a superset of every consumer's gate
+    // (agent-container mount, dedicated scorer, supervisor), so once it fires
+    // nodeRuntimePath is defined wherever the runtime is actually used. Bunsen
+    // base images (the common case) need no mounted runtime and skip this.
+    if (needsNodeRuntime && (!skipOrchestration || !skipEvaluation || useSupervisor)) {
+      nodeRuntimePath = await resolveContainerNodeRuntime(runPlatform, { log });
     }
 
     // Get API key for platform agents (orchestrator and/or scorer)
@@ -1014,6 +1015,10 @@ export async function executeRun(
       (scoreInAgentContainer && needsScorerBundle)
     );
     if (needsNodeInAgent) {
+      if (!nodeRuntimePath) {
+        // Unreachable: the resolve gate is a superset of needsNodeInAgent.
+        throw new Error('Internal error: Node runtime required in the agent container but unresolved.');
+      }
       mounts.push({
         source: nodeRuntimePath,
         target: '/bunsen/runtime/node',
@@ -1147,7 +1152,7 @@ export async function executeRun(
 
       // For custom images, symlink the mounted Node.js runtime onto PATH
       // so orchestrator-generated commands (e.g. "node /agent/...") work
-      if (needsNodeRuntime && hasNodeRuntime) {
+      if (needsNodeInAgent) {
         await execShellInContainer(
           container,
           'ln -sf /bunsen/runtime/node /usr/local/bin/node',

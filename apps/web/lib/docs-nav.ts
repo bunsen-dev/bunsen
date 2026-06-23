@@ -35,6 +35,7 @@ export const DOCS_NAV: readonly NavGroup[] = [
     items: [
       { file: "HOW_IT_WORKS.md", title: "How Bunsen Works" },
       { file: "ENVIRONMENT.md", title: "The Environment Model" },
+      { file: "ENVIRONMENT_INTERNALS.md", title: "Environment Internals" },
       { file: "TRUST_MODEL.md", title: "Trust Model" },
     ],
   },
