@@ -1,0 +1,18 @@
+{
+  "$comment": "Pinned Node.js runtime that Bunsen mounts into custom / non-bunsen container images so the platform tools (orchestrator, supervisor, scorers) have a Node interpreter inside the run container. SINGLE SOURCE OF TRUTH for both packages/runtime/src/node-runtime.ts (the host-side resolver) and packages/agents/scripts/build-bundles.mjs (the from-source pre-fetch). These are glibc builds from nodejs.org; the sha256 values are anchored to the GPG-signed SHASUMS256.txt for the release (re-derivable via scripts: curl https://nodejs.org/dist/v<version>/SHASUMS256.txt). musl/Alpine container images are not yet supported (the platform Node closure is glibc; see docs/PLATFORM_TOOLS.md) — a musl variant would add entries keyed '<target>-musl' from unofficial-builds.nodejs.org. Bumping the version must stay in lockstep with the esbuild --target in build-bundles.mjs.",
+  "version": "20.9.0",
+  "libc": "glibc",
+  "esbuildTarget": "node20",
+  "targets": {
+    "linux-x64": {
+      "url": "https://nodejs.org/dist/v20.9.0/node-v20.9.0-linux-x64.tar.gz",
+      "tarballSha256": "f0919f092fbf74544438907fa083c21e76b2d7a4bc287f0607ada1553ef16f60",
+      "binSha256": "a7d572c52208171a81b9afd7c347e8ff38a90ade77d200ee6b3a9dd88df4b0f3"
+    },
+    "linux-arm64": {
+      "url": "https://nodejs.org/dist/v20.9.0/node-v20.9.0-linux-arm64.tar.gz",
+      "tarballSha256": "d2a7dbeeb274bfd16b579d2cafb92f673010df36c83a5b55de3916aad6806a6a",
+      "binSha256": "2367779e2d2e302fd3423b990e295086c75f2cac763c381c1831642e91871a15"
+    }
+  }
+}

@@ -30,6 +30,8 @@ Bunsen base images happen to ship Node 20 and Python 3.11 because those are usef
 
 If you find yourself wanting to declare "this agent requires Node 20", the migration is "this agent ships Node 20 as a closure dep". See [Shipping a language runtime](./AGENT_DEPS_COOKBOOK.md#shipping-a-language-runtime) in the cookbook.
 
+**The platform follows the same rule.** Bunsen's own tools — the orchestrator, supervisor, and scorers — also need a Node interpreter *inside* the run container. On a Bunsen base image they use the image's Node 20 (a substrate Bunsen controls and pins). On a custom Dockerfile or non-bunsen base image, the platform does exactly what the anti-contract asks of agents: it **ships its own Node as a `closure` dependency**, mounted read-only at `/bunsen/runtime/node`. That binary is the official Node Linux tarball — the canonical `closure` example from the [linkage taxonomy](#linkage-taxonomy) — resolved on demand and verified against a pinned sha256 (no per-image baking). Like any glibc closure it runs on every Bunsen base image and the common custom bases (debian/ubuntu/CUDA/distroless-glibc); a **musl/Alpine** base is not yet supported for the platform tools — the same `abi.libc` asymmetry agents face. See [Platform Tools](./PLATFORM_TOOLS.md) for the layered resolution + host-cache details.
+
 ### Setup phase ordering
 
 Bunsen's setup ordering is what makes large-seed experiments fast and predictable. Steps run after platform resolution; non-applicable steps are skipped.

@@ -191,7 +191,6 @@ export {
   // Platform tool paths
   getAssetDir,
   getPlatformBundlePath,
-  getNodeRuntimePath,
   // Bunsen image management
   isBunsenImage,
   getBunsenImageDockerfilePath,
@@ -207,6 +206,18 @@ export {
   cleanupBunsenContainers,
 } from './container.js';
 export type { ProxyContainerInfo, PersistentContainer, ExecResult, ContainerLabelOptions, BunsenContainerInfo, CleanupResult } from './container.js';
+
+// Container Node runtime resolution (custom / non-bunsen images)
+export {
+  getNodeRuntimePath,
+  resolveContainerNodeRuntime,
+  getHostCacheDir,
+  getNodeRuntimeManifest,
+  nodeRuntimeTarget,
+  nodeRuntimeBinName,
+  NODE_RUNTIME_VERSION,
+} from './node-runtime.js';
+export type { NodeRuntimeTarget } from './node-runtime.js';
 
 // Executor
 export {

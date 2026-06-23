@@ -69,8 +69,12 @@ walks it in detail and forks into two paths —
 > (`curl | sh`, no Node required). `@bunsen-dev/types` stays on npm permanently. For
 > a one-shot try without a global install: `npx @bunsen-dev/cli …` (slower — prefer
 > `npm i -g` for real use). Experiments on Bunsen base images run end-to-end from
-> the npm install; experiments using a **custom Dockerfile or non-bunsen base
-> image** currently need the from-source checkout below.
+> the npm install. Experiments using a **custom Dockerfile or non-bunsen base
+> image** also work from the npm install: Bunsen fetches the small Node runtime it
+> mounts into those containers on first use, verifies it against a pinned sha256,
+> and caches it per-user (glibc bases — debian/ubuntu/CUDA/etc.; musl/Alpine bases
+> aren't yet supported). Set `BUNSEN_NODE_OFFLINE=1` to forbid that fetch (CI /
+> air-gapped), or pre-seed it with `BUNSEN_NODE_RUNTIME_DIR`.
 
 ### From a source checkout (for contributing)
 

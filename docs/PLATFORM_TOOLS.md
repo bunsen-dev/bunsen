@@ -93,9 +93,11 @@ agent container at creation time.
 
 ### Custom Images
 
-For custom base images without Node.js, we mount our own Node.js runtime. The
-same conditional bundle mounts as the Bunsen-image case apply; only the Node.js
-binary is added:
+For custom base images that may not ship Node.js, Bunsen mounts its **own** Node
+runtime at `/bunsen/runtime/node` — the platform honoring the same "ship your own
+runtime" anti-contract the [environment model](./ENVIRONMENT.md#the-anti-contract)
+imposes on agents. The same conditional bundle mounts as the Bunsen-image case
+apply; only the Node.js binary is added:
 
 ```
 Agent container mounts (conditional — see above):
@@ -109,6 +111,22 @@ Agent container mounts (conditional — see above):
 Execution:
   /bunsen/runtime/node /bunsen/lib/orchestrator.cjs
 ```
+
+**How that binary is obtained.** The host path mounted at `/bunsen/runtime/node`
+is resolved by `resolveContainerNodeRuntime(platform)` through layers, first hit
+wins: (a) `BUNSEN_NODE_RUNTIME_DIR` override → (b) a bundled asset shipped with the
+distribution → (c) `packages/agents/runtime/` in a source checkout → (d) a shared
+per-user host cache → (e) a **sha256-verified download** from nodejs.org. The
+pinned version and per-target hashes are the single source of truth in
+[`node-runtime-manifest.json`](../packages/runtime/src/node-runtime-manifest.json),
+shared with `build-bundles.mjs`. So the ~95 MB binary is in no distribution
+artifact (small npm package / standalone binary) yet custom-image experiments
+"just work" — the runtime is fetched once per host, verified, and cached. Set
+`BUNSEN_NODE_OFFLINE=1` to forbid the fetch (reproducible CI / air-gapped) and get
+an actionable error instead; `pnpm --filter @bunsen-dev/agents build:bundles:runtime`
+pre-fetches it for a source checkout. The runtime is **glibc** — it runs on every
+Bunsen base image and the common custom bases (debian/ubuntu/CUDA/distroless-glibc);
+**musl/Alpine** bases are not yet supported.
 
 ## Version Isolation
 

@@ -23,7 +23,6 @@ import {
   archToRunPlatform,
   normalizeRunPlatform,
   runPlatformToArch,
-  getNodeRuntimePath,
   type ProxyContainerInfo,
 } from './container.js';
 
@@ -130,18 +129,6 @@ describe('platform helpers', () => {
 
   it('rejects unsupported run platforms', () => {
     expect(() => normalizeRunPlatform('linux/s390x')).toThrow('Unsupported run platform');
-  });
-});
-
-describe('getNodeRuntimePath', () => {
-  it('returns the amd64 runtime path for amd64 inputs', () => {
-    expect(getNodeRuntimePath('amd64')).toContain('node-linux-x64');
-    expect(getNodeRuntimePath('linux/amd64')).toContain('node-linux-x64');
-  });
-
-  it('returns the arm64 runtime path for arm64 inputs', () => {
-    expect(getNodeRuntimePath('arm64')).toContain('node-linux-arm64');
-    expect(getNodeRuntimePath('linux/arm64')).toContain('node-linux-arm64');
   });
 });
 

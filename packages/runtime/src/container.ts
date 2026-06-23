@@ -1209,21 +1209,10 @@ export function getPlatformBundlePath(
  */
 export const PROXY_BOOTSTRAP_CONTAINER_PATH = '/bunsen/runtime/proxy-bootstrap.cjs';
 
-/**
- * Get the path to the Node.js runtime binary for the specified run platform.
- * This is used for custom (non-Bunsen) images that may not have Node.js installed.
- * Accepts either a full platform string (linux/amd64) or a bare arch (amd64).
- */
-export function getNodeRuntimePath(platform: string): string {
-  const runtimePlatform = normalizeRunPlatform(platform);
-  const arch = runtimePlatform === 'linux/arm64' ? 'linux-arm64' : 'linux-x64';
-  // Per-platform Node binaries (only needed for custom / non-bunsen base
-  // images) ship under the asset dir's `runtime/` subdirectory. They are
-  // intentionally NOT bundled into the interim npm package (tens of MB each);
-  // when absent, the executor throws an actionable "run build:bundles:runtime"
-  // error for the custom-image path.
-  return path.join(getAssetDir(), 'runtime', `node-${arch}`);
-}
+// The per-platform Node runtime resolver (asset path + layered on-demand
+// download/cache for custom-image experiments) lives in `./node-runtime.ts`
+// (`getNodeRuntimePath`, `resolveContainerNodeRuntime`). It imports getAssetDir
+// and the platform/arch helpers from this module.
 
 
 // ============================================================================

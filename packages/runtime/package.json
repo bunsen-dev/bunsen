@@ -16,7 +16,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/assets/proxy && cp src/proxy/*.py dist/assets/proxy/ && cp src/proxy/*.json dist/assets/proxy/",
+    "build": "tsc && cp src/node-runtime-manifest.json dist/ && mkdir -p dist/assets/proxy && cp src/proxy/*.py dist/assets/proxy/ && cp src/proxy/*.json dist/assets/proxy/",
     "clean": "rm -rf dist *.tsbuildinfo",
     "test": "vitest run && pnpm test:proxy",
     "test:watch": "vitest",
@@ -31,6 +31,7 @@
     "dockerode": "^4.0.0",
     "ignore": "^7.0.5",
     "js-yaml": "^4.1.0",
+    "tar": "^7.4.0",
     "ulid": "^3.0.2"
   },
   "devDependencies": {
