@@ -108,7 +108,7 @@ examples:
     invocation: node /agent/dist/index.js "Fix the bug in main.py and run tests"
 
 # Behavioral overlays only — pick the model with `--model`
-# (e.g. `claude-sdk-agent --model claude-opus-4-7`).
+# (e.g. `claude-sdk-agent --model claude-opus-4-8`).
 variants:
   read-only:
     description: Read-only mode for analysis tasks

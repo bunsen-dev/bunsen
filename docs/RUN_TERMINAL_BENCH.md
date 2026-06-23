@@ -44,7 +44,7 @@ bn run terminal-bench/fix-permissions claude-code
 A few things worth knowing:
 
 - **Choose the model** with `--model`, independent of the agent's variants:
-  `bn run terminal-bench/fix-permissions claude-code --model claude-opus-4-7`.
+  `bn run terminal-bench/fix-permissions claude-code --model claude-opus-4-8`.
   See the [model axis](./AGENT_YAML.md#model).
 - **Apple Silicon:** many ported tasks are built for `linux/amd64`. If a task
   was authored for amd64, force it with `--platform linux/amd64` (it runs under

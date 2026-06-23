@@ -1403,4 +1403,21 @@ describe('examples/agents migration', () => {
       }
     });
   }
+
+  it('claude-code defaults to headless (direct print mode); headed restores supervised', () => {
+    const base = loadAgent(path.join(agentsDir, 'claude-code'));
+    // The base config IS the headless print-mode config — it resolves when no
+    // variant is given, so a bare `claude-code` now runs headless by default.
+    expect(base.interaction.mode).toBe('direct');
+    expect(base.entrypoint.args).toContain('-p');
+    // The old `headless`/`verbose` variant names are gone; `headed` is the
+    // supervised opt-in.
+    const variants = getAgentVariants(base);
+    expect(variants).not.toContain('headless');
+    expect(variants).not.toContain('verbose');
+    expect(variants).toContain('headed');
+    const headed = applyAgentVariant(base, 'headed');
+    expect(headed.interaction.mode).toBe('supervised');
+    expect(headed.entrypoint.args).toEqual(['--dangerously-skip-permissions']);
+  });
 });
