@@ -43,6 +43,12 @@ container boundary at all:
   execution, and npm install scripts are disabled (`--ignore-scripts`) — but it still runs `git`/`npm`/`curl`
   on your host, so only resolve agents from sources you trust.
 - **`bn runs export`.** Extracting a workspace writes/reads a tar archive and applies a patch on the host.
+- **Container Node runtime fetch.** For a custom / non-bunsen base image, Bunsen fetches its own Node
+  binary on first use (cached per-user), then mounts it **read-only** at `/bunsen/runtime/node`. The
+  download is gated on a sha256 pinned in the repo (`node-runtime-manifest.json`, anchored to nodejs.org's
+  signed `SHASUMS256.txt`), so you get exactly the audited bytes or a hard failure — a malicious agent can't
+  swap the platform-tool runtime, and the URL is https-pinned. Set `BUNSEN_NODE_OFFLINE=1` to forbid the
+  fetch entirely (reproducible / air-gapped), or pre-seed it with `BUNSEN_NODE_RUNTIME_DIR`.
 
 ## The real container posture
 
