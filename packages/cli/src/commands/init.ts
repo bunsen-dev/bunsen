@@ -13,10 +13,12 @@ import * as path from 'node:path';
 import chalk from 'chalk';
 import { BunsenCliError } from '../errors.js';
 import { EXIT_CODES } from '../exit-codes.js';
+import { bundledAgentsDir, installAgentsInto, listBundledAgents } from './agents-add.js';
 
 interface InitOptions {
   force?: boolean;
   example?: boolean;
+  starterAgents?: boolean;
 }
 
 const CONFIG_FILENAME = 'bunsen.config.yaml';
@@ -132,6 +134,20 @@ export async function initCommand(options: InitOptions): Promise<void> {
     }
   }
 
+  if (options.starterAgents) {
+    // Copy the bundled starter agents into `agents/` (the default paths.agents
+    // entry the DEFAULT_CONFIG above declares). Existing dirs are skipped unless
+    // --force is passed, so re-running init never clobbers a customized agent.
+    const sourceDir = bundledAgentsDir();
+    const starters = listBundledAgents(sourceDir);
+    const agentsDir = path.join(cwd, 'agents');
+    const results = installAgentsInto(sourceDir, agentsDir, starters, { force: options.force });
+    for (const r of results) {
+      if (r.status === 'skipped') existed.push(path.join('agents', r.name));
+      else created.push(path.join('agents', r.name));
+    }
+  }
+
   console.log(chalk.green(`Initialized Bunsen project at ${cwd}`));
   console.log();
   for (const file of created) {
@@ -146,5 +162,11 @@ export async function initCommand(options: InitOptions): Promise<void> {
   console.log(chalk.dim('  bn experiments list        List experiments'));
   if (options.example) {
     console.log(chalk.dim('  bn run hello-world echo-agent'));
+  }
+  if (options.starterAgents) {
+    console.log(chalk.dim('  bn agents list             See the starter agents you just added'));
+    console.log(chalk.dim('  bn run <experiment> claude-code   (set ANTHROPIC_API_KEY in .env first)'));
+  } else {
+    console.log(chalk.dim('  bn agents add              Add a starter agent (claude-code, codex-cli, gemini-cli)'));
   }
 }

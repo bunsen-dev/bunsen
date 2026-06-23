@@ -66,6 +66,7 @@ Inspect, validate, and prebuild agents.
 | `bn agents show <name>`          | Show details about an agent.                                    |
 | `bn agents validate [name]`      | Validate `agent.yaml`. `--all` for every agent.                |
 | `bn agents build <agent>`        | Build and cache `install.build` artifacts. `--platform`, `--rebuild`. |
+| `bn agents add [names…]`         | Copy bundled starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into the project's agents dir. No names adds all; `--list` shows them; `--force` overwrites an existing dir. |
 
 ## `bn suites`
 
@@ -111,7 +112,7 @@ Inspect, augment, and calibrate [evaluation](./SCORERS.md) results.
 
 | Command                          | Description                                                            |
 | -------------------------------- | --------------------------------------------------------------------- |
-| `bn init`                        | Scaffold `bunsen.config.yaml`. `--example` also writes a starter experiment + agent; `-f/--force` overwrites. |
+| `bn init`                        | Scaffold `bunsen.config.yaml`. `--example` also writes a starter experiment + echo-agent; `--starter-agents` copies the starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into `agents/` (existing agent dirs are skipped unless `--force`); `-f/--force` overwrites. |
 | `bn new <type> <name>`           | Create a new `experiment` or `agent`. `-t/--template`.                |
 | `bn doctor`                      | Environment diagnostics (Docker, git, project config).              |
 | `bn config show`                 | Print the resolved `bunsen.config.yaml`.                            |

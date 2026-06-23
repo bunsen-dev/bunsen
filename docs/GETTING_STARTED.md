@@ -51,6 +51,28 @@ serves an interactive viewer (traces, diff, artifacts) at `http://localhost:3456
 For everything a run captures and where it lives on disk, see
 [Run Manifest & Events](./RUN_MANIFEST.md).
 
+## Run a real coding agent
+
+`echo-agent` proves the loop but makes no model calls. To run an actual coding
+agent, copy a bundled **starter** into your project — Bunsen ships the three
+frontier coding CLIs inside the CLI itself:
+
+```bash
+bn agents add              # copies claude-code, codex-cli, gemini-cli into agents/
+                           # (or run `bn init --starter-agents` at scaffold time)
+bn agents list             # confirm they resolve
+
+# Set the matching key in .env, then run one:
+bn run hello-world claude-code
+```
+
+Each starter needs its provider's key in `.env` — `ANTHROPIC_API_KEY` for
+`claude-code`, `OPENAI_API_KEY` for `codex-cli`, `GEMINI_API_KEY` for
+`gemini-cli`. The copied agents are plain files in `agents/<name>/` that you own:
+pin a different CLI version, add a variant, or swap the model with
+`bn run … claude-code --model <id>`. See [`agent.yaml`](./AGENT_YAML.md) for the
+full schema.
+
 ## Where to next
 
 You've seen the full loop. Now pick the path that matches your goal — each is

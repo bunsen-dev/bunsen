@@ -35,6 +35,7 @@ import { humanScoreCommand } from './commands/human-score.js';
 import { calibrateCommand } from './commands/calibrate.js';
 import { exportCommand } from './commands/export.js';
 import { buildAgentCommand } from './commands/build-agent.js';
+import { agentsAddCommand } from './commands/agents-add.js';
 import { cacheListCommand, cacheCleanCommand } from './commands/cache.js';
 import { rebuildIndexCommand } from './commands/rebuild-index.js';
 import { indexStatusCommand } from './commands/index-status.js';
@@ -180,6 +181,15 @@ agentsCommand
   .option('--platform <platform>', 'Build platform (linux/amd64 or linux/arm64)')
   .option('--format <format>', 'Output format (text|json|yaml)', 'text')
   .action(buildAgentCommand);
+
+agentsCommand
+  .command('add')
+  .description('Copy bundled starter agents (claude-code, codex-cli, gemini-cli) into the project')
+  .argument('[names...]', 'Starter agent names to add (default: all)')
+  .option('--list', 'List the available starter agents without copying')
+  .option('--force', 'Overwrite an agent directory that already exists')
+  .option('--format <format>', 'Output format (text|json|yaml)', 'text')
+  .action(wrapCommand(agentsAddCommand));
 
 // ---------------------------------------------------------------------------
 // bn suites
@@ -534,8 +544,9 @@ program
 program
   .command('init')
   .description('Scaffold bunsen.config.yaml in the current directory')
-  .option('-f, --force', 'Overwrite an existing bunsen.config.yaml')
+  .option('-f, --force', 'Overwrite an existing bunsen.config.yaml (and existing agents with --starter-agents)')
   .option('--example', 'Also scaffold a tiny experiment + agent')
+  .option('--starter-agents', 'Also copy the starter agents (claude-code, codex-cli, gemini-cli) into agents/')
   .action(initCommand);
 
 // ---------------------------------------------------------------------------
