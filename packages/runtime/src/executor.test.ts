@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -649,10 +649,16 @@ describe('fs.cpSync verbatimSymlinks (dep cache contract)', () => {
     }
   });
 
-  it('default fs.cpSync resolves relative symlinks to absolute (regression witness)', () => {
-    // Documents the bug class the verbatimSymlinks fix guards against.
-    // If Node ever changes the default to preserve verbatim, this test
-    // starts failing and the workaround can be reconsidered.
+  it('verbatimSymlinks is load-bearing: bun default fs.cpSync symlink handling is platform-dependent (witness)', () => {
+    // Witness for the *default* (no verbatimSymlinks) symlink-copy behavior of
+    // the Bun runtime — it is PLATFORM-DEPENDENT: macOS preserves the relative
+    // target verbatim, Linux resolves it to an absolute path (like Node). On
+    // Linux that absolute target points back at the source build tmpdir and
+    // breaks a relocated dep cache — which is exactly why the contract test above
+    // passes `verbatimSymlinks: true` (proven to preserve on both platforms). So
+    // the option is NOT belt-and-suspenders; it is required wherever Bunsen runs
+    // on Linux (CI, most prod hosts). If this starts failing, bun's default
+    // changed and the rationale should be revisited.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bunsen-cpsync-default-'));
     try {
       const src = path.join(root, 'src');
@@ -664,9 +670,11 @@ describe('fs.cpSync verbatimSymlinks (dep cache contract)', () => {
       fs.cpSync(src, dst, { recursive: true });
 
       const link = fs.readlinkSync(path.join(dst, 'bin', 'python'));
-      // The default behavior writes an absolute path resolved against the source.
-      expect(path.isAbsolute(link)).toBe(true);
-      expect(link).toContain('realbin');
+      if (process.platform === 'linux') {
+        expect(path.isAbsolute(link)).toBe(true);
+      } else {
+        expect(link).toBe('realbin');
+      }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

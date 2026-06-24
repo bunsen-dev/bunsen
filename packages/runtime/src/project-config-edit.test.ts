@@ -4,7 +4,7 @@
  * Tests for targeted, comment-preserving edits to bunsen.config.yaml#suites.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';

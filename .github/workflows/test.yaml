@@ -1,0 +1,69 @@
+name: Test
+
+# Typechecks and tests the whole workspace. Two test runtimes by design:
+#   - @bunsen-dev/runtime + @bunsen-dev/cli run on `bun test` (their run-index is
+#     coupled to `bun:sqlite`, which only the Bun runtime provides — see
+#     packages/runtime/src/run-index.ts and tasks/.../BUILD_AND_DISTRIBUTE_BN_CLI.md).
+#   - @bunsen-dev/types / sdk / agents stay on vitest-on-Node (the pure libraries
+#     that ship to npm — keeping their tests on Node proves Node compatibility).
+# The runtime suite also shells out to python3 for the proxy cost-estimator test
+# (`pnpm --filter @bunsen-dev/runtime test:proxy`).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        # Version comes from the root package.json "packageManager" field.
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Set up Bun
+        # The Bun runtime that executes the runtime+cli suites (and the eventual
+        # `bun build --compile` binary). Pinned for reproducibility.
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Set up Python
+        # For the proxy cost-estimator test (ai_capture_test.py, stdlib-only).
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # Topological build. @bunsen-dev/runtime must be built so @bunsen-dev/cli
+        # can resolve it (the workspace package resolves via its dist exports,
+        # not source). Also emits the agent .cjs bundles and the cli esbuild
+        # bundle, validating the build itself. No network/Docker needed (the
+        # agents `build` uses the esbuild-only `bundles` target).
+        run: pnpm -r build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test
+        run: pnpm -r test

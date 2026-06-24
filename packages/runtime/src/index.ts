@@ -200,6 +200,8 @@ export {
   BUNSEN_LABEL,
   BUNSEN_RUN_ID_LABEL,
   BUNSEN_COMPONENT_LABEL,
+  // Pinned sidecar image (surfaced by `bn doctor`)
+  MITMPROXY_IMAGE,
   // Cleanup
   listBunsenContainers,
   listBunsenNetworks,

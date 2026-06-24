@@ -8,7 +8,7 @@
  * complete example YAML passes the SAME loader `bn … validate` uses, and the
  * generated reference tables are in sync with the JSON schemas.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';

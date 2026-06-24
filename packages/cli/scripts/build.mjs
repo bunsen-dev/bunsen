@@ -141,7 +141,13 @@ async function bundleCli() {
   const externals = new Set();
   for (const out of Object.values(result.metafile.outputs)) {
     for (const imp of out.imports ?? []) {
-      if (imp.external && !isBuiltin(imp.path)) externals.add(imp.path);
+      // Drop Node builtins (`fs`, `node:path`, …) AND Bun builtins (`bun:sqlite`)
+      // — neither is an npm dependency. `bun:sqlite` is provided by the Bun
+      // runtime that executes this bundle (dev: `bun …`; release: the compiled
+      // binary), so it never belongs in package.json `dependencies`.
+      if (imp.external && !isBuiltin(imp.path) && !imp.path.startsWith('bun:')) {
+        externals.add(imp.path);
+      }
     }
   }
   console.log(`\nExternal runtime deps (must be in package.json dependencies):`);

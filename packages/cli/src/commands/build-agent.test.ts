@@ -3,16 +3,18 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 
-const coreMocks = vi.hoisted(() => ({
+// bun:test's `vi.mock` patches in place (no hoisting), so a plain object works
+// where vitest needed `vi.hoisted`.
+const coreMocks = {
   parseAgentVariantSyntax: vi.fn(),
   resolveAgent: vi.fn(),
   describeSearchedLocations: vi.fn(),
   loadAgent: vi.fn(),
   resolveAgentSource: vi.fn(),
   buildAgentArtifacts: vi.fn(),
-}));
+};
 
 vi.mock('@bunsen-dev/runtime', () => coreMocks);
 

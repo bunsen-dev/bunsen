@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 
-const coreMocks = vi.hoisted(() => ({
+// bun:test's `vi.mock` patches in place (no hoisting), so a plain object works
+// where vitest needed `vi.hoisted`.
+const coreMocks = {
   clearBuildCache: vi.fn(),
   clearDepsCache: vi.fn(),
   listBuildCacheEntries: vi.fn(),
   listDepsCacheEntries: vi.fn(),
-}));
+};
 
 vi.mock('@bunsen-dev/runtime', () => coreMocks);
 

@@ -1,16 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const coreMocks = vi.hoisted(() => ({
+// bun:test's `vi.mock` patches in place (no hoisting), so a plain object works
+// where vitest needed `vi.hoisted`.
+const coreMocks = {
   loadRunManifest: vi.fn(),
   getWorkspaceTarPath: vi.fn(),
   loadWorkspaceDiff: vi.fn(),
-}));
+};
 
 vi.mock('@bunsen-dev/runtime', () => coreMocks);
 
@@ -19,7 +21,7 @@ import { exportCommand } from './export.js';
 const TAR_BLOCK_SIZE = 512;
 
 let tmpDir: string;
-let exitSpy: MockInstance<typeof process.exit>;
+let exitSpy: Mock<typeof process.exit>;
 
 beforeEach(() => {
   vi.clearAllMocks();

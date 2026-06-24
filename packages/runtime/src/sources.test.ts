@@ -4,7 +4,7 @@
  * Tests for v1 agent source resolution.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -28,7 +28,9 @@ import {
 import type { InstallSource } from '@bunsen-dev/types';
 import type { ResolvedAgent } from './agent-loader.js';
 
-const mockExecFileSync = vi.mocked(execFileSync);
+// bun:test has no `vi.mocked` type helper; the imported `execFileSync` already
+// IS the mock from the factory above, so cast it to the mock type directly.
+const mockExecFileSync = execFileSync as unknown as Mock<typeof execFileSync>;
 
 function makeAgent(
   overrides: Partial<ResolvedAgent> & Pick<ResolvedAgent, 'install'>

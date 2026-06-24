@@ -4,7 +4,7 @@
  * Tests for the Evaluation Coordinator (v1 criteria input shape).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import type {
   Criterion,
   CriterionResult,

@@ -52,6 +52,7 @@ import {
   suitesInfoCommand,
 } from './commands/suites.js';
 import { doctorCommand } from './commands/doctor.js';
+import { upgradeCommand } from './commands/upgrade.js';
 import { initCommand } from './commands/init.js';
 import { publishRunCommand, publishReportCommand } from './commands/publish.js';
 import {
@@ -536,6 +537,16 @@ program
   .description('Run environment diagnostics (Docker, git, project config, …)')
   .option('--format <format>', 'Output format (text|json|yaml)', 'text')
   .action(doctorCommand);
+
+// ---------------------------------------------------------------------------
+// bn upgrade — self-update the standalone binary (defers to brew/scoop)
+// ---------------------------------------------------------------------------
+
+program
+  .command('upgrade')
+  .description('Update bn to the latest release (standalone binary; defers to brew/scoop/git)')
+  .option('-f, --force', 'Reinstall even if already on the latest version')
+  .action(upgradeCommand);
 
 // ---------------------------------------------------------------------------
 // bn init — scaffold bunsen.config.yaml in the current directory

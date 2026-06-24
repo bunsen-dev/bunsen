@@ -76,7 +76,7 @@ export const suiteCommand = `<span class="dim"># add the suite at a pinned ref, 
 <span class="cmd">bn suites add</span> https://github.com/bunsen-dev/terminal-bench.git --as terminal-bench
 <span class="cmd">bn run</span> terminal-bench/crack-7z-hash claude-code   <span class="dim"># code-scored, no API key</span>`;
 
-export const quickstartCommands = `<span class="cmd">npm i -g</span> @bunsen-dev/cli
+export const quickstartCommands = `<span class="cmd">curl -fsSL</span> https://bunsen.dev/install.sh | <span class="cmd">sh</span>   <span class="dim"># standalone binary — no Node</span>
 <span class="cmd">bn skills install</span>         <span class="dim"># so your agent can help you with anything you want to do with Bunsen</span>
 
 <span class="cmd">mkdir</span> my-lab &amp;&amp; <span class="cmd">cd</span> my-lab

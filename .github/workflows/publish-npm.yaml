@@ -1,9 +1,12 @@
 name: Publish npm packages
 
-# Publishes the three public packages — @bunsen-dev/types, @bunsen-dev/sdk, @bunsen-dev/cli —
-# to npm with SLSA provenance. The internal packages (@bunsen-dev/runtime,
-# @bunsen-dev/agents, @bunsen-dev/diff-filter) are marked "private": true and
-# `pnpm -r publish` skips them automatically.
+# Publishes the two public library packages — @bunsen-dev/types, @bunsen-dev/sdk —
+# to npm with SLSA provenance. @bunsen-dev/cli is NO LONGER published to npm: it
+# ships as a standalone `bun build --compile` binary (see release.yaml +
+# install.sh) and is now "private": true, joining the other internal packages
+# (@bunsen-dev/runtime, @bunsen-dev/agents, @bunsen-dev/diff-filter). `pnpm -r
+# publish` skips every private package automatically, so the publish set is
+# exactly types + sdk.
 #
 # How auth works here: pnpm packs each public package (rewriting `workspace:*`
 # to real versions) and shells out to the `npm` CLI to upload. The npm CLI is
@@ -81,7 +84,7 @@ jobs:
         # public package in its own dir instead (resolves workspace:* + runs prepack,
         # mirroring what `pnpm -r publish` does at release time).
         run: |
-          for pkg in types sdk cli; do
+          for pkg in types sdk; do
             echo "── packing @bunsen-dev/$pkg ──"
             ( cd "packages/$pkg" && pnpm pack )
           done
@@ -89,7 +92,8 @@ jobs:
       - name: Publish public packages with provenance
         if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
         # `pnpm -r publish` walks the workspace in topological order
-        # (types → sdk → cli) and skips every "private": true package.
+        # (types → sdk) and skips every "private": true package — including
+        # @bunsen-dev/cli, which is binary-distributed, not published.
         run: pnpm -r publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -58,7 +58,16 @@ export const BUNSEN_RUN_ID_LABEL = 'bunsen.run-id';
 export const BUNSEN_COMPONENT_LABEL = 'bunsen.component';
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-const MITMPROXY_IMAGE = 'mitmproxy/mitmproxy:latest';
+/**
+ * Pinned mitmproxy sidecar image. Pinned (not `:latest`) so an upstream breaking
+ * release can't silently land on a user's next pull and break trace capture.
+ * `12.2.3` is the current stable line — the version `:latest` already resolved
+ * to, so the addon (`src/proxy/ai_capture.py`, which uses mitmproxy's stable
+ * request/response hooks) has been running on it in practice; pinning just
+ * freezes it. Surfaced by `bn doctor`; bump deliberately and re-test
+ * `ai_capture_test.py` against the new line.
+ */
+export const MITMPROXY_IMAGE = 'mitmproxy/mitmproxy:12.2.3';
 const PROXY_PORT = 8080;
 
 const SUPPORTED_RUN_PLATFORMS = new Set<RunPlatform>(['linux/amd64', 'linux/arm64']);
@@ -808,8 +817,18 @@ export async function execInContainer(
     WorkingDir: workdir,
   });
 
-  // Start exec and get stream
-  const stream = await exec.start({ hijack: true, stdin: false });
+  // Start exec and get the multiplexed stdout/stderr stream.
+  //
+  // NOT `{ hijack: true }`: dockerode's raw-socket hijack of Docker's
+  // `101 Switching Protocols` upgrade is broken under the Bun runtime — it
+  // throws `(HTTP code 101) unexpected …` (Bun's `node:http` doesn't surface the
+  // hijacked upgrade socket the way docker-modem expects). `hijack` only matters
+  // for bidirectional streaming (attaching stdin); this exec is output-only
+  // (`stdin: false`), so the plain HTTP response stream carries the exact same
+  // multiplexed frames and `demuxStream` below works identically — verified
+  // byte-for-byte against Node. Re-test against real Docker before reintroducing
+  // `hijack` (e.g. for an interactive stdin exec) — it will need a Bun fix first.
+  const stream = await exec.start({ stdin: false });
 
   let stdout = '';
   let stderr = '';

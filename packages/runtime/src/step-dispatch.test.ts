@@ -13,7 +13,7 @@
  *   malformed-step guard).
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -34,7 +34,8 @@ import {
 } from './step-dispatch.js';
 
 const fakeContainer = {} as Parameters<typeof dispatchSteps>[0];
-const mockedExec = vi.mocked(execShellInContainer);
+// bun:test has no `vi.mocked` helper; the imported binding already IS the mock.
+const mockedExec = execShellInContainer as unknown as Mock<typeof execShellInContainer>;
 
 interface ExecCall {
   script: string;

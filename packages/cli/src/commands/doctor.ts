@@ -18,6 +18,7 @@ import {
   isGitAvailable,
   loadProject,
   ProjectConfigError,
+  MITMPROXY_IMAGE,
 } from '@bunsen-dev/runtime';
 import { resolveFormat, isMachineFormat, renderMachine } from '../format.js';
 import { EXIT_CODES } from '../exit-codes.js';
@@ -42,6 +43,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
   const checks: CheckResult[] = [];
 
   checks.push(await checkDocker());
+  checks.push(checkContainerImages());
   checks.push(await checkProcps());
   checks.push(checkGit());
   checks.push(checkProject());
@@ -94,6 +96,21 @@ async function checkDocker(): Promise<CheckResult> {
       detail: `Docker reachable but version probe failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+}
+
+function checkContainerImages(): CheckResult {
+  // Bunsen pulls container images on demand — it does not ship them in the
+  // binary. The honest companion to "the binary installed but first run needs
+  // Docker": the proxy sidecar (pinned) and any experiment base image are
+  // fetched on the first run that needs them.
+  return {
+    id: 'container_images',
+    label: 'Container images',
+    status: 'ok',
+    detail: `proxy sidecar pinned to ${MITMPROXY_IMAGE}`,
+    hint: 'Pulled on demand: the first run that captures traces pulls this image, and the first run of an experiment pulls its base image — allow network + time on that initial run.',
+    data: { mitmproxyImage: MITMPROXY_IMAGE },
+  };
 }
 
 async function checkProcps(): Promise<CheckResult> {

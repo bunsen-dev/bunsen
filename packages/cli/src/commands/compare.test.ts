@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 import type { RunManifestV1 } from '@bunsen-dev/types';
 
-const coreMocks = vi.hoisted(() => ({
+// bun:test's `mock.module` (aliased as `vi.mock`) patches the module registry
+// in place and retroactively, so — unlike vitest — the mock factory does not get
+// hoisted above the imports and needs no `vi.hoisted` wrapper. A plain object
+// defined before the `vi.mock` call is sufficient.
+const coreMocks = {
   listRuns: vi.fn(),
   loadRunManifest: vi.fn(),
-}));
+};
 
 vi.mock('@bunsen-dev/runtime', () => coreMocks);
 

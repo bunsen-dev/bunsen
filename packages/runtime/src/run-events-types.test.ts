@@ -23,7 +23,7 @@
  * assertions because the checks are at the type level.
  */
 
-import { describe, it } from 'vitest';
+import { describe, it } from 'bun:test';
 import type { RunEventInput } from './run-events.js';
 
 describe('RunEventInput type safety', () => {
