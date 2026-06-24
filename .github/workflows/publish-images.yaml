@@ -26,6 +26,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # OIDC token for actions/attest-build-provenance
 
     strategy:
       matrix:
@@ -78,6 +79,7 @@ jobs:
 
       - name: Build and push Docker image
         if: steps.check.outputs.should_build == 'true'
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./images/${{ matrix.image }}
@@ -93,5 +95,5 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
-          subject-digest: ${{ steps.meta.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
