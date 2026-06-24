@@ -1,6 +1,6 @@
 {
   "name": "@bunsen-dev/runtime",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Internal execution engine for Bunsen. Not part of the public API — use @bunsen-dev/sdk instead.",
   "type": "module",

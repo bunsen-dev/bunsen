@@ -7,4 +7,4 @@
  * `bn --version` flag and to stamp `bn skills install` so `bn skills list` can
  * warn when bundled skills were installed by an older CLI.
  */
-export const CLI_VERSION = '0.1.1';
+export const CLI_VERSION = '0.2.0';

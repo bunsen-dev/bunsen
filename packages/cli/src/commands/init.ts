@@ -87,8 +87,13 @@ install:
     type: local
 
 entrypoint:
-  command: /bin/sh
-  args: ['-c', 'echo "$@"', '--']
+  # Bunsen invokes \`<command> <task-prompt> <entrypoint.args…>\` — the prompt is
+  # the leading positional arg, and any entrypoint.args are appended AFTER it
+  # (see docs/AGENT_YAML.md). So a trivial echo agent is just \`echo\` with no
+  # args: \`echo '<prompt>'\`. Do NOT use \`/bin/sh -c '…' --\` here — that needs
+  # its args BEFORE the prompt, which the prompt-first contract can't express, so
+  # the prompt would be mis-read as a script name.
+  command: echo
 
 interaction:
   mode: direct
