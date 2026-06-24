@@ -43,11 +43,12 @@ humans and AI can build on.
 
 ## Quick Start
 
-**Prerequisites:** Docker, Node.js ≥ 22, and an `ANTHROPIC_API_KEY` (Bunsen's
-orchestrator and LLM evaluation run on Claude).
+**Prerequisites:** a running **Docker** daemon and an `ANTHROPIC_API_KEY`
+(Bunsen's orchestrator and LLM evaluation run on Claude). No Node toolchain
+required — the `bn` binary embeds its own runtime.
 
 ```bash
-npm i -g @bunsen-dev/cli
+curl -fsSL https://bunsen.dev/install.sh | sh   # standalone binary onto your PATH
 bn doctor                  # verify Docker + environment
 
 mkdir my-lab && cd my-lab
@@ -75,17 +76,21 @@ walks it in detail and forks into two paths —
 [Run a Terminal Bench Task](./docs/RUN_TERMINAL_BENCH.md) or
 [Bring Your Own Task](./docs/BRING_YOUR_OWN_TASK.md).
 
-> **Distribution.** The CLI currently ships as an npm package that runs on your
-> Node. It will move to a signed, self-contained standalone binary
-> (`curl | sh`, no Node required). `@bunsen-dev/types` stays on npm permanently. For
-> a one-shot try without a global install: `npx @bunsen-dev/cli …` (slower — prefer
-> `npm i -g` for real use). Experiments on Bunsen base images run end-to-end from
-> the npm install. Experiments using a **custom Dockerfile or non-bunsen base
-> image** also work from the npm install: Bunsen fetches the small Node runtime it
-> mounts into those containers on first use, verifies it against a pinned sha256,
-> and caches it per-user (glibc bases — debian/ubuntu/CUDA/etc.; musl/Alpine bases
-> aren't yet supported). Set `BUNSEN_NODE_OFFLINE=1` to forbid that fetch (CI /
-> air-gapped), or pre-seed it with `BUNSEN_NODE_RUNTIME_DIR`.
+> **Distribution.** `bn` ships as a **single self-contained binary** — one
+> download onto your PATH, no Node and no version skew (the binary embeds its own
+> runtime). Install with `curl -fsSL https://bunsen.dev/install.sh | sh`, or via a
+> Homebrew tap (`brew install bunsen-dev/tap/bunsen`) / Scoop on Windows. The one
+> unavoidable host prerequisite is a **Docker daemon** — experiments run in
+> reproducible containers, and the first run pulls a couple of images (the
+> mitmproxy trace-capture sidecar + your experiment's base image); `bn doctor`
+> reports both honestly. `@bunsen-dev/sdk` + `@bunsen-dev/types` (the programmatic
+> surface) stay on npm. Experiments using a **custom Dockerfile or non-bunsen base
+> image** work too: Bunsen fetches the small container Node runtime it mounts into
+> those containers on first use, verifies it against a pinned sha256, and caches it
+> per-user (glibc bases — debian/ubuntu/CUDA/etc.; musl/Alpine bases aren't yet
+> supported). Set `BUNSEN_NODE_OFFLINE=1` to forbid that fetch (CI / air-gapped),
+> or pre-seed it with `BUNSEN_NODE_RUNTIME_DIR`. The binary is ~55–110 MB per
+> platform — that's the embedded-runtime floor, not app size.
 
 ### From a source checkout (for contributing)
 

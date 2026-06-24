@@ -17,7 +17,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "gen:skill-reference": "node scripts/gen-skill-reference.mjs",
-    "bn": "node packages/cli/dist/bin.js"
+    "bn": "bun packages/cli/dist/bin.js"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

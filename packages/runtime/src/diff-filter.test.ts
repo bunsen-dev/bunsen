@@ -4,7 +4,7 @@
  * Tests for diff filtering utilities
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { filterLockfilesFromDiff, LOCKFILE_BASENAMES } from './diff-filter.js';
 
 // Helper: build a unified diff section with "diff -Nu" header (per-file mode)

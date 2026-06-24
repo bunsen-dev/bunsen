@@ -5,7 +5,7 @@
  * pipeline is exercised separately in `trace-stream.test.ts`.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import type { AITrace } from '@bunsen-dev/types';
 import {
   filterTracesInMemory,

@@ -4,7 +4,7 @@
  * Tests for calibration calculations
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { computeCalibration } from './calibration.js';
 import type { RunScorePair } from './calibration.js';
 import type {

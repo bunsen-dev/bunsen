@@ -11,7 +11,7 @@ export function FinalCTA({ waitlistStatus }: { waitlistStatus?: string }) {
           <em>and</em> the evidence.
         </h2>
         <p>
-          The CLI is source-available today — <code>npm i -g @bunsen-dev/cli</code>. Join the list for
+          The CLI is source-available today — <code>curl -fsSL https://bunsen.dev/install.sh | sh</code>. Join the list for
           releases and early access to the hosted lab: remote runs, shared analysis, publishing.
         </p>
         <div className="cta-row">

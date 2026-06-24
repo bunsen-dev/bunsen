@@ -1,0 +1,177 @@
+name: Release binaries
+
+# Builds the standalone `bn` binaries, signs them where a cert is configured,
+# attaches them (+ a unified SHA256SUMS) to the GitHub Release, and bumps the
+# Homebrew tap + Scoop bucket. Runs with publish-npm.yaml on `release: published`
+# — together: libraries on npm, the CLI as a signed standalone binary.
+#
+# Signing is per-OS (codesign/notarytool are macOS-only; signtool is Windows-only),
+# so the build is a per-OS matrix rather than Bun's one-host cross-compile. Every
+# signing step is GUARDED: absent the secret it no-ops and the release ships
+# unsigned (install.sh strips the macOS quarantine bit as the stopgap), turning on
+# automatically once the secret is set. See packaging/README.md.
+#
+# Windows is opt-in for launch (macOS + Linux first) — drop the windows matrix
+# entry to skip it.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build + upload binaries for"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-binaries-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            targets: darwin-arm64 darwin-x64
+            sign: macos
+          - os: ubuntu-latest
+            targets: linux-x64 linux-arm64
+            sign: none
+          - os: windows-latest
+            targets: windows-x64
+            sign: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: 1.3.14 }
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build host assets
+        run: pnpm -r build
+
+      - name: Compile binaries
+        run: pnpm --filter @bunsen-dev/cli build:binary ${{ matrix.targets }}
+
+      - name: Sign + notarize (macOS)
+        if: matrix.sign == 'macos'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+        run: |
+          if [ -z "$MACOS_CERT_P12_BASE64" ]; then
+            echo "::warning::No macOS signing cert configured — shipping UNSIGNED darwin binaries."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KPW="$(uuidgen)"
+          security create-keychain -p "$KPW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPW" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          echo "$MACOS_CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KPW" "$KEYCHAIN" >/dev/null
+          for f in packages/cli/dist/binaries/bn-darwin-*; do
+            echo "── signing $f ──"
+            codesign --force --options runtime --timestamp \
+              --entitlements packaging/macos-entitlements.plist \
+              --sign "$MACOS_SIGN_IDENTITY" "$f"
+            codesign --verify --strict --verbose=2 "$f"
+            ditto -c -k --keepParent "$f" "$f.zip"
+            xcrun notarytool submit "$f.zip" \
+              --apple-id "$MACOS_NOTARY_APPLE_ID" \
+              --password "$MACOS_NOTARY_PASSWORD" \
+              --team-id "$MACOS_NOTARY_TEAM_ID" --wait
+            rm -f "$f.zip"
+          done
+
+      - name: Sign (Windows Authenticode)
+        if: matrix.sign == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERT_PFX_BASE64) {
+            Write-Host "::warning::No Windows signing cert configured — shipping UNSIGNED windows binary."
+            exit 0
+          }
+          $pfx = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+          & $signtool sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            packages\cli\dist\binaries\bn-windows-x64.exe
+
+      - name: Upload binaries as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}
+          path: packages/cli/dist/binaries/bn-*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - name: Collect all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: binaries-*
+          merge-multiple: true
+
+      - name: Unified SHA256SUMS
+        run: |
+          cd artifacts
+          sha256sum bn-* > SHA256SUMS
+          echo "── released assets ──"; cat SHA256SUMS
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          cd artifacts
+          gh release upload "$TAG" bn-* SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Bump Homebrew tap + Scoop bucket
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN unset — skipping tap/bucket bump (run packaging/generate-packages.mjs manually)."
+            exit 0
+          fi
+          VERSION="${TAG#v}"
+          node packaging/generate-packages.mjs "$VERSION" artifacts/SHA256SUMS packaging/out
+          git config --global user.name "bunsen-release-bot"
+          git config --global user.email "release@bunsen.dev"
+          # Homebrew tap
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bunsen-dev/homebrew-tap.git" tap
+          mkdir -p tap/Casks && cp packaging/out/bunsen.rb tap/Casks/bunsen.rb
+          ( cd tap && git add Casks/bunsen.rb && git commit -m "bunsen ${VERSION}" && git push ) || echo "tap unchanged"
+          # Scoop bucket
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bunsen-dev/scoop-bucket.git" bucket
+          mkdir -p bucket/bucket && cp packaging/out/bunsen.json bucket/bucket/bunsen.json
+          ( cd bucket && git add bucket/bunsen.json && git commit -m "bunsen ${VERSION}" && git push ) || echo "bucket unchanged"

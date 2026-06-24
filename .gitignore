@@ -59,3 +59,6 @@ temp/
 # Local-only planning, never published
 working-docs/
 tasks/
+
+# Local output of packaging/generate-packages.mjs (CI generates + pushes these)
+packaging/out/

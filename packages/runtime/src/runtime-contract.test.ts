@@ -5,7 +5,7 @@
  * `BUNSEN_*` env vars the agent may rely on.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import {
   STABLE_PATHS,
   buildStablePathsMkdirScript,

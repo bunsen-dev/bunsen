@@ -5,7 +5,7 @@
  * override semantics, sha256 warning, legacy-field errors).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -20,7 +20,7 @@ import {
   AgentConfigError,
   type AgentWarning,
 } from './agent-loader.js';
-import type { AgentConfig } from '@bunsen-dev/types';
+import type { AgentConfig, InstallSource } from '@bunsen-dev/types';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -83,7 +83,7 @@ describe('parseAgentConfig', () => {
   });
 
   it('parses every install.source variant', () => {
-    for (const source of [
+    const sources: InstallSource[] = [
       { type: 'local' },
       { type: 'git', repo: 'https://example.com/repo.git', ref: 'main' },
       { type: 'npm', package: '@example/agent', version: '^1.0' },
@@ -92,7 +92,8 @@ describe('parseAgentConfig', () => {
         url: 'https://example.com/bin',
         sha256: 'a'.repeat(64),
       },
-    ]) {
+    ];
+    for (const source of sources) {
       const config = parseAgentConfig(baseYaml({ install: { source } }));
       expect(config.install.source).toEqual(source);
     }

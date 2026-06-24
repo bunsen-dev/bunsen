@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { shortRunId } from './short-id.js';
 
 describe('shortRunId', () => {

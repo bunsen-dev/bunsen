@@ -14,7 +14,7 @@
  * gone (every run dir is born with a manifest), so there's nothing to test
  * for synthesis anymore.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

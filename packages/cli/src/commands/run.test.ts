@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 
-const coreMocks = vi.hoisted(() => ({
+// bun:test's `vi.mock` patches in place (no hoisting), so plain objects work
+// where vitest needed `vi.hoisted`.
+const coreMocks = {
   loadExperiment: vi.fn(),
   loadAgent: vi.fn(),
   executeRun: vi.fn(),
@@ -14,15 +16,15 @@ const coreMocks = vi.hoisted(() => ({
   resolveAgent: vi.fn(),
   describeSearchedLocations: vi.fn(),
   AgentConfigError: class AgentConfigError extends Error {},
-}));
+};
 
-const oraMocks = vi.hoisted(() => ({
+const oraMocks = {
   start: vi.fn(),
   stop: vi.fn(),
   fail: vi.fn(),
   clear: vi.fn(),
   render: vi.fn(),
-}));
+};
 
 vi.mock('@bunsen-dev/runtime', () => coreMocks);
 

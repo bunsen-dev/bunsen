@@ -8,7 +8,7 @@
  * params on persistent connections, and we want to assert against the
  * persisted schema anyway). Each test gets a fresh tempdir.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -105,7 +105,7 @@ describe('openRunIndex', () => {
   it('creates the index file + schema and stores schema_version', () => {
     const db = openRunIndex(tempDir);
     try {
-      const row = db.prepare<[string], { value: string }>(
+      const row = db.prepare<{ value: string }, [string]>(
         'SELECT value FROM meta WHERE key = ?'
       ).get('schema_version');
       expect(row?.value).toBe(String(RUN_INDEX_SCHEMA_VERSION));
@@ -130,7 +130,7 @@ describe('openRunIndex', () => {
     // from the manifest on disk — the new column is now present and queryable.
     db = openRunIndex(tempDir, { readonly: true });
     try {
-      const version = db.prepare<[string], { value: string }>(
+      const version = db.prepare<{ value: string }, [string]>(
         'SELECT value FROM meta WHERE key = ?'
       ).get('schema_version');
       expect(version?.value).toBe(String(RUN_INDEX_SCHEMA_VERSION));
@@ -185,7 +185,7 @@ describe('upsertManifest', () => {
       // Replace with a higher revision and confirm the row is overwritten.
       upsertManifest(db, makeManifest({ manifest_revision: 2, status: 'failed' }));
       expect(countRuns(db)).toBe(1);
-      const updated = db.prepare<[string], { manifest_revision: number; status: string }>(
+      const updated = db.prepare<{ manifest_revision: number; status: string }, [string]>(
         'SELECT manifest_revision, status FROM runs WHERE run_id = ?'
       ).get('r1');
       expect(updated?.manifest_revision).toBe(2);
@@ -235,7 +235,7 @@ describe('upsertManifest', () => {
         },
       ]);
 
-      const cost = db.prepare<[string], { source_key: string; calls: number; cache_read_input_tokens: number | null; cost_usd: number }>(
+      const cost = db.prepare<{ source_key: string; calls: number; cache_read_input_tokens: number | null; cost_usd: number }, [string]>(
         'SELECT source_key, calls, cache_read_input_tokens, cost_usd FROM run_cost_breakdown WHERE run_id = ? ORDER BY source_key'
       ).all('r1');
       expect(cost).toEqual([
@@ -244,12 +244,12 @@ describe('upsertManifest', () => {
       ]);
 
       // Run-wide cache totals land on the runs table too.
-      const totals = db.prepare<[string], { total_cache_read_input_tokens: number | null }>(
+      const totals = db.prepare<{ total_cache_read_input_tokens: number | null }, [string]>(
         'SELECT total_cache_read_input_tokens FROM runs WHERE run_id = ?'
       ).get('r1');
       expect(totals?.total_cache_read_input_tokens).toBe(9000);
 
-      const artifacts = db.prepare<[string], { kind: string; rel_path: string }>(
+      const artifacts = db.prepare<{ kind: string; rel_path: string }, [string]>(
         'SELECT kind, rel_path FROM run_artifacts WHERE run_id = ? ORDER BY kind'
       ).all('r1');
       expect(artifacts).toEqual([
@@ -283,12 +283,12 @@ describe('upsertManifest', () => {
       expect(criteria).toHaveLength(1);
       expect(criteria[0].criterion).toBe('lint');
       // Cost breakdown should be empty now.
-      const cost = db.prepare<[string], { c: number }>(
+      const cost = db.prepare<{ c: number }, [string]>(
         'SELECT COUNT(*) AS c FROM run_cost_breakdown WHERE run_id = ?'
       ).get('r1');
       expect(cost?.c).toBe(0);
       // Artifacts trimmed.
-      const artifacts = db.prepare<[string], { c: number }>(
+      const artifacts = db.prepare<{ c: number }, [string]>(
         'SELECT COUNT(*) AS c FROM run_artifacts WHERE run_id = ?'
       ).get('r1');
       expect(artifacts?.c).toBe(1);
@@ -307,7 +307,7 @@ describe('deleteRun', () => {
       upsertManifest(db, makeManifest());
       deleteRun(db, 'r1');
       expect(countRuns(db)).toBe(0);
-      const cost = db.prepare<[string], { c: number }>(
+      const cost = db.prepare<{ c: number }, [string]>(
         'SELECT COUNT(*) AS c FROM run_cost_breakdown WHERE run_id = ?'
       ).get('r1');
       expect(cost?.c).toBe(0);

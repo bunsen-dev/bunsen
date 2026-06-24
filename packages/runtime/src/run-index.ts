@@ -11,7 +11,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import Database, { type Database as DatabaseType } from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import type {
   AgentModelUsage,
   AllowedScores,
@@ -21,6 +21,11 @@ import type {
   RunSummary,
 } from '@bunsen-dev/types';
 import { getBunsenDir, getRunsDir, loadRunManifest } from './storage.js';
+
+// bun:sqlite's `Database` class doubles as the connection type (unlike
+// better-sqlite3, which exported a separate `Database` type). Alias it so the
+// signatures below read the same as before the port.
+type DatabaseType = Database;
 
 export const RUN_INDEX_FILENAME = 'index.sqlite';
 
@@ -225,15 +230,21 @@ export function openRunIndex(
  */
 function openIndexRaw(dbPath: string, readonly: boolean): DatabaseType {
   if (readonly) {
-    return new Database(dbPath, { readonly: true, fileMustExist: true });
+    // bun:sqlite has no `fileMustExist` option, but a readonly open of a
+    // missing file throws ("unable to open database file") — the same effect.
+    // Callers already `fs.existsSync`-guard before opening readonly.
+    return new Database(dbPath, { readonly: true });
   }
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
+  // `strict: true` lets the bare-key bind objects below (`{ run_id: … }`) match
+  // `@run_id` placeholders without the sigil; `create: true` creates the file.
+  const db = new Database(dbPath, { create: true, strict: true });
   // WAL mode: better concurrency; the SQLite file becomes a write-ahead log
   // that's append-only for the duration of a transaction. Important here
-  // because manifest writes happen on every run completion.
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  // because manifest writes happen on every run completion. bun:sqlite has no
+  // `.pragma()` helper — pragmas go through `.exec()`.
+  db.exec('PRAGMA journal_mode = WAL;');
+  db.exec('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA_SQL);
   upsertSchemaVersion(db);
   return db;
@@ -255,7 +266,7 @@ export function ensureRunIndexFresh(baseDir: string = process.cwd()): void {
 
 function indexSchemaIsStale(dbPath: string): boolean {
   try {
-    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    const db = new Database(dbPath, { readonly: true });
     try {
       const row = db
         .prepare("SELECT value FROM meta WHERE key = 'schema_version'")
@@ -605,7 +616,7 @@ function rowToSummary(row: RunRow): RunSummary {
 }
 
 export function getRunSummary(db: DatabaseType, runId: string): RunSummary | null {
-  const row = db.prepare<[string], RunRow>(
+  const row = db.prepare<RunRow, [string]>(
     `SELECT ${SUMMARY_COLUMNS} FROM runs WHERE run_id = ?`
   ).get(runId);
   return row ? rowToSummary(row) : null;
@@ -642,7 +653,7 @@ export function listRunSummaries(db: DatabaseType, filter: RunFilter = {}): RunS
        ORDER BY ${orderBy} ${orderDir}
        LIMIT ? OFFSET ?`;
 
-  const rows = db.prepare<unknown[], RunRow>(sql).all(...params, limit, offset);
+  const rows = db.prepare<RunRow, (string | number)[]>(sql).all(...params, limit, offset);
   return rows.map(rowToSummary);
 }
 
@@ -659,11 +670,11 @@ export interface CriterionRow {
 }
 
 export function listRunCriteria(db: DatabaseType, runId: string): CriterionRow[] {
-  const rows = db.prepare<[string], {
+  const rows = db.prepare<{
     run_id: string; criterion: string; weight: number; score: number | null;
     summary: string; status: string | null; scorer_type: string | null;
     allowed_scores_json: string | null; log_path: string | null;
-  }>(
+  }, [string]>(
     `SELECT run_id, criterion, weight, score, summary, status, scorer_type,
             allowed_scores_json, log_path
        FROM run_criteria WHERE run_id = ?
@@ -683,7 +694,7 @@ export function listRunCriteria(db: DatabaseType, runId: string): CriterionRow[]
 }
 
 export function countRuns(db: DatabaseType): number {
-  const row = db.prepare<[], { c: number }>('SELECT COUNT(*) AS c FROM runs').get();
+  const row = db.prepare<{ c: number }, []>('SELECT COUNT(*) AS c FROM runs').get();
   return row?.c ?? 0;
 }
 
@@ -693,10 +704,10 @@ export function countRuns(db: DatabaseType): number {
  * cross-run callers don't have to open each manifest.
  */
 export function listRunAgentModels(db: DatabaseType, runId: string): AgentModelUsage[] {
-  const rows = db.prepare<[string], {
+  const rows = db.prepare<{
     model: string; calls: number; input_tokens: number;
     output_tokens: number; cost_usd: number;
-  }>(
+  }, [string]>(
     `SELECT model, calls, input_tokens, output_tokens, cost_usd
        FROM run_agent_models WHERE run_id = ?
        ORDER BY rank`
@@ -716,7 +727,7 @@ export function listRunAgentModels(db: DatabaseType, runId: string): AgentModelU
  * the model was secondary). Backed by `idx_agent_models_model`.
  */
 export function findRunIdsByModel(db: DatabaseType, model: string): string[] {
-  const rows = db.prepare<[string], { run_id: string }>(
+  const rows = db.prepare<{ run_id: string }, [string]>(
     `SELECT DISTINCT run_id FROM run_agent_models WHERE model = ?`
   ).all(model);
   return rows.map((r) => r.run_id);

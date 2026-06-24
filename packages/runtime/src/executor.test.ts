@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -649,10 +649,16 @@ describe('fs.cpSync verbatimSymlinks (dep cache contract)', () => {
     }
   });
 
-  it('default fs.cpSync resolves relative symlinks to absolute (regression witness)', () => {
-    // Documents the bug class the verbatimSymlinks fix guards against.
-    // If Node ever changes the default to preserve verbatim, this test
-    // starts failing and the workaround can be reconsidered.
+  it('default fs.cpSync preserves relative symlinks verbatim under the Bun runtime (witness)', () => {
+    // Witness for the *default* symlink-copy behavior of the runtime Bunsen
+    // actually executes on. Node's default resolves a relative symlink target to
+    // an absolute path — the bug class the explicit `verbatimSymlinks: true`
+    // above guards against (a copied python/node symlink would point back at the
+    // source build tmpdir and break a relocated dep cache). Bun's default
+    // already preserves the target verbatim, so on Bun the default is safe and
+    // the explicit option is belt-and-suspenders + Node-compat insurance. If
+    // this starts failing, Bun's default changed and the rationale for the
+    // explicit option should be revisited.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bunsen-cpsync-default-'));
     try {
       const src = path.join(root, 'src');
@@ -664,9 +670,7 @@ describe('fs.cpSync verbatimSymlinks (dep cache contract)', () => {
       fs.cpSync(src, dst, { recursive: true });
 
       const link = fs.readlinkSync(path.join(dst, 'bin', 'python'));
-      // The default behavior writes an absolute path resolved against the source.
-      expect(path.isAbsolute(link)).toBe(true);
-      expect(link).toContain('realbin');
+      expect(link).toBe('realbin');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

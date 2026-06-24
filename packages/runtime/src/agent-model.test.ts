@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { buildAgentModels, type AgentModelTally } from './agent-model.js';
 
 function tallies(entries: Record<string, AgentModelTally>): Map<string, AgentModelTally> {

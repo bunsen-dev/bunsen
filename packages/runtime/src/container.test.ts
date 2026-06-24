@@ -6,8 +6,24 @@
 
 import { EventEmitter } from 'node:events';
 import * as path from 'node:path';
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import {
+import { describe, it, expect, vi, afterEach } from 'bun:test';
+import type { ProxyContainerInfo } from './container.js';
+
+// Capture the args passed to docker.createContainer so we can assert on the
+// HostConfig that createPersistentContainer builds, without a real daemon.
+//
+// Unlike vitest, bun:test's `vi.mock` patches the module registry in place
+// rather than hoisting above the imports — and container.ts constructs its
+// Docker client at module-eval time (`const docker = new Docker()`). So the
+// mock must be registered BEFORE container.js is first evaluated: the value
+// bindings come from a dynamic `import()` placed *after* `vi.mock`, not a
+// static top-of-file import (the type-only import above is erased and safe).
+const { createContainerMock } = { createContainerMock: vi.fn() };
+vi.mock('dockerode', () => ({
+  default: vi.fn(() => ({ createContainer: createContainerMock })),
+}));
+
+const {
   getAssetDir,
   getAddonScriptPath,
   getPricingDataPath,
@@ -23,15 +39,7 @@ import {
   archToRunPlatform,
   normalizeRunPlatform,
   runPlatformToArch,
-  type ProxyContainerInfo,
-} from './container.js';
-
-// Capture the args passed to docker.createContainer so we can assert on the
-// HostConfig that createPersistentContainer builds, without a real daemon.
-const { createContainerMock } = vi.hoisted(() => ({ createContainerMock: vi.fn() }));
-vi.mock('dockerode', () => ({
-  default: vi.fn(() => ({ createContainer: createContainerMock })),
-}));
+} = await import('./container.js');
 
 describe('getAssetDir', () => {
   const original = process.env.BUNSEN_ASSET_DIR;
@@ -165,8 +173,15 @@ describe('ExecTimeoutError', () => {
       timeoutMs: 10,
     });
 
-    expect(container.exec).toHaveBeenCalledOnce();
+    expect(container.exec).toHaveBeenCalledTimes(1);
     expect(exec.inspect).not.toHaveBeenCalled();
+    // Regression guard: dockerode's `hijack: true` raw-socket take-over of
+    // Docker's `101 Switching Protocols` upgrade throws `(HTTP code 101)
+    // unexpected …` under the Bun runtime (verified against real Docker). The
+    // exec is output-only, so it must start WITHOUT hijack. Do not reintroduce
+    // `hijack: true` without a Bun-side fix — the mocked tests can't catch it, a
+    // real `bn run` can.
+    expect(exec.start).toHaveBeenCalledWith({ stdin: false });
   });
 });
 
@@ -282,7 +297,7 @@ describe('createPersistentContainer HostConfig', () => {
 
     await createPersistentContainer({ image: 'bunsen/headless', mounts: [] });
 
-    expect(createContainerMock).toHaveBeenCalledOnce();
+    expect(createContainerMock).toHaveBeenCalledTimes(1);
     const config = createContainerMock.mock.calls[0][0];
     expect(config.HostConfig.SecurityOpt).toEqual(['no-new-privileges']);
   });

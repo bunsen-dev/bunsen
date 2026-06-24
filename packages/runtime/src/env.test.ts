@@ -4,7 +4,7 @@
  * Tests for environment variable utilities
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -289,7 +289,9 @@ describe('loadProjectEnv', () => {
     const loaded = loadProjectEnv();
 
     expect(loaded).toEqual({ TEST_PROJECT_VAR: 'from_project' });
-    expect(process.env.TEST_PROJECT_VAR).toBe('from_project');
+    // bun-types narrows unknown process.env keys to `undefined`; widen for the
+    // assertion (the var is set above and present at runtime).
+    expect(process.env.TEST_PROJECT_VAR as string | undefined).toBe('from_project');
   });
 
   it('returns empty when no bunsen.config.yaml is present', () => {
