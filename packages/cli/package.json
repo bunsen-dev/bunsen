@@ -5,7 +5,7 @@
   "author": "Matthew Job Granmoe",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
-  "//": "private: the CLI is distributed as a standalone `bun build --compile` binary via GitHub Releases + install.sh / brew / scoop — NOT npm. Only @bunsen-dev/{sdk,types} publish to npm. See tasks/.../BUILD_AND_DISTRIBUTE_BN_CLI.md.",
+  "//": "private: the CLI is distributed as a standalone `bun build --compile` binary via GitHub Releases + install.sh / brew / scoop — NOT npm. Only @bunsen-dev/{sdk,types} publish to npm.",
   "private": true,
   "repository": {
     "type": "git",

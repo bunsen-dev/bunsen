@@ -854,6 +854,13 @@ export async function execInContainer(
       }
     );
     stream.on('end', resolve);
+    // Also stop waiting if the stream errors mid-exec (connection drop, daemon
+    // restart) — otherwise demuxPromise never settles and the exec only returns
+    // via the full timeout. The exit-code inspection after the race is the source
+    // of truth for success/failure. (The non-hijack http.IncomingMessage stream
+    // used under Bun emits 'error' differently than the old socket, so this guard
+    // matters.)
+    stream.on('error', resolve);
   });
 
   // Wait for completion with timeout

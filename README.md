@@ -169,6 +169,28 @@ pnpm typecheck  # type check
 pnpm lint       # lint
 ```
 
+### Testing the compiled binary locally
+
+`pnpm bn <cmd>` runs the bundled CLI under Bun (the everyday dev loop — it has all
+assets, so `bn run` works). To exercise the actual **standalone binary** built from
+your working tree:
+
+```bash
+pnpm -r build                                            # incl. dist/assets + agent bundles
+pnpm --filter @bunsen-dev/cli build:binary darwin-arm64  # or darwin-x64 / linux-x64 / linux-arm64 / all
+./packages/cli/dist/binaries/bn-darwin-arm64 doctor
+```
+
+The binary extracts its embedded assets to `~/.cache/bunsen/assets/<version>/`,
+keyed by version — so across rebuilds at the same version the cache won't refresh.
+When iterating, point `BUNSEN_ASSET_DIR` at the freshly-built assets (it bypasses
+extraction entirely), or clear the cache:
+
+```bash
+BUNSEN_ASSET_DIR="$PWD/packages/cli/dist/assets" ./packages/cli/dist/binaries/bn-darwin-arm64 run …
+# or after each rebuild:  rm -rf ~/.cache/bunsen/assets
+```
+
 ## Trust & Safety
 
 **Running an experiment, agent, or suite means running its author's code on your machine.** That's the

@@ -96,9 +96,9 @@ fi
 # --- install ----------------------------------------------------------------
 mkdir -p "$INSTALL_DIR"
 chmod +x "${tmp}/${asset}"
-# Strip the quarantine bit curl sets on macOS. Until the binary is notarized
-# (Phase 2 / Homebrew cask), this is what lets the freshly-downloaded unsigned
-# binary launch without a Gatekeeper prompt.
+# Strip the quarantine bit curl sets on macOS. Until the binary is signed +
+# notarized, this is what lets the freshly-downloaded unsigned binary launch
+# without a Gatekeeper prompt.
 if [ "$os" = "darwin" ] && command -v xattr >/dev/null 2>&1; then
   xattr -d com.apple.quarantine "${tmp}/${asset}" >/dev/null 2>&1 || true
 fi

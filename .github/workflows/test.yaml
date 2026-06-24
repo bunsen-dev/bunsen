@@ -3,7 +3,7 @@ name: Test
 # Typechecks and tests the whole workspace. Two test runtimes by design:
 #   - @bunsen-dev/runtime + @bunsen-dev/cli run on `bun test` (their run-index is
 #     coupled to `bun:sqlite`, which only the Bun runtime provides — see
-#     packages/runtime/src/run-index.ts and tasks/.../BUILD_AND_DISTRIBUTE_BN_CLI.md).
+#     packages/runtime/src/run-index.ts).
 #   - @bunsen-dev/types / sdk / agents stay on vitest-on-Node (the pure libraries
 #     that ship to npm — keeping their tests on Node proves Node compatibility).
 # The runtime suite also shells out to python3 for the proxy cost-estimator test

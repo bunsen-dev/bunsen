@@ -16,6 +16,7 @@ import {
   isDockerAvailable,
   getDockerInfo,
   isGitAvailable,
+  imageExists,
   loadProject,
   ProjectConfigError,
   MITMPROXY_IMAGE,
@@ -43,7 +44,7 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
   const checks: CheckResult[] = [];
 
   checks.push(await checkDocker());
-  checks.push(checkContainerImages());
+  checks.push(await checkContainerImages());
   checks.push(await checkProcps());
   checks.push(checkGit());
   checks.push(checkProject());
@@ -98,18 +99,23 @@ async function checkDocker(): Promise<CheckResult> {
   }
 }
 
-function checkContainerImages(): CheckResult {
+async function checkContainerImages(): Promise<CheckResult> {
   // Bunsen pulls container images on demand — it does not ship them in the
-  // binary. The honest companion to "the binary installed but first run needs
-  // Docker": the proxy sidecar (pinned) and any experiment base image are
-  // fetched on the first run that needs them.
+  // binary. This reports whether the pinned proxy sidecar is already cached
+  // locally, so the user knows whether their next trace-capturing run will spend
+  // time pulling it (absence is normal on a fresh install, not a failure).
+  const cached = await imageExists(MITMPROXY_IMAGE).catch(() => false);
   return {
     id: 'container_images',
     label: 'Container images',
     status: 'ok',
-    detail: `proxy sidecar pinned to ${MITMPROXY_IMAGE}`,
-    hint: 'Pulled on demand: the first run that captures traces pulls this image, and the first run of an experiment pulls its base image — allow network + time on that initial run.',
-    data: { mitmproxyImage: MITMPROXY_IMAGE },
+    detail: cached
+      ? `proxy sidecar ${MITMPROXY_IMAGE} (cached)`
+      : `proxy sidecar ${MITMPROXY_IMAGE} (will pull on first trace-capturing run)`,
+    hint: cached
+      ? undefined
+      : 'The first run also pulls each experiment\'s base image — allow network + time on that initial run.',
+    data: { mitmproxyImage: MITMPROXY_IMAGE, cached },
   };
 }
 

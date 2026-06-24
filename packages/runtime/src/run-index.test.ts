@@ -3,10 +3,9 @@
 /**
  * Tests for the SQLite run-index.
  *
- * These exercise the index against a real on-disk SQLite file (better-sqlite3
- * has no in-memory mode that supports our prepared statements with named
- * params on persistent connections, and we want to assert against the
- * persisted schema anyway). Each test gets a fresh tempdir.
+ * These exercise the index against a real on-disk SQLite file (bun:sqlite),
+ * asserting against the persisted schema + the delete-and-rebuild recovery the
+ * production code relies on. Each test gets a fresh tempdir.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'node:fs';
