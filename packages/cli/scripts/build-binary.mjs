@@ -50,8 +50,8 @@ const ALL_TARGETS = {
   'darwin-x64': { target: 'bun-darwin-x64-baseline', out: 'bn-darwin-x64' },
   'linux-x64': { target: 'bun-linux-x64-baseline', out: 'bn-linux-x64' },
   'linux-arm64': { target: 'bun-linux-arm64', out: 'bn-linux-arm64' },
-  // Windows is deferred (unsigned; icon/console flags need a Windows runner) —
-  // opt-in via an explicit target arg or `all`. See Phase 2.
+  // Windows is opt-in (unsigned; the --windows-icon / --windows-hide-console
+  // flags would need a Windows runner) — build it via an explicit target or `all`.
   'windows-x64': { target: 'bun-windows-x64-baseline', out: 'bn-windows-x64.exe' },
 };
 const DEFAULT_TARGETS = ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64'];

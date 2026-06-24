@@ -2,11 +2,13 @@
 <!--
   Entitlements for codesigning the `bn` macOS binary under the hardened runtime.
 
-  A `bun build --compile` binary embeds a JIT JavaScript engine, so it MUST carry
-  `com.apple.security.cs.allow-jit` (and the unsigned-executable-memory / JIT
-  write allowances) or it crashes immediately under the hardened runtime that
-  notarization requires. Requires Bun >= 1.2.4. See BUILD_AND_DISTRIBUTE_BN_CLI.md
-  Phase 2.
+  A `bun build --compile` binary embeds a JIT JavaScript engine, so under the
+  hardened runtime that notarization requires it MUST carry the JIT allowances or
+  it crashes immediately. These two are what Bun's documented codesign recipe
+  uses (Bun >= 1.2.4). Kept deliberately narrow — if a signed build still crashes
+  under the hardened runtime, the broader
+  `com.apple.security.cs.disable-executable-page-protection` may be needed; add it
+  only if required and re-test.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -14,8 +16,6 @@
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <true/>
-    <key>com.apple.security.cs.disable-executable-page-protection</key>
     <true/>
 </dict>
 </plist>

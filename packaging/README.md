@@ -18,7 +18,11 @@ everything here is additive. GitHub Releases is the artifact host for all of the
    ```
    brew install bunsen-dev/tap/bunsen
    ```
-   The cask install strips the macOS quarantine bit — less Gatekeeper friction than raw `curl`.
+   **Until the binary is signed + notarized**, a cask-installed bare binary is
+   quarantined by Homebrew and macOS Gatekeeper may block it on first run (the
+   cask caveat tells the user how to clear it). So **prefer `install.sh` until
+   signing lands** — it strips quarantine. Once the macOS notary secrets are set,
+   the cask is the smoother path.
 
 ### Scoop bucket (Windows)
 1. Create a public repo **`bunsen-dev/scoop-bucket`** with a `bucket/` dir.
@@ -42,14 +46,33 @@ release still succeeds without them (unsigned), and turns on automatically once 
 | `WINDOWS_CERT_PFX_BASE64` / `WINDOWS_CERT_PASSWORD` | Authenticode cert (or use Azure Trusted Signing) |
 | `HOMEBREW_TAP_TOKEN` | a PAT with `contents:write` on the tap + bucket repos (for auto-bump) |
 
+## Cutting a release (and the install.sh timing gap)
+
+`release.yaml` triggers on `release: published`, builds the binaries, and uploads
+them — which takes **~10–15 min** for the macOS/Windows matrix. During that window
+`https://github.com/.../releases/latest/download/<asset>` **404s**, so
+`curl … | sh` (and `brew install`) fail until the upload finishes. Two notes:
+
+- For a **dark launch** (no announced install traffic), the window is harmless —
+  just don't advertise the one-liner until the binary workflow is green.
+- For an **announced** launch, cut the tag, let the binaries attach, and confirm
+  `curl … | sh` works *before* pointing people at it.
+- **Do not cut the first standalone release as a *prerelease*** — GitHub's
+  "latest" excludes prereleases, so `install.sh` would 404 permanently even after
+  the binaries attach. Use a full release.
+
+For a macOS+Linux-first launch you can drop the `windows-latest` matrix entry in
+`release.yaml`; the generator then emits only the cask (no Scoop manifest) and the
+bucket bump is skipped automatically.
+
 ## Auto-bump (per release)
 
-`release.yaml`'s `packages` job runs `generate-packages.mjs <version>` against the
-built `SHA256SUMS`, then commits `Casks/bunsen.rb` to `homebrew-tap` and
-`bucket/bunsen.json` to `scoop-bucket` using `HOMEBREW_TAP_TOKEN`. So a single
-GitHub Release fans out to install.sh assets + the tap + the bucket. If
-`HOMEBREW_TAP_TOKEN` is unset, the job is skipped (do it manually: run the
-generator and copy the two files into the repos).
+`release.yaml`'s `publish` job runs `generate-packages.mjs <version>` against the
+built `SHA256SUMS`, then commits `Casks/bunsen.rb` to `homebrew-tap` and (when a
+Windows binary was built) `bucket/bunsen.json` to `scoop-bucket` using
+`HOMEBREW_TAP_TOKEN`. So a single GitHub Release fans out to install.sh assets +
+the tap + the bucket. If `HOMEBREW_TAP_TOKEN` is unset, the job is skipped (do it
+manually: run the generator and copy the files into the repos).
 
 ## Manual generation
 

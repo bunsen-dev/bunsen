@@ -56,9 +56,12 @@ function need(asset) {
 
 const url = (asset) => `https://github.com/${REPO}/releases/download/v${version}/${asset}`;
 
-// --- Homebrew cask (macOS) --------------------------------------------------
-// A bare-binary cask: download the per-arch asset, install it as `bn`. The cask
-// install strips the quarantine bit, so no notarization prompt for tap users.
+// --- Homebrew cask (macOS) — always generated (a release always has darwin) --
+// A bare-binary cask: download the per-arch asset, install it as `bn`. NOTE: a
+// cask-downloaded file is quarantined by Homebrew; Gatekeeper accepts it only
+// once the binary is signed + notarized. Until then a cask user may have to clear
+// quarantine manually (see the caveat) — so prefer install.sh (which strips it)
+// until signing lands.
 const cask = `cask "bunsen" do
   version "${version}"
 
@@ -77,41 +80,50 @@ const cask = `cask "bunsen" do
   desc "${DESC}"
   homepage "${HOMEPAGE}"
 
-  # bn needs a running Docker daemon for \`bn run\`; \`bn doctor\` checks for it.
   caveats <<~EOS
-    Bunsen runs experiments in Docker containers. Start a Docker daemon, then run:
+    Bunsen runs experiments in Docker containers — start a Docker daemon, then:
       bn doctor
+
+    If macOS Gatekeeper blocks bn (until the binary is notarized), clear quarantine:
+      xattr -d com.apple.quarantine "$(brew --prefix)/bin/bn"
   EOS
 end
 `;
 
-// --- Scoop manifest (Windows) ----------------------------------------------
-// `checkver`/`autoupdate` keep the bucket current from GitHub releases.
-const scoop = {
-  version,
-  description: DESC,
-  homepage: HOMEPAGE,
-  license: 'LicenseRef-PolyForm-Shield-1.0.0',
-  architecture: {
-    '64bit': {
-      url: url('bn-windows-x64.exe'),
-      hash: need('bn-windows-x64.exe'),
-      bin: [['bn-windows-x64.exe', 'bn']],
-    },
-  },
-  checkver: { github: `https://github.com/${REPO}` },
-  autoupdate: {
-    architecture: {
-      '64bit': { url: `https://github.com/${REPO}/releases/download/v$version/bn-windows-x64.exe` },
-    },
-    hash: { url: `https://github.com/${REPO}/releases/download/v$version/SHA256SUMS` },
-  },
-  notes: 'Bunsen runs experiments in Docker containers — start Docker Desktop, then `bn doctor`.',
-};
-
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'bunsen.rb'), cask);
-fs.writeFileSync(path.join(outDir, 'bunsen.json'), JSON.stringify(scoop, null, 2) + '\n');
-console.log(`✓ Wrote ${path.relative(repoRoot, path.join(outDir, 'bunsen.rb'))} + bunsen.json for v${version}`);
+console.log(`✓ Wrote ${path.relative(repoRoot, path.join(outDir, 'bunsen.rb'))} (cask) for v${version}`);
 console.log('  Homebrew cask → bunsen-dev/homebrew-tap : Casks/bunsen.rb');
-console.log('  Scoop manifest → bunsen-dev/scoop-bucket : bucket/bunsen.json');
+
+// --- Scoop manifest (Windows) — only when a windows asset was built ----------
+// The macOS+Linux-first launch (release.yaml drops the windows matrix entry)
+// produces no bn-windows-x64.exe, so skip-and-warn instead of hard-failing.
+// `checkver`/`autoupdate` keep the bucket current from GitHub releases.
+if (sums['bn-windows-x64.exe']) {
+  const scoop = {
+    version,
+    description: DESC,
+    homepage: HOMEPAGE,
+    license: 'LicenseRef-PolyForm-Shield-1.0.0',
+    architecture: {
+      '64bit': {
+        url: url('bn-windows-x64.exe'),
+        hash: sums['bn-windows-x64.exe'],
+        bin: [['bn-windows-x64.exe', 'bn']],
+      },
+    },
+    checkver: { github: `https://github.com/${REPO}` },
+    autoupdate: {
+      architecture: {
+        '64bit': { url: `https://github.com/${REPO}/releases/download/v$version/bn-windows-x64.exe` },
+      },
+      hash: { url: `https://github.com/${REPO}/releases/download/v$version/SHA256SUMS` },
+    },
+    notes: 'Bunsen runs experiments in Docker containers — start Docker Desktop, then `bn doctor`.',
+  };
+  fs.writeFileSync(path.join(outDir, 'bunsen.json'), JSON.stringify(scoop, null, 2) + '\n');
+  console.log(`✓ Wrote ${path.relative(repoRoot, path.join(outDir, 'bunsen.json'))} (Scoop manifest)`);
+  console.log('  Scoop manifest → bunsen-dev/scoop-bucket : bucket/bunsen.json');
+} else {
+  console.log('• No bn-windows-x64.exe in SHA256SUMS — skipping the Scoop manifest (macOS+Linux release).');
+}

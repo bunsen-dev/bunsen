@@ -70,7 +70,7 @@ const STARTER_AGENTS = ['claude-code', 'codex-cli', 'gemini-cli'];
  * esbuild plugin: inline only our own `@bunsen-dev/*` workspace packages; keep
  * every other bare specifier (third-party deps + Node builtins) external, so
  * the bundle carries no `workspace:*` references and native modules
- * (better-sqlite3, dockerode→ssh2→cpu-features) are never bundled.
+ * (dockerode→ssh2→cpu-features) are never bundled.
  */
 const externalizeNonBunsen = {
   name: 'externalize-non-bunsen',

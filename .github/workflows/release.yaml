@@ -167,11 +167,16 @@ jobs:
           node packaging/generate-packages.mjs "$VERSION" artifacts/SHA256SUMS packaging/out
           git config --global user.name "bunsen-release-bot"
           git config --global user.email "release@bunsen.dev"
-          # Homebrew tap
+          # Homebrew tap (cask is always generated)
           git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bunsen-dev/homebrew-tap.git" tap
           mkdir -p tap/Casks && cp packaging/out/bunsen.rb tap/Casks/bunsen.rb
           ( cd tap && git add Casks/bunsen.rb && git commit -m "bunsen ${VERSION}" && git push ) || echo "tap unchanged"
-          # Scoop bucket
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bunsen-dev/scoop-bucket.git" bucket
-          mkdir -p bucket/bucket && cp packaging/out/bunsen.json bucket/bucket/bunsen.json
-          ( cd bucket && git add bucket/bunsen.json && git commit -m "bunsen ${VERSION}" && git push ) || echo "bucket unchanged"
+          # Scoop bucket — only when a Windows binary was built (the generator
+          # emits bunsen.json only then; a macOS+Linux release skips it).
+          if [ -f packaging/out/bunsen.json ]; then
+            git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/bunsen-dev/scoop-bucket.git" bucket
+            mkdir -p bucket/bucket && cp packaging/out/bunsen.json bucket/bucket/bunsen.json
+            ( cd bucket && git add bucket/bunsen.json && git commit -m "bunsen ${VERSION}" && git push ) || echo "bucket unchanged"
+          else
+            echo "No Scoop manifest (no Windows binary) — skipping bucket bump."
+          fi
