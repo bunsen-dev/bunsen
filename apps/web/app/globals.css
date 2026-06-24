@@ -688,7 +688,7 @@ h2.sec {
   font-size: 0.93rem;
 }
 
-/* quickstart code cards */
+/* two-file cards (stepc) + quickstart command list */
 .stepc {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -795,11 +795,33 @@ pre .dim {
 .runit .cmd {
   color: var(--accent);
 }
-.runit-note {
-  margin-top: 8px;
-  font-size: 0.82rem;
+.cmdlist {
+  margin-top: 28px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--code);
+  padding: 18px 20px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.85;
+  color: var(--fg);
+  white-space: pre;
+  overflow-x: auto;
+}
+.cmdlist .cmd {
+  color: var(--accent);
+}
+.cmdlist .dim {
+  color: var(--muted);
+}
+.cmdnote {
+  margin-top: 16px;
+  max-width: 48rem;
+  font-size: 0.86rem;
   color: var(--muted-2);
-  text-align: center;
+}
+.cmdnote .mono {
+  color: var(--fg);
 }
 
 /* deep evals ladder */

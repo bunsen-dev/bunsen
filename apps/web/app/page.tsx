@@ -3,6 +3,7 @@ import { Hero } from "@/components/Hero";
 import { PipelineMap } from "@/components/PipelineMap";
 import { Pillars } from "@/components/Pillars";
 import { Quickstart } from "@/components/Quickstart";
+import { TwoFiles } from "@/components/TwoFiles";
 import { DeepEvals } from "@/components/DeepEvals";
 import { AtScale } from "@/components/AtScale";
 import { TheLab } from "@/components/TheLab";
@@ -23,6 +24,7 @@ export default async function Home({
         <PipelineMap />
         <Pillars />
         <Quickstart />
+        <TwoFiles />
         <DeepEvals />
         <AtScale />
         <TheLab />
