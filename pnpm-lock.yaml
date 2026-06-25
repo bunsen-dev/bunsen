@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@braintrust/lingua-wasm@0.1.0':
+    hash: weunna5pkwr7uh5rfyvvqayvxa
+    path: patches/@braintrust__lingua-wasm@0.1.0.patch
+
 importers:
 
   .:
@@ -140,6 +145,9 @@ importers:
         specifier: ^3.0.2
         version: 3.0.2
     devDependencies:
+      '@braintrust/lingua-wasm':
+        specifier: 0.1.0
+        version: 0.1.0(patch_hash=weunna5pkwr7uh5rfyvvqayvxa)
       '@bunsen-dev/agents':
         specifier: workspace:*
         version: link:../agents
@@ -2029,12 +2037,12 @@ snapshots:
 
   '@balena/dockerignore@1.0.2': {}
 
-  '@braintrust/lingua-wasm@0.1.0': {}
+  '@braintrust/lingua-wasm@0.1.0(patch_hash=weunna5pkwr7uh5rfyvvqayvxa)': {}
 
   '@braintrust/lingua@0.1.0(@anthropic-ai/sdk@0.71.2(zod@3.25.76))(openai@5.23.2(zod@3.25.76))':
     dependencies:
       '@anthropic-ai/sdk': 0.71.2(zod@3.25.76)
-      '@braintrust/lingua-wasm': 0.1.0
+      '@braintrust/lingua-wasm': 0.1.0(patch_hash=weunna5pkwr7uh5rfyvvqayvxa)
       openai: 5.23.2(zod@3.25.76)
 
   '@emnapi/runtime@1.11.1':

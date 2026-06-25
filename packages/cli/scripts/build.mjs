@@ -31,16 +31,29 @@
 import * as esbuild from 'esbuild';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { isBuiltin } from 'node:module';
+import { isBuiltin, createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(__dirname, '../../..');
+const require = createRequire(import.meta.url);
 
 const distDir = path.join(cliRoot, 'dist');
 const assetsDir = path.join(distDir, 'assets');
+
+// @braintrust/lingua's wasm-bindgen (nodejs) glue reads its sibling
+// `lingua_bg.wasm` relative to its own `__dirname`. That path does not survive
+// `bun build --compile` (the binary re-roots `__dirname` into its virtual FS),
+// so the standalone binary embeds the wasm separately (see binary-entry.ts) and
+// the dep is patched to honor BUNSEN_LINGUA_WASM. Resolve the `.` export
+// (nodejs/lingua.js) and take the wasm beside it — the exports map hides the
+// `./nodejs/*` subpath, so we can't import the wasm by specifier directly.
+const linguaWasmSrc = path.join(
+  path.dirname(require.resolve('@braintrust/lingua-wasm')),
+  'lingua_bg.wasm'
+);
 
 const agentsDist = path.join(repoRoot, 'packages/agents/dist');
 const proxySrc = path.join(repoRoot, 'packages/runtime/src/proxy');
@@ -194,6 +207,25 @@ function copyAssets() {
 }
 
 /**
+ * Copy the lingua wasm core to dist/ so binary-entry.ts can embed it into the
+ * `bun build --compile` binary (`with { type: 'file' }`). Unlike dist/assets/*,
+ * this is NOT extracted to disk at runtime — it is read straight from the
+ * binary's virtual FS via BUNSEN_LINGUA_WASM (the patched lingua-wasm loader).
+ * The dev/npm path never reads this copy; it resolves the wasm from node_modules.
+ */
+function copyLinguaWasm() {
+  if (!fs.existsSync(linguaWasmSrc)) {
+    console.error(
+      `\n✗ lingua_bg.wasm not found at ${linguaWasmSrc}\n` +
+        `  (resolved from @braintrust/lingua-wasm — is the dependency installed?)\n`
+    );
+    process.exit(1);
+  }
+  fs.copyFileSync(linguaWasmSrc, path.join(distDir, 'lingua_bg.wasm'));
+  console.log('Copied lingua_bg.wasm → dist/ (embedded into the standalone binary).');
+}
+
+/**
  * Anti-staleness guard: the skills' generated `reference/*.md` field tables are
  * derived from the JSON Schemas in `@bunsen-dev/types`. Fail the build if a schema
  * change landed without regenerating them, so the published CLI never ships a
@@ -218,6 +250,7 @@ async function main() {
   fs.mkdirSync(distDir, { recursive: true });
   await bundleCli();
   copyAssets();
+  copyLinguaWasm();
   console.log('\n✓ @bunsen-dev/cli build complete.');
 }
 

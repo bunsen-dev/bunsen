@@ -38,6 +38,7 @@
     "ulid": "^3.0.2"
   },
   "devDependencies": {
+    "@braintrust/lingua-wasm": "0.1.0",
     "@bunsen-dev/agents": "workspace:*",
     "@bunsen-dev/runtime": "workspace:*",
     "@bunsen-dev/types": "workspace:*",

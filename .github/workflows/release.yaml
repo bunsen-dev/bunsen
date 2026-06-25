@@ -60,6 +60,31 @@ jobs:
       - name: Compile binaries
         run: pnpm --filter @bunsen-dev/cli build:binary ${{ matrix.targets }}
 
+      - name: Smoke-test the host-native binary
+        # The binary embeds the host assets + the lingua wasm core; a missing
+        # embed crashes EVERY command at startup (e.g. lingua's wasm loading off
+        # a build-time __dirname that doesn't survive `--compile`). That fails at
+        # runtime only — tsc + unit tests pass — so run the freshly compiled
+        # binary that matches THIS runner's arch (cross-arch targets can't
+        # execute here) and fail the release BEFORE upload if it can't report its
+        # own version.
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            macos-latest)  bin=bn-darwin-arm64 ;;
+            ubuntu-latest) bin=bn-linux-x64 ;;
+            *) echo "::warning::no host-native smoke target for ${{ matrix.os }}"; exit 0 ;;
+          esac
+          path="packages/cli/dist/binaries/$bin"
+          chmod +x "$path"
+          echo "── smoke: $bin --version ──"
+          out="$("$path" --version)"
+          echo "reported version: $out"
+          case "$out" in
+            [0-9]*.[0-9]*.[0-9]*) echo "✓ $bin starts and reports a version" ;;
+            *) echo "::error::$bin did not report a valid version (got: '$out')"; exit 1 ;;
+          esac
+
       - name: Sign + notarize (macOS)
         if: matrix.sign == 'macos'
         env:
