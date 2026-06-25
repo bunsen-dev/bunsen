@@ -42,9 +42,6 @@ jobs:
           - os: ubuntu-latest
             targets: linux-x64 linux-arm64
             sign: none
-          - os: windows-latest
-            targets: windows-x64
-            sign: windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
