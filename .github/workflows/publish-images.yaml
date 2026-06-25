@@ -27,6 +27,7 @@ jobs:
       contents: read
       packages: write
       id-token: write # OIDC token for actions/attest-build-provenance
+      attestations: write # persist the provenance attestation to the repo store
 
     strategy:
       matrix:
