@@ -1,0 +1,18 @@
+diff --git a/nodejs/lingua.js b/nodejs/lingua.js
+index 22de3cd3afa6c911d76cac3cdf67aad11b30a1da..b2ebb62b05feaadbac58a3f94659b845052812bd 100644
+--- a/nodejs/lingua.js
++++ b/nodejs/lingua.js
+@@ -1281,7 +1281,12 @@ module.exports.__wbindgen_throw = function(arg0, arg1) {
+     throw new Error(getStringFromWasm0(arg0, arg1));
+ };
+ 
+-const path = require('path').join(__dirname, 'lingua_bg.wasm');
++// Patched for Bunsen's `bun build --compile` standalone binary: under
++// `--compile`, `__dirname` re-roots into the binary's virtual FS, so the
++// sibling `lingua_bg.wasm` is absent at the baked-in build-time path. The binary
++// embeds the wasm (Bun `with { type: 'file' }`) and points BUNSEN_LINGUA_WASM at
++// the embedded copy; the dev/npm path leaves it unset and resolves as before.
++const path = process.env.BUNSEN_LINGUA_WASM || require('path').join(__dirname, 'lingua_bg.wasm');
+ const bytes = require('fs').readFileSync(path);
+ 
+ const wasmModule = new WebAssembly.Module(bytes);
