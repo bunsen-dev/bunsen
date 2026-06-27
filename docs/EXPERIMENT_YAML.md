@@ -100,6 +100,7 @@ Per-experiment run settings. All fields are optional.
 | Field                    | Required | Type                                     | Description                                          |
 | ------------------------ | -------- | ---------------------------------------- | -------------------------------------------------- |
 | `timeout`                | no       | duration string                          | Overall agent timeout.                             |
+| `onTimeout`              | no       | `'score'` \| `'fail'`                    | On agent timeout: `score` captures the workspace and runs evaluation (run completes, flagged timed-out); `fail` (default) fails the run. |
 | `platform`               | no       | `'auto'` \| `'linux/amd64'` \| `'linux/arm64'` | Single resolved platform for this run.      |
 | `artifactCaptureTimeout` | no       | duration string                          | Post-run artifact capture timeout.                 |
 

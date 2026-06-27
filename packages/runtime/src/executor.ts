@@ -165,6 +165,8 @@ interface ActiveRun {
   scorerContainer: ScorerContainerInfo | null;
   cleaningUp: boolean;
   terminalEventEmitted: boolean;
+  /** Set when the agent hit `run.timeout` and `onTimeout: score` let it through. */
+  timedOut: boolean;
 }
 
 let activeRun: ActiveRun | null = null;
@@ -425,6 +427,79 @@ export function buildExecLogs(result: Pick<ExecResult, 'stdout' | 'stderr'>): st
   return result.stdout + (result.stderr ? `\n--- STDERR ---\n${result.stderr}` : '');
 }
 
+/** Container path where the direct-mode agent records its process-group id. */
+export const AGENT_PGID_FILE = '/bunsen/run/agent.pgid';
+
+/**
+ * Shell prefix prepended to the direct-mode launch so it records its process-group
+ * id. Each `docker exec` is its own group leader, so `$$`'s group covers the agent
+ * and every descendant. Best-effort and exit-code-transparent (`;`-separated, never
+ * changes the launched command's status).
+ *
+ * Field 5 of `/proc/$$/stat` is the process-group id — read it straight from `/proc`
+ * rather than shelling out to `ps`, which isn't reliably present/uniform across every
+ * experiment image (a missing `ps` silently left the pgid file empty, so the reap then
+ * found nothing to kill). `mkdir -p` guarantees the dir exists before the write.
+ */
+export function agentPgidRecordPrefix(pgidFile: string = AGENT_PGID_FILE): string {
+  const dir = pgidFile.replace(/\/[^/]+$/, '');
+  return `mkdir -p ${dir} 2>/dev/null; awk '{print $5}' /proc/$$/stat > ${pgidFile} 2>/dev/null || true; `;
+}
+
+/**
+ * Shell command that SIGKILLs exactly the recorded agent process *group* (the
+ * `-- -"$PGID"` form), reaping the agent and its descendants while sparing the
+ * container's init and `sleep infinity` keepalive (different groups). Echoes a
+ * one-line status the caller logs.
+ */
+export function reapAgentProcessGroupCommand(pgidFile: string = AGENT_PGID_FILE): string {
+  return `PGID=$(cat ${pgidFile} 2>/dev/null)
+       if [ -z "$PGID" ]; then echo "no agent process group recorded; skipping"; exit 0; fi
+       if kill -KILL -- -"$PGID" 2>/dev/null; then echo "reaped agent process group $PGID"
+       else echo "agent process group $PGID had no live processes"; fi`;
+}
+
+/**
+ * Terminate a timed-out agent and everything it spawned, before the workspace is
+ * captured for scoring.
+ *
+ * When an agent exec times out, Docker can only abandon the exec — the agent
+ * process keeps running inside the container (see container.ts), so it could
+ * still be mutating `/workspace` while we capture + score it. This reaps it.
+ *
+ * The direct-mode launch records its process-group id to {@link AGENT_PGID_FILE};
+ * each `docker exec` is its own process-group leader, so the agent and all its
+ * descendants share that one group. `kill -KILL -- -<pgid>` reaps exactly that
+ * group — sparing the container's init (PID 1) and the `sleep infinity` keepalive
+ * (a different group), which a blunter `kill -1` would take down and so stop the
+ * container mid-capture. It runs as root (the default exec user), so it works for
+ * both root and non-root agents. Only used on a scored timeout (`onTimeout: score`):
+ * a clean finish needs no kill, and the tmux/supervised path already tears down its
+ * session. Best-effort — a missing/empty pgid file (e.g. no `procps`) degrades to
+ * the pre-existing (benign) race rather than failing the run.
+ */
+export async function terminateTimedOutAgent(
+  container: PersistentContainer,
+  report: (msg: string) => void,
+): Promise<void> {
+  try {
+    const result = await execShellInContainer(container, reapAgentProcessGroupCommand(), {
+      timeout: 10000,
+    });
+    // Durably surfaced (not a transient/verbose-only line): on a scored timeout the
+    // user should be able to see the agent was force-terminated before scoring.
+    report(`Timed out; ${result.stdout.trim() || 'reaped agent before scoring'}`);
+  } catch (err) {
+    // Best-effort: a failed reap leaves the pre-existing (benign) capture race, so
+    // we report and continue to scoring rather than failing the run.
+    report(
+      `Warning: failed to reap timed-out agent before scoring: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
 export function cleanupInternalRunFiles(runDir: string): void {
   for (const file of ['agent-script.sh', 'agent-complete.marker', 'launcher.sh']) {
     const filePath = path.join(runDir, file);
@@ -567,6 +642,9 @@ export async function executeRun(
   // Calculate effective timeout: experiment.run.timeout takes precedence over CLI timeout.
   const experimentTimeoutMs = parseOptionalDuration(experiment.run?.timeout);
   const effectiveTimeout = experimentTimeoutMs ?? timeout;
+  // On agent-exec timeout: 'score' captures + evaluates what the agent left; 'fail' (default)
+  // fails the run. Applied identically in both the direct and tmux execution paths below.
+  const onTimeoutPolicy = experiment.run?.onTimeout ?? 'fail';
   const artifactCaptureTimeoutMs =
     parseOptionalDuration(experiment.run?.artifactCaptureTimeout) ??
     DEFAULT_ARTIFACT_CAPTURE_TIMEOUT_SECONDS * 1000;
@@ -629,6 +707,7 @@ export async function executeRun(
     scorerContainer: null,
     cleaningUp: false,
     terminalEventEmitted: false,
+    timedOut: false,
   };
 
   // Best-effort event emit. Never let JSONL append errors fail a run — the
@@ -1646,6 +1725,10 @@ exec su bunsen -c "${agentScriptFile}"
 
         if (!completed) {
           log('Warning: Agent execution timed out');
+          // Under onTimeout: 'score', flag the timeout and let the run fall through to
+          // capture + evaluation (the forced exit code below keeps it off the failure
+          // path). Under 'fail' (default), the synthesized exit code 1 fails the run.
+          if (onTimeoutPolicy === 'score' && activeRun) activeRun.timedOut = true;
         }
 
         // 8. Clean up (supervisor will exit on its own when it sees the marker file, but kill it just in case)
@@ -1660,9 +1743,11 @@ exec su bunsen -c "${agentScriptFile}"
         // 9. Read logs and exit code
         const logResult = await execShellInContainer(container, `cat ${logFile}`, { timeout: artifactCaptureTimeoutMs });
 
-        // Read exit code from marker file
+        // Read exit code from marker file (a scored timeout reports 124 by convention).
         const markerResult = await execShellInContainer(container, `cat ${markerFile} 2>/dev/null || echo 0`, { timeout: 5000 });
-        const agentExitCode = parseInt(markerResult.stdout.trim(), 10) || (completed ? 0 : 1);
+        const agentExitCode = activeRun?.timedOut
+          ? 124
+          : parseInt(markerResult.stdout.trim(), 10) || (completed ? 0 : 1);
 
         // Strip ANSI escape codes from logs for readability.
         // Raw terminal bytes are preserved in recording.cast for full-fidelity replay.
@@ -1708,6 +1793,9 @@ ${agentScript}
           await writeFileInContainer(container, '/bunsen/run/agent-script.sh', directScriptContent, { mode: '755' });
           directScript = `chown bunsen:bunsen /bunsen/run/agent-script.sh && su bunsen -c /bunsen/run/agent-script.sh`;
         }
+        // Record this exec's process group so a scored timeout can reap exactly the
+        // agent's tree (and nothing else) — see agentPgidRecordPrefix.
+        directScript = agentPgidRecordPrefix() + directScript;
         try {
           result = await execShellInContainer(container, directScript, {
             env: runAsNonRoot ? {} : agentEnv,
@@ -1730,8 +1818,26 @@ ${agentScript}
             if (onLog) {
               onLog(logs);
             }
+
+            if (onTimeoutPolicy === 'score') {
+              // Score what the agent left: flag the timeout, reap the still-running
+              // agent so the captured workspace is stable, synthesize a result
+              // (124 = timeout convention), and fall through to capture + evaluation
+              // instead of failing the run.
+              if (activeRun) activeRun.timedOut = true;
+              await terminateTimedOutAgent(container, info);
+              result = {
+                exitCode: 124,
+                stdout: error.stdout,
+                stderr: error.stderr,
+                durationMs: error.durationMs,
+              };
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
           }
-          throw error;
         }
       }
 
@@ -1960,6 +2066,13 @@ ${agentScript}
       // just the agent.
       mutateRunManifest(runId, baseDir, (m) => {
         m.exit_code = result.exitCode;
+        if (activeRun?.timedOut) {
+          // A completed-but-timed-out run (onTimeout: score) is recorded via the
+          // manifest's extensibility zone, so consumers can tell it apart from a
+          // clean finish without a core-schema bump.
+          m.extensions = m.extensions ?? {};
+          m.extensions.timed_out = true;
+        }
       });
 
       // Run evaluation (if not skipped)
@@ -2362,8 +2475,10 @@ ${agentScript}
 
     // Compute the final run status. The run encompasses both the agent and
     // evaluation phases, so either failing fails the run. Gate failures are
-    // a scored outcome, not an error, and don't mark the run failed.
-    const agentFailed = result.exitCode !== 0;
+    // a scored outcome, not an error, and don't mark the run failed. A scored
+    // timeout (onTimeout: score) is a completed run, not an agent failure — the
+    // budget was spent and we graded the result.
+    const agentFailed = result.exitCode !== 0 && !activeRun?.timedOut;
     const finalStatus: 'succeeded' | 'failed' =
       agentFailed || evaluationThrew ? 'failed' : 'succeeded';
     const failurePhase: 'agent' | 'evaluation' | null = agentFailed

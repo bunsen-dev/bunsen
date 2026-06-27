@@ -260,6 +260,7 @@ If a step needs root, set `as: root` on that step or set `environment.user: root
 | Field                    | Type            | Default | Description                                                                                  |
 | ------------------------ | --------------- | ------- | -------------------------------------------------------------------------------------------- |
 | `timeout`                | duration string | `15m`   | Overall agent timeout.                                                                       |
+| `onTimeout`              | `score` \| `fail` | `fail` | What to do when the agent hits `timeout`. `score` reaps the agent's process tree (so the captured workspace is stable), then runs evaluation against whatever it left — the run completes, flagged `extensions.timed_out: true`. Right for open-ended, fixed-budget tasks. `fail` (default) fails the run. |
 | `platform`               | `auto` \| `linux/amd64` \| `linux/arm64` | `auto` | Per-experiment platform preference (see [Platforms & Architecture](./PLATFORMS.md)).               |
 | `artifactCaptureTimeout` | duration string | `2m`    | Post-run artifact capture (diff, tar export, log retrieval).                                 |
 

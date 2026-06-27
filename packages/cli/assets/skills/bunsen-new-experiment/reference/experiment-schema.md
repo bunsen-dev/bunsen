@@ -38,6 +38,10 @@ String, one of: `"linux/amd64"`, `"linux/arm64"`.
 
 String, one of: `"user"`, `"root"`.
 
+## onTimeout
+
+String, one of: `"score"`, `"fail"`.
+
 ## task
 
 - `prompt`: string **(required)** — minLength 1
@@ -121,6 +125,7 @@ Requires exactly one of: `base`  —or—  `dockerfile`.
 - `timeout`: `duration`
 - `platform`: `"auto"` | `platform`
 - `artifactCaptureTimeout`: `duration`
+- `onTimeout`: `onTimeout`
 - _no other fields allowed_
 
 ## allowedScores

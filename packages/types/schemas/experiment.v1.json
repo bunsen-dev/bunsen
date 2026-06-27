@@ -37,6 +37,7 @@
     "duration": { "type": "string", "pattern": "^\\d+(?:\\.\\d+)?(?:ms|s|m|h)$" },
     "platform": { "type": "string", "enum": ["linux/amd64", "linux/arm64"] },
     "executionUser": { "type": "string", "enum": ["user", "root"] },
+    "onTimeout": { "type": "string", "enum": ["score", "fail"] },
     "runtimeName": { "type": "string", "enum": ["node", "python", "go", "rust", "ruby"] },
 
     "task": {
@@ -177,7 +178,8 @@
             { "$ref": "#/$defs/platform" }
           ]
         },
-        "artifactCaptureTimeout": { "$ref": "#/$defs/duration" }
+        "artifactCaptureTimeout": { "$ref": "#/$defs/duration" },
+        "onTimeout": { "$ref": "#/$defs/onTimeout" }
       },
       "additionalProperties": false
     },
