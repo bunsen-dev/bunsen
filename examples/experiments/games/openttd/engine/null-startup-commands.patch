@@ -1,0 +1,46 @@
+--- a/src/video/null_v.cpp
++++ b/src/video/null_v.cpp
+@@ -12,7 +12,11 @@
+ #include "../blitter/factory.hpp"
+ #include "../saveload/saveload.h"
+ #include "../window_func.h"
++#include "../console_func.h"
+ #include "null_v.h"
++#include <cstdlib>
++#include <string>
++#include <string_view>
+ 
+ #include "../safeguards.h"
+ 
+@@ -49,9 +53,31 @@
+ void VideoDriver_Null::MainLoop()
+ {
+ 	uint i;
++	bool bunsen_started = false;
+ 
+ 	for (i = 0; i < this->ticks; i++) {
+ 		::GameLoop();
++
++		/* Bunsen benchmark: once the freshly generated game is live, run any
++		 * startup console commands (e.g. "start_ai StarterAI") supplied via the
++		 * OPENTTD_STARTUP_COMMANDS env var (semicolon-separated). Runs once. This
++		 * lets a headless single-player run launch a specific bot deterministically
++		 * (the competitor auto-spawn timer does not fire on a headless new game). */
++		if (!bunsen_started && _game_mode == GM_NORMAL) {
++			bunsen_started = true;
++			if (const char *bunsen_cmds = std::getenv("OPENTTD_STARTUP_COMMANDS")) {
++				std::string_view all{bunsen_cmds};
++				size_t pos = 0;
++				while (pos <= all.size()) {
++					size_t sep = all.find(';', pos);
++					std::string_view one = all.substr(pos, sep == std::string_view::npos ? std::string_view::npos : sep - pos);
++					if (!one.empty()) IConsoleCmdExec(std::string(one));
++					if (sep == std::string_view::npos) break;
++					pos = sep + 1;
++				}
++			}
++		}
++
+ 		::InputLoop();
+ 		::UpdateWindows();
+ 	}

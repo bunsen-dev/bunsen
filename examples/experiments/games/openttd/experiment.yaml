@@ -1,0 +1,114 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: openttd
+description: >-
+  Run a transport company in OpenTTD by authoring a NoAI Squirrel bot. The agent
+  edits ai/StarterAI/; the scorer re-runs the bot from a fixed map seed, headless,
+  for a fixed in-game horizon and reads authoritative metrics (0-1000 performance
+  rating, company value, cargo delivered) straight from game state. Deterministic,
+  hard-to-cheese, with a watchable savegame replay.
+
+task:
+  prompt: |-
+    You are running a transport company in OpenTTD by writing a bot against the
+    game's native NoAI Squirrel API.
+
+    Your deliverable is the AI package in /workspace/ai/StarterAI/. Edit
+    /workspace/ai/StarterAI/main.nut (and add helper .nut files beside it) to build
+    a profitable transport network: connect towns and industries with road or rail,
+    run vehicles, deliver cargo, and grow the company over time.
+
+    Read /workspace/README.md first, and use the `openttd-bot` skill — it teaches the
+    NoAI API and the build loop, and it documents the sharp edges that will silently
+    kill a bot (Start() must never return; call Sleep() regularly; cost-check with
+    AITestMode before committing builds).
+
+    Iterate with the same simulation the scorer uses:
+
+        openttd-playtest
+
+    It runs your bot headless for the scored horizon and prints whether it compiled,
+    plus the final performance rating, company value, and cargo delivered. Use a short
+    horizon while iterating (OPENTTD_HORIZON_YEARS=2 openttd-playtest), then a
+    full run before you finish.
+
+    You are scored on authoritative game state from a fresh re-run of your bot — you
+    cannot report your own numbers. Do not rename the package: ai/StarterAI/info.nut's
+    GetName()/CreateInstance() must stay "StarterAI". Put your logic in main.nut.
+
+workspace:
+  sources:
+    - path: ./workspace
+    # Make the cross-agent OpenTTD bot skill discoverable in the run container for
+    # both Claude Code (.claude/skills) and Codex/Cursor (.agents/skills).
+    - path: ./skill/openttd-bot
+      target: .claude/skills/openttd-bot
+    - path: ./skill/openttd-bot
+      target: .agents/skills/openttd-bot
+
+environment:
+  image:
+    dockerfile: ./Dockerfile
+  platforms: [linux/amd64, linux/arm64]
+  user: user
+
+# Canonical, pinned run parameters. These are env-driven so a later calibration
+# task can sweep seed / horizon / map / climate without editing content; the values
+# here match the harness defaults baked into the image, so the agent's playtest sees
+# exactly the scored configuration.
+env:
+  OPENTTD_SEED: "1234567"
+  OPENTTD_HORIZON_YEARS: "12"
+  OPENTTD_MAP_SIZE: "9"
+  OPENTTD_CLIMATE: "0"
+
+run:
+  # Authoring a working OpenTTD bot is an open-ended optimize task — the agent
+  # iterates (write → openttd-playtest → read errors → fix) until time runs out.
+  # The budget is the difficulty dial: if the performance rating saturates (strong
+  # models maxing it), cut this down (e.g. 15m) to re-open headroom.
+  timeout: 30m
+  # On timeout, SCORE whatever bot the agent left rather than failing the run: the
+  # budget is the effort dial, and we grade the result. `openttd-playtest` checkpoints
+  # the last *working* bot, so a tweak cut off mid-edit falls back to it (see verifiers/).
+  onTimeout: score
+  artifactCaptureTimeout: 5m
+
+evaluation:
+  criteria:
+    # Gate (pure precondition, weight 0): re-run the bot authoritatively and require a
+    # solvent company. Also writes /tmp/openttd-score/metrics.json (rating + value +
+    # cargo) for the rating scorer below and the report. A bankrupt company skips the
+    # rating and the run scores 0.
+    - id: not-bankrupt
+      title: Company solvent at horizon
+      type: script
+      run: bash /bunsen/verifiers/simulate_and_gate.sh
+      scores: [0, 1]
+      timeout: 20m
+      weight: 0
+      gate:
+        ifBelow: 1
+
+    # The score IS OpenTTD's native 0-1000 company performance rating (normalized).
+    # That rating already subsumes company value, cargo delivered, cargo variety,
+    # vehicles, stations, profit, and loan — so it's the single holistic, hard-to-cheese
+    # signal. Value and cargo are still captured (gate metrics.json + the playtest tool)
+    # and surfaced in the report, but are not scored separately (they'd double-count the
+    # rating and saturate against fixed targets).
+    - id: performance-rating
+      title: Performance rating
+      type: script
+      run: python3 /bunsen/verifiers/metric.py
+      weight: 1
+      needs: [not-bankrupt]
+
+  report:
+    instructions: |-
+      Summarize how the agent's OpenTTD bot performed. Lead with the performance rating
+      (the scored metric, 0-1000), and reference company value and cargo delivered from
+      the metrics as supporting context. Use the diff of ai/StarterAI/ to explain WHAT
+      the bot built (routes, vehicles, cargo types) and how that maps to the rating. If
+      the gate failed, say whether the bot failed to compile/register or went bankrupt,
+      and point at the likely cause in the code.
+    needs: all

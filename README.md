@@ -141,6 +141,14 @@ published `@bunsen-dev/cli`, so an npm-only install can drop them into a project
 with `bn agents add` (or `bn init --starter-agents`) — no checkout required. The others
 are checkout-only references to learn from.
 
+The bundled experiments are grouped by category under `examples/experiments/`:
+
+| Category       | What the agent does                                                                 |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `fix-bugs/`    | Fix a failing test in a real upstream repo snapshot (a real PR's starting point).   |
+| `zero-to-one/` | Build something from scratch — FizzBuzz, a shader background, a small UI.            |
+| `games/`       | Play a real open-source game by **authoring a bot** against its native API, scored on authoritative game state with a watchable replay. Flagship: **`openttd`** — write an OpenTTD NoAI Squirrel bot to run a transport company. |
+
 Any agent can be steered with a system prompt without changing the platform — see
 [System Prompts](./docs/SYSTEM_PROMPTS.md). To scaffold your own from a blank
 template, use `bn new agent <name>` (the `bunsen-new-agent` skill from `bn skills

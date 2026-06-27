@@ -36,6 +36,23 @@ the upstream license file at its root.
 | `click-context-sentinel/workspace/` | [pallets/click](https://github.com/pallets/click) | pre-[#3137](https://github.com/pallets/click/pull/3137) | BSD-3-Clause — Copyright 2014 Pallets |
 | `click-flag-options/workspace/` | [pallets/click](https://github.com/pallets/click) | pre-[#3152](https://github.com/pallets/click/pull/3152) | BSD-3-Clause — Copyright 2014 Pallets |
 
+## Game-experiment image components (fetched + built at image-build time)
+
+The `examples/experiments/games/openttd/` experiment builds a Docker image from third-party,
+freely-redistributable game software. These components are **not committed to this repository** — they
+are downloaded from `cdn.openttd.org` at image-build time against pinned, sha256-verified URLs (see the
+experiment's [`Dockerfile`](./examples/experiments/games/openttd/Dockerfile)). They keep their own
+upstream licenses; Bunsen's Shield license does not apply to them.
+
+| Component | Version | License | Notes |
+|---|---|---|---|
+| **OpenTTD** engine | 15.3 | GPL-2.0-only | Built from `openttd-15.3-source.tar.xz`. One small in-tree engine patch is applied (`openttd/engine/null-startup-commands.patch`, GPL-2.0) — shipping that diff is the offer of the modified source. |
+| **OpenGFX** baseset | 8.0 | GPL-2.0 | `opengfx-8.0-all.zip`, bundled unmodified. |
+
+The proprietary original Transport Tycoon Deluxe assets are **never** bundled. Full licensing detail and
+the GPL source-offer rationale live in
+[`examples/experiments/games/openttd/NOTICE.md`](./examples/experiments/games/openttd/NOTICE.md).
+
 ## External (not in this repository, for completeness)
 
 - **Terminal Bench** — the 66-task port of

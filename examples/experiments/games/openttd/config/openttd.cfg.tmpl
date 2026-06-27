@@ -1,0 +1,40 @@
+; Pinned OpenTTD configuration for the Bunsen flagship experiment.
+;
+; This is the single source of truth for the scored game's settings. The harness
+; (/opt/bunsen/run_openttd.py) reads this template, substitutes the @TOKENS@ from
+; environment variables (so a calibration sweep can vary seed / map / climate
+; without editing content), and launches the game with it. Everything that is NOT
+; a token is FIXED for reproducibility.
+;
+; In-game cheats and infinite-money are not a concern here: OpenTTD's cheat menu
+; is a single-player GUI feature that is structurally absent from the headless
+; (null-video) run this experiment uses. These settings just pin the economy and
+; map generation so every run of the same image is identical.
+
+[graphicsset]
+name = OpenGFX
+
+[game_creation]
+landscape = @CLIMATE@            ; 0=temperate, 1=arctic, 2=tropical, 3=toyland
+generation_seed = @SEED@
+map_x = @MAP_X@                  ; map is 2^map_x x 2^map_y tiles
+map_y = @MAP_Y@
+starting_year = 1950
+land_generator = 1              ; TerraGenesis (Perlin) — stable across runs
+
+[difficulty]
+; The harness starts exactly the agent's bot + the scorer's reporter explicitly,
+; so OpenTTD must not auto-spawn its own random competitors.
+max_no_competitors = 0
+
+[economy]
+inflation = false               ; off => prices are stable run-to-run (determinism)
+
+[vehicle]
+; Breakdowns add RNG to vehicle behaviour; off keeps the sim clean & reproducible.
+disable_elrails = false
+
+[gui]
+; The null video driver writes a savegame on exit. That file is the canonical,
+; watchable replay artifact (load it in any stock OpenTTD client).
+autosave_on_exit = true

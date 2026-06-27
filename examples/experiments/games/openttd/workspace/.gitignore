@@ -1,0 +1,7 @@
+# Playtest output from `openttd-playtest` (the savegame, logs, and a throwaway
+# OpenTTD home). It's regenerated on every run — keep it out of the workspace diff.
+openttd-out/
+
+# Last-working-bot checkpoint that `openttd-playtest` snapshots so the scorer can
+# fall back to it if your final edit is left broken. Internal — not part of the diff.
+.openttd/
