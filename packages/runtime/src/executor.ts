@@ -920,6 +920,7 @@ export async function executeRun(
       agentName: agent.name,
       platform: runPlatform,
       requiresRoot: experiment.environment.user === 'root',
+      runTimeoutMs: effectiveTimeout,
       agentVariant,
       experimentVariant,
       ...(suiteProvenance ? { suiteId: suiteProvenance.id } : {}),

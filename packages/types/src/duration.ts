@@ -93,3 +93,23 @@ export function parseOptionalDuration(value: string | undefined | null): number 
   if (value === undefined || value === null) return undefined;
   return parseDuration(value);
 }
+
+/**
+ * Format a millisecond duration as the most natural single-unit duration
+ * string — the inverse of {@link parseDuration} for clean values. Picks the
+ * largest unit (h, m, s, ms) that divides the duration exactly, so 1_800_000
+ * formats as "30m", 600_000 as "10m", 3_600_000 as "1h", 90_000 as "90s", and
+ * 500 as "500ms". The result always carries a unit suffix, so it round-trips
+ * back through {@link parseDuration}.
+ */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) {
+    throw new InvalidDurationError(ms, `Cannot format a non-finite or negative duration: ${ms}.`);
+  }
+  const rounded = Math.round(ms);
+  if (rounded === 0) return '0s';
+  if (rounded % UNIT_TO_MS.h === 0) return `${rounded / UNIT_TO_MS.h}h`;
+  if (rounded % UNIT_TO_MS.m === 0) return `${rounded / UNIT_TO_MS.m}m`;
+  if (rounded % UNIT_TO_MS.s === 0) return `${rounded / UNIT_TO_MS.s}s`;
+  return `${rounded}ms`;
+}

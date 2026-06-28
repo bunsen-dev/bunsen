@@ -7,6 +7,8 @@
  * stable paths and reserved `BUNSEN_*` env vars the agent may rely on.
  */
 
+import { formatDuration } from '@bunsen-dev/types';
+
 // ---------------------------------------------------------------------------
 // Stable paths inside the agent container
 // ---------------------------------------------------------------------------
@@ -72,6 +74,13 @@ export interface ReservedEnvOptions {
   agentVariant?: string;
   suiteId?: string;
   suiteVersion?: string;
+  /**
+   * Resolved run timeout in milliseconds. Surfaced to the agent as
+   * `BUNSEN_RUN_TIMEOUT` (a human-readable duration string, e.g. "30m") so the
+   * agent knows its total wall-clock budget and can plan its work. Omitted when
+   * the run has no timeout.
+   */
+  runTimeoutMs?: number;
 }
 
 /**
@@ -108,6 +117,9 @@ export function buildReservedEnv(options: ReservedEnvOptions): Record<string, st
   }
   if (options.suiteVersion !== undefined) {
     reserved.BUNSEN_SUITE_VERSION = options.suiteVersion;
+  }
+  if (options.runTimeoutMs !== undefined) {
+    reserved.BUNSEN_RUN_TIMEOUT = formatDuration(options.runTimeoutMs);
   }
   return reserved;
 }

@@ -35,7 +35,10 @@ task:
         them — build general strength (a bot that only beats passive snakes will
         be punished by the hidden ladder, which includes aggressive styles).
 
-    YOU HAVE A LIMITED TIME BUDGET — checkpoint with battlesnake-selftest:
+    YOU HAVE A LIMITED TIME BUDGET — your total wall-clock budget is in the
+    BUNSEN_RUN_TIMEOUT environment variable (e.g. "30m"; run `echo
+    $BUNSEN_RUN_TIMEOUT` to read it and `date` to see elapsed time). Budget your
+    iterations and checkpoint with battlesnake-selftest:
       • When your time runs out you are scored on the bot at /workspace/submission/,
         NOT your latest in-progress edit. So checkpoint working versions as you go.
       • Each time `battlesnake-selftest` runs and your bot starts cleanly, it

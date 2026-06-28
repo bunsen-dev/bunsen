@@ -669,6 +669,7 @@ The runtime injects these; user config cannot override them (parsers reject `BUN
 - `BUNSEN_RUN_DIR` (`/bunsen/run`)
 - `BUNSEN_AGENT_HOME` (`/home/bunsen` for non-root runs, `/root` when `environment.user: root`). Use this in `install.configure` scripts to write user-level config files (`$BUNSEN_AGENT_HOME/.codex/config.toml`, `$BUNSEN_AGENT_HOME/.claude.json`, etc.) without needing to know the execution user. The runtime chowns this directory to the execution user after `install.configure` finishes.
 - `BUNSEN_PLATFORM` (resolved run platform)
+- `BUNSEN_RUN_TIMEOUT` (the run's total wall-clock budget as a human-readable duration string, e.g. `30m`, resolved after any variant override; set only when the run has a timeout). Lets the agent budget its work — note it's the *total* budget, not elapsed/remaining time.
 - `BUNSEN_SUITE_ID`, `BUNSEN_SUITE_VERSION` (set only when running via a suite)
 
 ## See also
