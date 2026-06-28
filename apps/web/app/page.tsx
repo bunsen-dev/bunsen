@@ -2,10 +2,9 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Hero } from "@/components/Hero";
 import { PipelineMap } from "@/components/PipelineMap";
 import { Pillars } from "@/components/Pillars";
-import { Quickstart } from "@/components/Quickstart";
-import { TwoFiles } from "@/components/TwoFiles";
-import { DeepEvals } from "@/components/DeepEvals";
-import { AtScale } from "@/components/AtScale";
+import { EvalAnything } from "@/components/EvalAnything";
+import { DeepByDefault } from "@/components/DeepByDefault";
+import { SetupExperiment } from "@/components/SetupExperiment";
 import { TheLab } from "@/components/TheLab";
 import { FinalCTA } from "@/components/FinalCTA";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -22,12 +21,11 @@ export default async function Home({
       <main id="top">
         <Hero />
         <PipelineMap />
-        <Pillars />
-        <Quickstart />
-        <TwoFiles />
-        <DeepEvals />
-        <AtScale />
+        <EvalAnything />
+        <SetupExperiment />
+        <DeepByDefault />
         <TheLab />
+        <Pillars />
         <FinalCTA waitlistStatus={waitlist} />
       </main>
       <SiteFooter />

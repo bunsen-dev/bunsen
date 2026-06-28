@@ -20,7 +20,7 @@ export function Hero() {
             View on GitHub
           </a>
           <a className="btn btn-ghost" href="#start">
-            See the quickstart →
+            Get started →
           </a>
         </div>
         <p className="hero-tertiary">

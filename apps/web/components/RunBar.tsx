@@ -7,7 +7,7 @@
 //   - A trailing "*" marks anything not bundled yet (third-party suites/agents). It
 //     renders as a superscript star explained by the footnote. Real, shipping items sit
 //     in the resting frame (index 0) so the default visible state is honest; self-authored
-//     custom experiments aren't starred (you write those — see the Quickstart).
+//     custom experiments aren't starred (you write those — see Get started).
 //   - program-bench/sqlite is a real ProgramBench task (reconstruct SQLite from its
 //     binary; arXiv 2605.03546); mle-bench is a different domain (ML) and container-native.
 const experiments = [
