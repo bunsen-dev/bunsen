@@ -40,6 +40,13 @@ strong reference bot itself only scores ~50% against the panel) while weaker bot
 score in the single digits — add a stronger snake to re-open headroom as models
 improve.
 
+> **Difficulty knob for a future v2.** The maximin bots' search depth is
+> env-tunable via `BATTLESNAKE_MAX_DEPTH` (pinned to `2`). Bumping it to `3`+ makes
+> them strictly stronger — a ready dial to re-open headroom if a future model ever
+> maxes the depth-2 panel (trade-off: deeper search ≈ slower games). Board size
+> (`BATTLESNAKE_WIDTH`/`HEIGHT`) is a *speed* dial, not a difficulty one (win-rate
+> is ~flat across 7×7–13×13; smaller boards just make games much shorter).
+
 ## The dev/scored split (anti-leakage)
 
 The agent practices against the **visible sparring set** (`runtime/sparring/`,
