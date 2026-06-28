@@ -88,7 +88,22 @@ def _downsample(frames, max_frames):
     return [frames[i] for i in idx]
 
 
-def render_gif(frames, out_path, cell=34, ms=120, title=None, max_frames=140):
+def _wrap_entries(draw, entries, font, max_w, sep="    "):
+    """Greedily pack "name: value" entries onto lines no wider than max_w."""
+    lines, cur = [], ""
+    for e in entries:
+        trial = e if not cur else cur + sep + e
+        if not cur or draw.textlength(trial, font=font) <= max_w:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = e
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def render_gif(frames, out_path, cell=34, ms=120, title=None, max_frames=140, scores=None):
     if not frames:
         raise ValueError("no frames to render")
     frames = _downsample(frames, max_frames)
@@ -98,22 +113,37 @@ def render_gif(frames, out_path, cell=34, ms=120, title=None, max_frames=140):
     names = _names(frames)
     ids = list(names.keys())
 
+    s = SS
     pad = cell
     header = cell * 2
     legend_row = int(cell * 0.62)
-    # one row per snake (vertical) so long names like "claude-code_<model>" fit
-    legend = int(cell * 0.3) + len(ids) * legend_row + int(cell * 0.2)
+    score_row = int(cell * 0.52)
     board_w = W * cell
     board_h = H * cell
     img_w = board_w + pad * 2
-    img_h = header + board_h + legend + pad
 
-    # supersampled canvas
-    s = SS
+    # measurement draw (canvas scale) to fit the title + wrap the scores line
+    _m = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    avail = (img_w - 2 * pad) * s
+    f_small = _font(int(cell * 0.5))
+
+    # fit the title so a long "Battlesnake run <run-id>" stays on one line
+    ttl = title or "Battlesnake"
+    tsize = int(cell * 0.85)
+    while tsize > int(cell * 0.45) and _m.textlength(ttl, font=_font(tsize)) > avail:
+        tsize -= 1
+    f_turn = _font(tsize)
+
+    # wrap the scores ("name: value" pairs) onto lines that fit
+    score_lines = _wrap_entries(_m, [f"{n}: {v}" for n, v in scores], f_small, avail) \
+        if scores else []
+
+    legend = int(cell * 0.3) + len(ids) * legend_row
+    score_block = (int(cell * 0.32) + len(score_lines) * score_row) if score_lines else 0
+    img_h = header + board_h + legend + score_block + int(cell * 0.4)
+
     cw, ch = img_w * s, img_h * s
     cs = cell * s
-    f_turn = _font(int(cell * 0.85))
-    f_small = _font(int(cell * 0.5))
 
     def cell_xy(x, y):
         # board (x,y) -> top-left pixel of cell on supersampled canvas
@@ -228,6 +258,13 @@ def render_gif(frames, out_path, cell=34, ms=120, title=None, max_frames=140):
                 label = f"{names[sid]}   (dead)"
             d.text((lx + sw + int(cell * 0.25) * s, ly + int(sw * 0.05)), label,
                    fill=TEXT if alive else SUBTEXT, font=f_small)
+
+        # scores line(s) below the player names: "name: value   name: value ..."
+        if score_lines:
+            sy = ly0 + len(ids) * legend_row * s + int(cell * 0.18) * s
+            for ln in score_lines:
+                d.text((lx, sy), ln, fill=TEXT, font=f_small)
+                sy += score_row * s
 
         frames_out.append(im.resize((img_w, img_h), Image.LANCZOS))
 

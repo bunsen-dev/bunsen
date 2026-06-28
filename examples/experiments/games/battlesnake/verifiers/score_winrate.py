@@ -107,8 +107,13 @@ def main():
     artifacts = []
     if best is not None:
         gif_path = os.path.join(scorer_out, "replay.gif")
+        run_id = os.environ.get("BUNSEN_RUN_ID", "")
+        title = f"Battlesnake run {run_id}" if run_id else "Battlesnake run"
+        # scores shown on the replay: the headline win-rate + per-opponent breakdown
+        gif_scores = [("win-rate", f"{100 * score:.0f}%")] + \
+                     [(opp["name"], per[opp["name"]]) for opp in _ladder.HELD_OUT]
         try:
-            bsrender.render_gif(best[1], gif_path, title="Battlesnake replay")
+            bsrender.render_gif(best[1], gif_path, title=title, scores=gif_scores)
             artifacts.append({"path": "replay.gif", "mediaType": "image/gif"})
         except Exception as e:
             print(f"warning: GIF render failed: {e}", file=sys.stderr)
