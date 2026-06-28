@@ -54,18 +54,38 @@ def _font(size):
         return ImageFont.load_default()
 
 
+def _color_dist(a, b):
+    return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
+
+
+# Minimum RGB-euclidean separation between any two snakes in a replay. Two bots
+# can independently pick near-identical colors (e.g. an agent whose info() color
+# happens to match a reference snake's), which renders them indistinguishable.
+_MIN_COLOR_DIST = 90.0
+
+
 def _snake_colors(frames):
-    """Stable color per snake id across the game (first non-default wins)."""
-    colors, order = {}, []
+    """A VISUALLY DISTINCT color per snake id. Each snake keeps its chosen color
+    unless it is missing/default OR clashes with a snake already placed in this
+    replay; on a clash we substitute the fallback color farthest from every color
+    already used, so every snake is easy to tell apart no matter what the bots
+    picked."""
+    chosen, order = {}, []
     for fr in frames:
         for s in fr["board"]["snakes"]:
-            if s["id"] not in colors:
+            if s["id"] not in chosen:
                 order.append(s["id"])
                 c = s.get("customizations", {}).get("color")
-                colors[s["id"]] = _hex(c) if c and c != "#888888" else None
-    for i, sid in enumerate(order):
-        if colors[sid] is None:
-            colors[sid] = _hex(FALLBACK_COLORS[i % len(FALLBACK_COLORS)])
+                chosen[s["id"]] = _hex(c) if c and c != "#888888" else None
+    palette = [_hex(c) for c in FALLBACK_COLORS]
+    colors, used = {}, []
+    for sid in order:
+        col = chosen[sid]
+        if col is None or any(_color_dist(col, u) < _MIN_COLOR_DIST for u in used):
+            # the fallback maximizing the minimum distance to colors already used
+            col = max(palette, key=lambda p: min((_color_dist(p, u) for u in used), default=1e9))
+        colors[sid] = col
+        used.append(col)
     return colors
 
 
