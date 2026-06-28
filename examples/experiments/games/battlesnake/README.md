@@ -28,8 +28,17 @@ battlesnake/
     ├── score_winrate.py   primary win-rate scorer + renders the replay GIF
     ├── diagnostics.py     survival / per-opponent / food (weight 0)
     ├── _ladder.py         the held-out opponents + held-out scored seeds
-    └── ladder/            pragmatic, hunter, areacontrol  ← the SCORED/hidden bots
+    └── ladder/            areacontrol, hunter, minimax, trapper  ← the SCORED/hidden bots
 ```
+
+The held-out panel is a difficulty spread: `areacontrol` (1-ply Voronoi) and
+`hunter` (aggressive 1-ply) are medium; `minimax` and `trapper` are **depth-2
+alpha-beta maximin** bots (pinned to a fixed depth so scored games are fast and
+deterministic) with different evals. The two strong bots cap even a frontier-model
+bot near ~50% each, so win-rate does not saturate at 100% for top models (a
+strong reference bot itself only scores ~50% against the panel) while weaker bots
+score in the single digits — add a stronger snake to re-open headroom as models
+improve.
 
 ## The dev/scored split (anti-leakage)
 

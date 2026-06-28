@@ -99,7 +99,8 @@ def main():
         try:
             best = -1
             for seed in GATE_SEEDS:
-                res = bsengine.play_running(you + opp, seed=seed, width=11, height=11)
+                res = bsengine.play_running(you + opp, seed=seed, width=11, height=11,
+                                            wall_clock=_ladder.WALL_CLOCK)
                 if res.get("error"):           # engine/wall-clock issue, not a death
                     continue
                 best = max(best, res["snakes"].get(_ladder.AGENT_NAME, {}).get("turns", 0))

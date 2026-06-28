@@ -95,7 +95,9 @@ evaluation:
       title: Win-rate vs held-out ladder
       type: script
       weight: 1
-      timeout: 20m
+      # 9 seeds x 4 held-out bots = 36 games; the depth-2 maximin bots make some
+      # games longer than the old 1-ply ladder, so allow generous headroom.
+      timeout: 30m
       run: python3 /bunsen/verifiers/score_winrate.py
 
     - id: diagnostics
@@ -105,16 +107,6 @@ evaluation:
       needs: [win-rate]
       timeout: 2m
       run: python3 /bunsen/verifiers/diagnostics.py
-
-  report:
-    instructions: |-
-      Summarize how the agent's Battlesnake bot performed. Cite the win-rate vs
-      the held-out ladder, the per-opponent breakdown and diagnostics (survival,
-      food, death causes), and what the bot's strategy looks like from its
-      /workspace code (does it do flood-fill space control, food/health
-      management, head-to-head handling?). Note whether it appears to have
-      over-fit the visible sparring bots. Reference the replay GIF artifact.
-    needs: all
 
 variants:
   # Shorter authoring budget to observe how far the agent gets with less time.

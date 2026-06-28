@@ -61,7 +61,8 @@ def main():
                         r = bsengine.play_running(
                             you + running_opp, seed=seed,
                             width=_ladder.WIDTH, height=_ladder.HEIGHT,
-                            gametype=_ladder.GAMETYPE, timeout_ms=_ladder.MOVE_TIMEOUT_MS)
+                            gametype=_ladder.GAMETYPE, timeout_ms=_ladder.MOVE_TIMEOUT_MS,
+                            wall_clock=_ladder.WALL_CLOCK)
                     except Exception as e:
                         errors.append(f"{opp['name']}@{seed}: {e}")
                         continue
@@ -108,7 +109,9 @@ def main():
     if best is not None:
         gif_path = os.path.join(scorer_out, "replay.gif")
         run_id = os.environ.get("BUNSEN_RUN_ID", "")
-        title = f"Battlesnake run {run_id}" if run_id else "Battlesnake run"
+        # variant-specific note in the title (e.g. the 10-minute `quick` variant)
+        note = {"quick": " (10-minute)"}.get(os.environ.get("BUNSEN_EXPERIMENT_VARIANT", ""), "")
+        title = f"Battlesnake{note} run {run_id}" if run_id else f"Battlesnake{note} run"
         # scores shown on the replay: the headline win-rate + per-opponent breakdown
         gif_scores = [("win-rate", f"{100 * score:.0f}%")] + \
                      [(opp["name"], per[opp["name"]]) for opp in _ladder.HELD_OUT]
