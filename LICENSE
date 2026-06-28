@@ -1,8 +1,10 @@
 Bunsen is source-available under the PolyForm Shield License 1.0.0, reproduced in
 full below. It is NOT an OSI "open source" license. Portions of this repository
-are third-party components provided under their own licenses (MIT, Apache-2.0,
-BSD-3-Clause) and are NOT covered by the license below — see LICENSING.md for the
-full map and for a plain-English summary of what you may and may not do.
+are third-party components under their own licenses (MIT, Apache-2.0, BSD-3-Clause),
+and the Battlesnake experiment image bundles a third-party engine under AGPL-3.0
+(built from pinned upstream source, not vendored in this repository). None of these
+are covered by the license below — see LICENSING.md for the full map and a
+plain-English summary of what you may and may not do.
 
 Required Notice: Copyright 2026 Matthew Job Granmoe
 Licensor Line of Business: Bunsen — a research system for humans and AI agents to improve agentic systems through reproducible experiments, evaluation, meta-analysis, and shared evidence (https://bunsen.dev)

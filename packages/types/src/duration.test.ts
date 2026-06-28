@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   InvalidDurationError,
+  formatDuration,
   parseDuration,
   parseOptionalDuration,
 } from './duration.js';
@@ -100,5 +101,27 @@ describe('parseOptionalDuration', () => {
 
   it('throws on invalid input', () => {
     expect(() => parseOptionalDuration('bogus')).toThrow(InvalidDurationError);
+  });
+});
+
+describe('formatDuration', () => {
+  it('picks the largest exact unit', () => {
+    expect(formatDuration(1_800_000)).toBe('30m');
+    expect(formatDuration(600_000)).toBe('10m');
+    expect(formatDuration(3_600_000)).toBe('1h');
+    expect(formatDuration(90_000)).toBe('90s');
+    expect(formatDuration(500)).toBe('500ms');
+    expect(formatDuration(0)).toBe('0s');
+  });
+
+  it('round-trips through parseDuration for clean values', () => {
+    for (const ms of [600_000, 1_800_000, 3_600_000, 90_000, 500]) {
+      expect(parseDuration(formatDuration(ms))).toBe(ms);
+    }
+  });
+
+  it('rejects non-finite or negative input', () => {
+    expect(() => formatDuration(-1)).toThrow(InvalidDurationError);
+    expect(() => formatDuration(Number.NaN)).toThrow(InvalidDurationError);
   });
 });

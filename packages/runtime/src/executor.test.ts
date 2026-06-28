@@ -6,6 +6,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import {
+  AGENT_PGID_FILE,
+  agentPgidRecordPrefix,
+  reapAgentProcessGroupCommand,
   buildExecLogs,
   buildWorkspaceMaterializationScript,
   buildWorkspaceSourceAssemblyScript,
@@ -726,6 +729,7 @@ describe('handleSignal scrubs live-key files', () => {
         scorerContainer: null,
         cleaningUp: false,
         terminalEventEmitted: false,
+        timedOut: false,
       });
 
       try {
@@ -743,4 +747,29 @@ describe('handleSignal scrubs live-key files', () => {
       }
     });
   }
+});
+
+describe('timed-out agent reaping (onTimeout: score)', () => {
+  it('launch prefix records the exec process group, exit-code-transparently', () => {
+    const prefix = agentPgidRecordPrefix();
+    // Records $$'s process group id (field 5 of /proc/$$/stat — no `ps` dependency)
+    // to the pgid file, after ensuring the dir exists.
+    expect(prefix).toContain('/proc/$$/stat');
+    expect(prefix).toContain('mkdir -p /bunsen/run');
+    expect(prefix).toContain(`> ${AGENT_PGID_FILE}`);
+    // ...best-effort (won't fail the launch) and `;`-separated so it can't change
+    // the launched command's exit status.
+    expect(prefix.trimEnd().endsWith('|| true;')).toBe(true);
+  });
+
+  it('reap command SIGKILLs the recorded process GROUP, not a bare pid', () => {
+    const cmd = reapAgentProcessGroupCommand();
+    expect(cmd).toContain(`cat ${AGENT_PGID_FILE}`);
+    // The `-- -"$PGID"` form targets the whole group (sparing init + keepalive);
+    // a bare `kill "$PGID"` would only hit one process. Guard that it stays a group kill.
+    expect(cmd).toContain('kill -KILL -- -"$PGID"');
+    expect(cmd).not.toMatch(/kill -KILL "?\$PGID/);
+    // No recorded group => no-op (don't kill anything blindly).
+    expect(cmd).toContain('no agent process group recorded; skipping');
+  });
 });

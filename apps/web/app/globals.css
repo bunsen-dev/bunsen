@@ -410,7 +410,6 @@ h1.display {
    A slim teaser/wayfinding band; the detailed story lives in #start/#evals/#lab. */
 .pipemap {
   padding: 30px 0 36px;
-  border-top: 1px solid var(--border-soft);
 }
 .pipe-grid {
   display: flex;
@@ -641,7 +640,6 @@ h1.display {
 /* sections */
 section.band {
   padding: 80px 0;
-  border-top: 1px solid var(--border-soft);
 }
 .eyebrow {
   font-family: var(--mono);
@@ -745,7 +743,7 @@ h2.sec {
 }
 .stepc.wide {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 420px 1fr;
   align-items: stretch;
 }
 .stepc.wide .hd {
@@ -838,6 +836,30 @@ pre .dim {
 .cmdnote .mono {
   color: var(--fg);
 }
+.cmdnote a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.cmdnote a:hover {
+  color: var(--amber);
+}
+
+/* get started — numbered steps (1 · install, then 2 · create your first experiment) */
+.setupstep {
+  margin-top: 34px;
+}
+.setnum {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.setupstep .cmdlist,
+.setupstep .stepc.first {
+  margin-top: 14px;
+}
 
 /* deep evals ladder */
 .ladder {
@@ -885,6 +907,92 @@ pre .dim {
   color: var(--muted-2);
 }
 .gatecallout .mono {
+  color: var(--accent);
+}
+
+/* eval-anything — the universal eval lab. Two concrete benchblocks: the Terminal
+   Bench port (categories + command) and BattlesnakeBench (two replay GIFs). */
+.benchblock {
+  margin-top: 30px;
+}
+.benchblock h3 {
+  margin-top: 8px;
+  font-size: 1.28rem;
+  font-weight: 700;
+}
+.benchblock > p {
+  margin-top: 10px;
+  max-width: 48rem;
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+.rtag {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.tblink {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tblink:hover {
+  color: var(--amber);
+}
+
+/* BattlesnakeBench — two replay GIFs side by side, each captioned */
+.gifrow {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.gif-cell {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gif-cell img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+}
+.gif-cell figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: center;
+  font-family: var(--mono);
+}
+.gif-cell figcaption b {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.gif-cell figcaption span {
+  font-size: 0.7rem;
+  color: var(--muted-2);
+}
+@media (max-width: 600px) {
+  .gifrow {
+    grid-template-columns: 1fr;
+  }
+}
+/* fair-hedge footnote under the BattlesnakeBench replays */
+/* must out-specify `.benchblock > p` (0.98rem) above, or it overrides the size */
+.benchblock > p.benchnote {
+  margin: 14px auto 0;
+  max-width: 64ch;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--muted-2);
+  text-align: center;
+}
+.benchnote sup {
   color: var(--accent);
 }
 
@@ -1069,7 +1177,6 @@ table.m .cheap {
   position: relative;
   text-align: center;
   padding: 96px 0;
-  border-top: 1px solid var(--border-soft);
   overflow: hidden;
 }
 .finalcta::before {

@@ -74,6 +74,25 @@ describe('buildReservedEnv', () => {
     });
   });
 
+  it('exposes BUNSEN_RUN_TIMEOUT as a human-readable duration when set, and omits it otherwise', () => {
+    const withTimeout = buildReservedEnv({
+      runId: 'r',
+      experimentName: 'e',
+      agentName: 'a',
+      platform: 'linux/amd64',
+      runTimeoutMs: 30 * 60_000,
+    });
+    expect(withTimeout.BUNSEN_RUN_TIMEOUT).toBe('30m');
+
+    const without = buildReservedEnv({
+      runId: 'r',
+      experimentName: 'e',
+      agentName: 'a',
+      platform: 'linux/amd64',
+    });
+    expect(without.BUNSEN_RUN_TIMEOUT).toBeUndefined();
+  });
+
   it('sets BUNSEN_AGENT_HOME to /root when requiresRoot is true', () => {
     const env = buildReservedEnv({
       runId: 'r',

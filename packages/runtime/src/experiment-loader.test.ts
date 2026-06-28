@@ -176,6 +176,20 @@ describe('parseExperimentConfig', () => {
     expect(config.evaluation.criteria[0].timeout).toBe('180s');
   });
 
+  it('parses run.onTimeout and leaves it unset when absent', () => {
+    expect(parseV1(baseYaml({ run: { onTimeout: 'score' } })).run?.onTimeout).toBe('score');
+    expect(parseV1(baseYaml({ run: { onTimeout: 'fail' } })).run?.onTimeout).toBe('fail');
+    // Absent => left unset so the runtime applies the 'fail' default (and so a
+    // variant overriding other run fields can't silently reset it).
+    expect(parseV1(baseYaml({ run: { timeout: '5m' } })).run?.onTimeout).toBeUndefined();
+  });
+
+  it('rejects an invalid run.onTimeout value', () => {
+    expect(() =>
+      parseV1(baseYaml({ run: { onTimeout: 'ignore' } })),
+    ).toThrow(/onTimeout must be 'score' or 'fail'/);
+  });
+
   it('accepts writeFile steps in workspace.setup', () => {
     const config = parseV1(
       baseYaml({

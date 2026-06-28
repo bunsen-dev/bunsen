@@ -125,6 +125,13 @@ export interface RunConfig {
   platform?: 'auto' | RunPlatform;
   /** Post-run artifact capture timeout. Duration string. */
   artifactCaptureTimeout?: string;
+  /**
+   * What to do when the agent hits `timeout`. `'score'` captures the workspace and
+   * runs evaluation against whatever the agent left (the run completes, flagged as
+   * timed-out) — the right choice for open-ended "do your best in a fixed budget"
+   * tasks. `'fail'` (default) fails the run, suitable for bounded tasks.
+   */
+  onTimeout?: 'score' | 'fail';
 }
 
 // ---------------------------------------------------------------------------

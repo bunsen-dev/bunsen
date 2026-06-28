@@ -1,0 +1,122 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: battlesnake
+description: >-
+  Author a Battlesnake bot, scored by win-rate against a hidden held-out ladder
+  of algorithmic reference snakes; emits an auto-rendered replay GIF.
+labels:
+  category: games
+  game: battlesnake
+task:
+  prompt: |-
+    Write a Battlesnake bot in /workspace and make it win as many games as
+    possible.
+
+    Battlesnake is a turn-based game where snakes move on a grid, eat food to
+    grow, and try to outlast each other. Your bot is an HTTP server implementing
+    the 4-endpoint Battlesnake API (GET /, POST /start, POST /move, POST /end);
+    each turn the game engine POSTs the board state to /move and you reply with
+    one of "up", "down", "left", "right". A starter bot that makes legal,
+    non-suicidal moves is already in /workspace (main.py + start.sh) — it runs
+    out of the box but does not try to win yet. Improve it.
+
+    READ /workspace/SKILL.md FIRST. It documents the API, the board/move JSON,
+    the coordinate system, and core strategy (flood-fill space control, food and
+    health management, head-to-head rules).
+
+    HOW YOU ARE SCORED — read carefully:
+      • You are scored by WIN-RATE against a HIDDEN, HELD-OUT ladder of reference
+        snakes that you CANNOT see. It is a DIFFERENT set from the practice bots.
+      • To practice, run `battlesnake-selftest` — it plays your bot against three
+        VISIBLE sparring bots (randomish, hungry, spacer in /opt/battlesnake/
+        sparring) and prints win-rate, survival, and death causes, and renders a
+        sample game to /workspace/selftest-replay.gif.
+      • The sparring bots are NOT the bots you are scored against. Do not over-fit
+        them — build general strength (a bot that only beats passive snakes will
+        be punished by the hidden ladder, which includes aggressive styles).
+
+    YOU HAVE A LIMITED TIME BUDGET — your total wall-clock budget is in the
+    BUNSEN_RUN_TIMEOUT environment variable (e.g. "30m"; run `echo
+    $BUNSEN_RUN_TIMEOUT` to read it and `date` to see elapsed time). Budget your
+    iterations and checkpoint with battlesnake-selftest:
+      • When your time runs out you are scored on the bot at /workspace/submission/,
+        NOT your latest in-progress edit. So checkpoint working versions as you go.
+      • Each time `battlesnake-selftest` runs and your bot starts cleanly, it
+        SNAPSHOTS your current bot to /workspace/submission/ for you. So just run
+        `battlesnake-selftest` after every improvement and your latest working bot
+        is always saved — a half-finished edit at the buzzer can't cost you your
+        progress. (If you never run it, scoring falls back to /workspace.)
+
+    REQUIREMENTS:
+      • Write your bot in Python 3 using only the standard library (the
+        environment has python3; do not assume any third-party package is
+        installed for your bot).
+      • Keep your bot DETERMINISTIC given the board state: do not use unseeded
+        randomness or wall-clock time, so your results reproduce.
+      • Respond to /move within the move timeout (default 500 ms).
+      • `start.sh` must launch your bot on the port given by $PORT. If you keep
+        the Python starter you don't need to change it.
+
+    Iterate: edit main.py, run `battlesnake-selftest`, read the win-rate and
+    death causes, and improve. Finish when your bot reliably beats the sparring
+    set with room to spare.
+workspace:
+  sources:
+    - path: ./workspace
+    - path: ./SKILL.md
+      target: SKILL.md
+environment:
+  image:
+    dockerfile: ./Dockerfile
+  platforms:
+    - linux/amd64
+    - linux/arm64
+  user: user
+run:
+  timeout: 30m
+  # The agent iterates a bot with a fast self-test loop and usually finishes in
+  # budget; `onTimeout: score` is a safety net so that if it does hit the limit,
+  # the bot it left in /workspace is still graded (instead of failing the run).
+  onTimeout: score
+  # NOTE: the held-out scoring runs ~36 games in the dedicated scorer container,
+  # which can take a few minutes; the agent budget above is for authoring only.
+evaluation:
+  # MUST stay 'dedicated' (the default): it keeps verifiers/ — the hidden ladder
+  # and scored seeds — out of the agent's container. Do NOT set container: agent.
+  criteria:
+    - id: valid-bot
+      title: Valid bot
+      type: script
+      scores: [0, 1]
+      weight: 0
+      gate:
+        ifBelow: 1
+      timeout: 3m
+      run: python3 /bunsen/verifiers/gate.py
+
+    - id: win-rate
+      title: Win-rate vs held-out ladder
+      type: script
+      weight: 1
+      # 9 seeds x 4 held-out bots = 36 games; the depth-2 maximin bots make some
+      # games longer than the old 1-ply ladder, so allow generous headroom.
+      timeout: 30m
+      run: python3 /bunsen/verifiers/score_winrate.py
+
+    - id: diagnostics
+      title: Diagnostics (survival, per-opponent, food)
+      type: script
+      weight: 0
+      needs: [win-rate]
+      timeout: 2m
+      run: python3 /bunsen/verifiers/diagnostics.py
+
+variants:
+  # Shorter authoring budget to observe how far the agent gets with less time.
+  # `onTimeout: score` (from the base) grades whatever bot is in /workspace when
+  # the timer fires — there is no last-known-good checkpoint, so a mid-edit
+  # cutoff can score 0.
+  quick:
+    description: 10-minute authoring budget (for time-pressure experiments).
+    run:
+      timeout: 10m

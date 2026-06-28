@@ -127,6 +127,8 @@ const VALID_RUN_PLATFORMS: ReadonlySet<string> = new Set([
   'linux/arm64',
 ]);
 
+const VALID_ON_TIMEOUT_VALUES: ReadonlySet<string> = new Set(['score', 'fail']);
+
 const VALID_CRITERION_TYPES: ReadonlySet<string> = new Set([
   'script',
   'judge',
@@ -836,9 +838,22 @@ function parseRunConfig(raw: unknown, ctx: string): RunConfig {
       'experiment.run.artifactCaptureTimeout.type',
     );
   }
+  if (raw.onTimeout !== undefined) {
+    // Only set when explicitly present, so a variant that overrides other run
+    // fields doesn't silently reset onTimeout (the merge spreads parsed objects).
+    // The runtime applies the `'fail'` default when the key is absent everywhere.
+    if (typeof raw.onTimeout !== 'string' || !VALID_ON_TIMEOUT_VALUES.has(raw.onTimeout)) {
+      fail(
+        'experiment.run.onTimeout.enum',
+        `${ctx}.onTimeout must be 'score' or 'fail'.`,
+        `${ctx}.onTimeout`,
+      );
+    }
+    out.onTimeout = raw.onTimeout as RunConfig['onTimeout'];
+  }
   ensureNoUnknownKeys(
     raw,
-    new Set(['timeout', 'platform', 'artifactCaptureTimeout']),
+    new Set(['timeout', 'platform', 'artifactCaptureTimeout', 'onTimeout']),
     ctx,
     'experiment.run.unknown_field',
   );

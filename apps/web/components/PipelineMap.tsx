@@ -7,7 +7,7 @@
 //
 // Each cell: a mono label (.pk) + a visual, then prose in the page's sans voice
 // (.pdesc = primary line, .psub = secondary detail). The eval cell is a teaser,
-// not a legend — the full scorer ladder lives in the Deep Evals section (#evals);
+// not a legend — the full scorer ladder lives in the Deep by default section (#deep);
 // the analyze cell sells the real payoff: meta-analysis -> insight -> iterate (#lab).
 
 export function PipelineMap() {
@@ -46,8 +46,8 @@ export function PipelineMap() {
 
           <span className="parrow" aria-hidden="true">→</span>
 
-          {/* 3 · deep evals — scorers that are themselves agents, gated by a $0 script */}
-          <a className="pcell evals" href="#evals">
+          {/* 3 · deep evals — scorers that are themselves agents, gated by a cheap script */}
+          <a className="pcell evals" href="#deep">
             <div className="pk">deep evals</div>
             <div className="spectrum" aria-hidden="true">
               <i />

@@ -260,6 +260,7 @@ If a step needs root, set `as: root` on that step or set `environment.user: root
 | Field                    | Type            | Default | Description                                                                                  |
 | ------------------------ | --------------- | ------- | -------------------------------------------------------------------------------------------- |
 | `timeout`                | duration string | `15m`   | Overall agent timeout.                                                                       |
+| `onTimeout`              | `score` \| `fail` | `fail` | What to do when the agent hits `timeout`. `score` reaps the agent's process tree (so the captured workspace is stable), then runs evaluation against whatever it left — the run completes, flagged `extensions.timed_out: true`. Right for open-ended, fixed-budget tasks. `fail` (default) fails the run. |
 | `platform`               | `auto` \| `linux/amd64` \| `linux/arm64` | `auto` | Per-experiment platform preference (see [Platforms & Architecture](./PLATFORMS.md)).               |
 | `artifactCaptureTimeout` | duration string | `2m`    | Post-run artifact capture (diff, tar export, log retrieval).                                 |
 
@@ -668,6 +669,7 @@ The runtime injects these; user config cannot override them (parsers reject `BUN
 - `BUNSEN_RUN_DIR` (`/bunsen/run`)
 - `BUNSEN_AGENT_HOME` (`/home/bunsen` for non-root runs, `/root` when `environment.user: root`). Use this in `install.configure` scripts to write user-level config files (`$BUNSEN_AGENT_HOME/.codex/config.toml`, `$BUNSEN_AGENT_HOME/.claude.json`, etc.) without needing to know the execution user. The runtime chowns this directory to the execution user after `install.configure` finishes.
 - `BUNSEN_PLATFORM` (resolved run platform)
+- `BUNSEN_RUN_TIMEOUT` (the run's total wall-clock budget as a human-readable duration string, e.g. `30m`, resolved after any variant override; set only when the run has a timeout). Lets the agent budget its work — note it's the *total* budget, not elapsed/remaining time.
 - `BUNSEN_SUITE_ID`, `BUNSEN_SUITE_VERSION` (set only when running via a suite)
 
 ## See also

@@ -2,11 +2,9 @@
 
 The Bunsen landing page — deployed at [bunsen.dev](https://bunsen.dev).
 
-A Next.js app (App Router, React 19) with a dark terminal aesthetic: a hero with
-an animated `bn run` line, the three pillars, a quickstart, the deep-evals
-ladder, an at-scale benchmark matrix, the lab idea, a final CTA with an email
-capture, and an in-app `/docs` route. Styling is authored CSS in
-`app/globals.css` (ported from the design source); fonts come from `next/font`.
+A Next.js app (App Router, React 19); styling is authored CSS in
+`app/globals.css`, fonts come from `next/font`. It also houses the in-app
+documentation at `/docs`.
 
 **No client components / no client JS.** Every page is server-rendered. The
 homepage `/` is dynamically rendered (it reads the post-submit waitlist status

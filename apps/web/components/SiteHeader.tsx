@@ -8,14 +8,14 @@ export function SiteHeader() {
       <div className="wrap nav">
         <Brand gradientId="flame-header" ariaLabel="Bunsen home" />
         <nav className="nav-links">
+          <a className="navlink" href="/#anything">
+            Eval anything
+          </a>
           <a className="navlink" href="/#start">
-            Quickstart
+            Get started
           </a>
-          <a className="navlink" href="/#evals">
+          <a className="navlink" href="/#deep">
             Deep evals
-          </a>
-          <a className="navlink" href="/#scale">
-            At scale
           </a>
           <a className="navlink" href="/docs">
             Docs

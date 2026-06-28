@@ -28,9 +28,8 @@ export function Pillars() {
             <div className="tag">DEEP EVALS</div>
             <h3>Score it with AI</h3>
             <p>
-              Scorers from <span className="mono">$0</span> deterministic checks up to AI agents
-              that run your tests, drive a real browser, and read the run&apos;s own traces. The
-              whole ladder, out of the box.
+              Scorers from deterministic checks up to AI agents that run your tests, drive a real
+              browser, and read the run&apos;s own traces. The whole ladder, out of the box.
             </p>
           </div>
         </div>
