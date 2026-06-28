@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""battlesnake-selftest — play YOUR bot against the visible sparring snakes and
+report how it does, before you finish.
+
+This plays /workspace (your bot, via start.sh) against the three bundled SPARRING
+bots — randomish, hungry, spacer — over a set of dev seeds, prints per-opponent
+win-rate, survival length, and death causes, and renders one sample game to
+/workspace/selftest-replay.gif so you can watch it.
+
+IMPORTANT: you are SCORED against a DIFFERENT, HIDDEN ladder (not these sparring
+bots). Use this loop to build general strength, not to over-fit these three.
+
+Usage:
+  battlesnake-selftest                 # 8 seeds vs each sparring bot
+  battlesnake-selftest --games 16      # more seeds = steadier estimate
+  battlesnake-selftest --bot 'bash /workspace/start.sh'   # custom launch command
+"""
+import argparse
+import glob
+import os
+import shutil
+import sys
+
+sys.path.insert(0, "/opt/battlesnake/lib")
+import bsengine
+import bsrender
+
+SPARRING_DIR = os.environ.get("BATTLESNAKE_SPARRING", "/opt/battlesnake/sparring")
+TIER_ORDER = ["randomish", "hungry", "spacer"]
+WORKSPACE = "/workspace"
+SUBMISSION_DIR = "/workspace/submission"
+DEFAULT_BOT = "bash /workspace/start.sh"
+
+
+def checkpoint_workspace_bot():
+    """Snapshot the live /workspace bot into /workspace/submission/ — the
+    last-known-good checkpoint the scorer grades. Called only after the bot has
+    started cleanly, so a broken in-progress edit never overwrites a good
+    snapshot. Copies start.sh + every top-level .py (the common bot shape); if
+    your bot spans subdirectories, copy them into /workspace/submission/ too."""
+    try:
+        os.makedirs(SUBMISSION_DIR, exist_ok=True)
+        files = sorted(glob.glob(os.path.join(WORKSPACE, "*.py")))
+        sh = os.path.join(WORKSPACE, "start.sh")
+        if os.path.isfile(sh):
+            files.append(sh)
+        for f in files:
+            shutil.copy2(f, os.path.join(SUBMISSION_DIR, os.path.basename(f)))
+        return True
+    except Exception as e:
+        print(f"  (could not checkpoint to {SUBMISSION_DIR}: {e})", file=sys.stderr)
+        return False
+
+
+def sparring_bots():
+    found = {os.path.splitext(os.path.basename(p))[0]: p
+             for p in glob.glob(os.path.join(SPARRING_DIR, "*.py"))}
+    ordered = [n for n in TIER_ORDER if n in found] + \
+              [n for n in sorted(found) if n not in TIER_ORDER]
+    return [(n, [sys.executable, found[n]]) for n in ordered]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--games", type=int, default=8, help="seeds per opponent")
+    ap.add_argument("--bot", default="bash /workspace/start.sh",
+                    help="shell command that launches your bot on $PORT")
+    ap.add_argument("--gif", default="/workspace/selftest-replay.gif")
+    ap.add_argument("--width", type=int, default=11)
+    ap.add_argument("--height", type=int, default=11)
+    args = ap.parse_args()
+
+    seeds = list(range(1, args.games + 1))
+    you_cmd = ["bash", "-c", f'exec {args.bot}']
+
+    # Start your bot once; verify it answers before running games.
+    try:
+        you = bsengine.start_bots([{"name": "you", "cmd": you_cmd}])
+    except Exception as e:
+        print(f"ERROR: your bot failed to start ({e}).", file=sys.stderr)
+        print("Check that `start.sh` launches a server on $PORT.", file=sys.stderr)
+        return 1
+
+    # The bot started cleanly, so checkpoint it: this is your last-known-good bot
+    # and is exactly what gets scored. (Only when testing the default workspace
+    # bot — a custom --bot is not your submission.)
+    checkpointed = args.bot == DEFAULT_BOT and checkpoint_workspace_bot()
+
+    best_game = None       # (priority, frames, title)
+    total_w = total_g = 0
+    rows = []
+    try:
+        for name, cmd in sparring_bots():
+            opp = bsengine.start_bots([{"name": name, "cmd": cmd}])
+            try:
+                wins = 0
+                surv = []
+                deaths = {}
+                for s in seeds:
+                    r = bsengine.play_running(you + opp, seed=s,
+                                              width=args.width, height=args.height)
+                    won = r["winner"] == "you"
+                    wins += 1 if won else 0
+                    you_info = r["snakes"].get("you", {})
+                    surv.append(you_info.get("turns", 0))
+                    d = you_info.get("death", "?")
+                    if not won:
+                        deaths[d] = deaths.get(d, 0) + 1
+                    # keep the most decisive game to render (prefer a long win)
+                    prio = (1 if won else 0, r["turns"])
+                    if r["frames"] and (best_game is None or prio > best_game[0]):
+                        best_game = (prio, r["frames"], f"you vs {name}")
+            finally:
+                bsengine.stop_bots(opp)
+            total_w += wins
+            total_g += len(seeds)
+            avg = sum(surv) // len(surv) if surv else 0
+            rows.append((name, wins, len(seeds), avg, deaths))
+    finally:
+        bsengine.stop_bots(you)
+
+    print(f"\nBattlesnake self-test — your bot vs the sparring set, {args.games} seeds each\n")
+    for name, w, n, avg, deaths in rows:
+        ds = ", ".join(f"{k}:{v}" for k, v in sorted(deaths.items())) or "—"
+        print(f"  vs {name:10} {100 * w // n:3}%  ({w}/{n} wins)   "
+              f"avg survival {avg:3} turns   losses by [{ds}]")
+    print(f"\n  OVERALL: {100 * total_w // total_g if total_g else 0}% "
+          f"across {total_g} games\n")
+
+    if best_game is not None:
+        try:
+            bsrender.render_gif(best_game[1], args.gif, title=best_game[2])
+            print(f"  Sample game rendered to {args.gif} "
+                  f"({len(best_game[1])} frames) — open it to watch.\n")
+        except Exception as e:
+            print(f"  (could not render sample GIF: {e})\n", file=sys.stderr)
+
+    if checkpointed:
+        print(f"  Checkpointed this working bot to {SUBMISSION_DIR}/ — this is "
+              f"what gets scored\n  when your time runs out. Run selftest after "
+              f"each improvement to keep it current.\n")
+
+    print("  Reminder: scoring uses a DIFFERENT, HIDDEN ladder. Optimize for "
+          "general strength,\n  not for beating these three sparring bots.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

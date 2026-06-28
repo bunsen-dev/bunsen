@@ -147,6 +147,14 @@ template, use `bn new agent <name>` (the `bunsen-new-agent` skill from `bn skill
 install` walks you through the `agent.yaml`); to start from a working one,
 `bn agents add` then edit (see the [CLI Reference](./docs/CLI.md)).
 
+Example experiments live under `examples/experiments/`, grouped by category:
+
+| Category | What the agent does |
+| --- | --- |
+| `zero-to-one/` | Build a small app or program from a prompt. |
+| `fix-bugs/` | Fix a real bug in a verbatim snapshot of an upstream repo. |
+| `games/` | Author a game-playing **bot** scored from authoritative game state, with an auto-rendered replay. `games/battlesnake` (write a Battlesnake bot, scored by win-rate against a hidden held-out ladder, emits a replay GIF) is the first. |
+
 ## Base images
 
 | Image             | Description                                          |
