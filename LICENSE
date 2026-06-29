@@ -116,12 +116,6 @@ Terms. If any provision of these Additional Terms is held unenforceable, it is l
 severed to the minimum extent necessary, and the remainder of these Additional Terms and
 the PolyForm Shield License remain in effect.
 
-> **Note for counsel / review status:** the four sections below — Acceptable Use; Costs
-> and Third-Party Services; Indemnification; and Governing Law and Venue — are drafted by
-> the maintainer and are pending legal review. They are not legal advice. "Governing Law
-> and Venue" contains bracketed placeholders that must be set before these terms are
-> relied upon.
-
 ## Acceptable Use
 
 You are responsible for your use of the software, including everything an agent,
@@ -163,9 +157,9 @@ participate in its defense with its own counsel at its own expense.
 ## Governing Law and Venue
 
 These terms — the PolyForm Shield License 1.0.0 and these Additional Terms — are governed
-by the laws of [GOVERNING JURISDICTION — for counsel to set], without regard to its
-conflict-of-laws rules. The state and federal courts located in [EXCLUSIVE VENUE — for
-counsel to set] have exclusive jurisdiction over any dispute arising out of or relating to
-the software or these terms, and you consent to that jurisdiction and venue; the Licensor
-may additionally seek injunctive relief in any court of competent jurisdiction. The United
-Nations Convention on Contracts for the International Sale of Goods does not apply.
+by the laws of the State of Minnesota, without regard to its conflict-of-laws rules. The
+state courts of Minnesota located in Ramsey County and the United States District Court for
+the District of Minnesota have exclusive jurisdiction over any dispute arising out of or
+relating to the software or these terms, and you consent to that jurisdiction and venue; the
+Licensor may additionally seek injunctive relief in any court of competent jurisdiction. The
+United Nations Convention on Contracts for the International Sale of Goods does not apply.

@@ -53,9 +53,6 @@ the Maintainer later forms. Any permitted assignee may exercise all rights grant
 
 ## 7. Indemnification
 
-*(Maintainer draft, pending legal review — **optional**. This raises the bar for first-time contributors,
-so the Maintainer may choose to drop or soften it.)*
-
 To the maximum extent permitted by applicable law, if you breach the representations in Section 4 (You have
 the right to contribute) — for example, by submitting a contribution you did not have the right to submit,
 or that infringes a third party's copyright, patent, trademark, trade secret, or other rights — you will
