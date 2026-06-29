@@ -51,6 +51,15 @@ You acknowledge that the Maintainer may assign this agreement and the rights gra
 that succeeds to, owns, or operates Bunsen or the Maintainer's Bunsen-related business, including a company
 the Maintainer later forms. Any permitted assignee may exercise all rights granted here.
 
+## 7. Indemnification
+
+To the maximum extent permitted by applicable law, if you breach the representations in Section 4 (You have
+the right to contribute) — for example, by submitting a contribution you did not have the right to submit,
+or that infringes a third party's copyright, patent, trademark, trade secret, or other rights — you will
+indemnify and hold harmless the Maintainer from any third-party claim, loss, liability, or expense
+(including reasonable attorneys' fees) arising out of that breach. This Section 7 does not impose liability
+on you for a contribution to the extent it is your original creation and you had the right to submit it.
+
 ---
 
 **How to sign:** **[cla-assistant.io](https://cla-assistant.io)** will prompt first-time contributors once

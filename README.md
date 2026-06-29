@@ -215,6 +215,13 @@ disposable host with throwaway, scoped API keys. See **[Trust Model](./docs/TRUS
 full trust model — where code executes (host vs container), the exact container posture, how to share runs
 safely, and the trace body-vs-headers nuance.
 
+**You are responsible for what your runs do and what they cost.** Bunsen does not cap spend — a run is
+bounded by `run.timeout`, not by a dollar or token budget, so a looping or fast agent can run up a large
+provider bill. You are solely responsible for all charges you incur with model and tool providers, and for
+ensuring your use — and anything an agent does over the open network — complies with those providers' terms
+and with applicable law. Use scoped, low-limit keys and provider-side budgets to bound spend. See
+[Cost Accounting](./docs/COST.md) and the Additional Terms in [`LICENSE`](./LICENSE).
+
 ## License
 
 Bunsen is **source-available** under the [PolyForm Shield License 1.0.0](./LICENSE) — it is **not** an OSI

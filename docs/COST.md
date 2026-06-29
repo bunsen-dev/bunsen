@@ -20,6 +20,23 @@ Cost is only as good as the traces it's computed from. If the proxy captured no
 traffic, there is nothing to price — see [Can you trust the
 numbers?](#can-you-trust-the-numbers).
 
+## Cost responsibility
+
+> **You are solely responsible for all charges you incur with model and tool
+> providers when you run Bunsen.** Bunsen does **not** enforce a spend cap or
+> budget: a run is bounded by wall-clock (`run.timeout`) and the agent's own
+> stopping behavior, **not** by a dollar or token limit, so a fast or looping
+> agent can run up a large provider bill inside that window. The figures in this
+> document are **observed-only, after-the-fact estimates** computed from captured
+> traces (see [Can you trust the numbers?](#can-you-trust-the-numbers)) — they are
+> not billing, not authoritative, and do not limit anything.
+>
+> To actually bound spend, use the controls that gate it: provider-side budgets
+> and rate limits, scoped and low-limit API keys, throwaway keys on a disposable
+> host (see the [Trust Model](./TRUST_MODEL.md)), and a conservative `run.timeout`.
+> Bunsen is `AS IS` software and disclaims liability for these charges — see "No
+> Liability" and the Additional Terms in [`LICENSE`](../LICENSE).
+
 ## How a call is priced
 
 ### The pricing snapshot

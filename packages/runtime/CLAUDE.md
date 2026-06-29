@@ -4,7 +4,7 @@ Internal execution engine for Bunsen. Handles configuration loading, Docker cont
 
 **Not public API.** This package is marked `private: true`. The public surface is `@bunsen-dev/sdk`, `@bunsen-dev/types`, and `@bunsen-dev/cli`. See `docs/PACKAGES.md` for the boundary.
 
-**No backwards compatibility.** See the root [`CLAUDE.md`](../../CLAUDE.md) — Bunsen has no external consumers yet, so every shape in this package is free to change. Do not keep legacy fields around, do not add adapters from an old shape to a new one, do not maintain dual-shape code paths. When a type, field, or function changes, update every call site in the same commit and delete the old version.
+**No backwards compatibility.** This is an internal package (`private: true`, see above) with no API-stability obligation — every shape here is free to change. Per the root [`CLAUDE.md`](../../CLAUDE.md): do not keep legacy fields around, do not add adapters from an old shape to a new one, do not maintain dual-shape code paths. When a type, field, or function changes, update every call site in the same commit and delete the old version.
 
 ## Module Overview
 

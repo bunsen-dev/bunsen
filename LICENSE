@@ -6,6 +6,11 @@ and the Battlesnake experiment image bundles a third-party engine under AGPL-3.0
 are covered by the license below — see LICENSING.md for the full map and a
 plain-English summary of what you may and may not do.
 
+This file also carries **Additional Terms from the Licensor** — acceptable use, cost
+responsibility, indemnification, and governing law — set out after the license text
+below. They supplement (and do not modify) the PolyForm Shield License and apply to
+your use of the software.
+
 Required Notice: Copyright 2026 Matthew Job Granmoe
 Licensor Line of Business: Bunsen — a research system for humans and AI agents to improve agentic systems through reproducible experiments, evaluation, meta-analysis, and shared evidence (https://bunsen.dev)
 
@@ -98,3 +103,63 @@ A **product** can be a good or service, or a combination of them.
 **Your licenses** are all the licenses granted to you for the software under these terms.
 
 **Use** means anything you do with the software requiring one of your licenses.
+
+---
+
+# Additional Terms from the Licensor
+
+These Additional Terms are offered by the Licensor (Matthew Job Granmoe) together with,
+and in addition to, the PolyForm Shield License 1.0.0 reproduced above. They supplement
+that license; they do not modify its text, which is reproduced verbatim so its identity
+is preserved. By exercising any license to the software, you also accept these Additional
+Terms. If any provision of these Additional Terms is held unenforceable, it is limited or
+severed to the minimum extent necessary, and the remainder of these Additional Terms and
+the PolyForm Shield License remain in effect.
+
+## Acceptable Use
+
+You are responsible for your use of the software, including everything an agent,
+experiment, suite, scoring code, or other author- or agent-supplied code does when you
+run it — locally, over a network, or against any third-party or upstream system. You must
+ensure that your use, and any activity you cause through the software, complies with all
+applicable laws and with the terms, acceptable-use policies, and rate limits of every
+third-party service it touches (including model and tool providers). The software executes
+author-supplied and agent-generated code with open network access by design; see the Trust
+Model (docs/TRUST_MODEL.md). The Licensor does not monitor, control, direct, or approve
+what you run or what your runs do.
+
+## Costs and Third-Party Services
+
+The software can make, or cause an agent to make, calls to paid third-party services (for
+example, model-provider APIs) using credentials that you supply. **You are solely
+responsible for all charges, fees, and obligations you incur with those services.** The
+software does not impose any spend, token, or usage cap: a run is bounded by its configured
+timeout and by the agent's own behavior, not by a monetary or token budget, and a
+malfunctioning, looping, or adversarial agent may incur substantial charges within that
+window. Any cost figures the software reports are after-the-fact estimates computed from
+captured traffic; they are not billing, are not authoritative, and do not limit anything.
+You are responsible for bounding your own spend (for example, with provider-side budgets
+and rate limits and with scoped, low-limit credentials). As stated in "No Liability" above,
+the Licensor is not liable to you for any such charges.
+
+## Indemnification
+
+To the maximum extent permitted by applicable law, you will indemnify, defend, and hold
+harmless the Licensor — and the Licensor's successors and assignees — from and against any
+third-party claim, demand, action, loss, liability, damage, cost, or expense (including
+reasonable attorneys' fees) arising out of or relating to: (a) your use of the software;
+(b) anything an agent, experiment, suite, or other code does when you run the software;
+(c) your violation of these Additional Terms, of any applicable law, or of any third
+party's rights; or (d) charges or obligations you incur with any third-party service. The
+Licensor will give you reasonable notice of any claim subject to this section and may
+participate in its defense with its own counsel at its own expense.
+
+## Governing Law and Venue
+
+These terms — the PolyForm Shield License 1.0.0 and these Additional Terms — are governed
+by the laws of the State of Minnesota, without regard to its conflict-of-laws rules. The
+state courts of Minnesota located in Ramsey County and the United States District Court for
+the District of Minnesota have exclusive jurisdiction over any dispute arising out of or
+relating to the software or these terms, and you consent to that jurisdiction and venue; the
+Licensor may additionally seek injunctive relief in any court of competent jurisdiction. The
+United Nations Convention on Contracts for the International Sale of Goods does not apply.

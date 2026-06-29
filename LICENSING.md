@@ -26,6 +26,22 @@ All original code in this repository authored by the Licensor (Matthew Job Granm
 If you want to do something the Shield license doesn't permit (e.g., offer a competing or hosted commercial
 service built on Bunsen), a **commercial license is available** — contact the maintainer (see the README).
 
+### Your responsibilities
+
+Using Bunsen means running code — the experiment author's, the agent's, and whatever the agent generates at
+runtime — with open network access and your own provider keys. A few things follow from that, set out in the
+**Additional Terms from the Licensor** in [`LICENSE`](./LICENSE):
+
+- **You run it at your own risk.** The software is provided "as is," with no warranty, and the Licensor is
+  not liable for damages from its use — including data loss, system damage, or charges you incur. See the
+  [Trust Model](./docs/TRUST_MODEL.md).
+- **You pay for your own usage.** Bunsen does not cap spend; you are solely responsible for all charges you
+  incur with model and tool providers. See [Cost Accounting](./docs/COST.md).
+- **You comply with others' terms.** You are responsible for ensuring your use — and anything an agent does
+  over the network — follows applicable law and the terms of every third-party service it touches.
+- **You cover third-party claims from your use.** You indemnify the Licensor against third-party claims
+  arising from how you use the software.
+
 ### Can I use Bunsen at work?
 
 Yes. PolyForm Shield allows internal commercial use, including using Bunsen inside your company to run
