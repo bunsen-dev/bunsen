@@ -1,11 +1,11 @@
-import { Brand } from "@/components/Flame";
+import { Brand } from "@/components/Brand";
 import { links, site } from "@/lib/site";
 
 export function SiteFooter() {
   return (
     <footer className="site">
       <div className="wrap foot">
-        <Brand gradientId="flame-footer" />
+        <Brand />
         <div className="links">
           <a href={links.github}>GitHub</a>
           <a href={links.linkedin}>Built by Matt Granmoe</a>

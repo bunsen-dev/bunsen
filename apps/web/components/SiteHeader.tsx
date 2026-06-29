@@ -1,4 +1,4 @@
-import { Brand } from "@/components/Flame";
+import { Brand } from "@/components/Brand";
 import { GitHubIcon } from "@/components/icons";
 import { links } from "@/lib/site";
 
@@ -6,7 +6,7 @@ export function SiteHeader() {
   return (
     <header className="site">
       <div className="wrap nav">
-        <Brand gradientId="flame-header" ariaLabel="Bunsen home" />
+        <Brand ariaLabel="Bunsen home" />
         <nav className="nav-links">
           <a className="navlink" href="/#anything">
             Eval anything
