@@ -11,27 +11,26 @@
 //   - program-bench/sqlite is a real ProgramBench task (reconstruct SQLite from its
 //     binary; arXiv 2605.03546); mle-bench is a different domain (ML) and container-native.
 const experiments = [
-  "terminal-bench/build-linux-kernel",
-  "gcal-clone",
-  "program-bench/sqlite*",
-  "play-tetris",
-  "mle-bench/spaceship-titanic*",
-  "your-experiment",
-  "terminal-bench/build-linux-kernel",
+  'terminal-bench/build-linux-kernel',
+  'gcal-clone',
+  'program-bench/sqlite*',
+  'battlesnake',
+  'mle-bench/spaceship-titanic*',
+  'your-experiment',
 ];
 
 const agents = [
-  "claude-code",
-  "codex-cli",
-  "gemini-cli",
-  "opencode*",
-  "pi*",
-  "your-agent",
-  "claude-code",
+  'claude-code',
+  'codex-cli',
+  'gemini-cli',
+  'opencode*',
+  'pi*',
+  'your-agent',
+  'claude-code',
 ];
 
 function RotItem({ name }: { name: string }) {
-  if (name.endsWith("*")) {
+  if (name.endsWith('*')) {
     return (
       <li>
         {name.slice(0, -1)}
@@ -68,13 +67,12 @@ export function RunBar() {
         </span>
       </div>
       <div className="runcap">
-        <b>If you can run it, Bunsen can test it.</b> Swap one argument to compare
-        across models <em>and</em> harnesses.
+        <b>If you can run it, Bunsen can test it.</b> Swap one argument to compare across models{' '}
+        <em>and</em> harnesses.
       </div>
       <div className="runfoot">
-        <span className="star">*</span> Coming soon — add any benchmark via{" "}
-        <span className="mono">bn suites add</span>, or any agent in ~10 lines of
-        YAML.
+        <span className="star">*</span> Coming soon — add any benchmark via{' '}
+        <span className="mono">bn suites add</span>, or any agent in ~10 lines of YAML.
       </div>
     </div>
   );
