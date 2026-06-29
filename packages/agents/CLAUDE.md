@@ -62,7 +62,7 @@ Instead, when scorer/orchestrator code needs a small pure utility:
   ```
 - The standalone files already inline several utilities (see `loadDiff()`, `loadLogs()`, etc. in `src/scorer/standalone.ts`) for this reason.
 - Only import from `@bunsen-dev/types` or similarly small dependency-free shared packages. Do not import `@bunsen-dev/runtime` or cross-package source files into bundle entrypoints.
-- When a type from `@bunsen-dev/types` is the right shape, import it — do **not** duplicate the runtime's adapter/transform inline just to keep the bundle self-contained. This repo has no backwards-compat requirements (see the root [`CLAUDE.md`](../../CLAUDE.md)); the solution to a shape change is to update the bundle's reader, not to maintain a parallel legacy shape inside the bundle.
+- When a type from `@bunsen-dev/types` is the right shape, import it — do **not** duplicate the runtime's adapter/transform inline just to keep the bundle self-contained. This is internal bundle code with no API-stability obligation (see the root [`CLAUDE.md`](../../CLAUDE.md)); the solution to a shape change is to update the bundle's reader, not to maintain a parallel legacy shape inside the bundle.
 
 ### External packages
 
