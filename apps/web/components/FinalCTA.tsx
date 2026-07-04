@@ -12,7 +12,7 @@ export function FinalCTA({ waitlistStatus }: { waitlistStatus?: string }) {
         </h2>
         <p>
           The CLI is source-available today — <code>curl -fsSL https://bunsen.dev/install.sh | sh</code>. Join the list for
-          releases and early access to the hosted lab: remote runs, shared analysis, publishing.
+          release notes and new findings as they ship.
         </p>
         <div className="cta-row">
           <a className="btn btn-primary" href={links.github}>
