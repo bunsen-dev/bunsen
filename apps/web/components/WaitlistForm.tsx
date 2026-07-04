@@ -7,7 +7,7 @@ const ERRORS: Record<string, string> = {
 };
 
 /**
- * Email capture (updates + early access to the hosted lab). Plain `<form>` posting
+ * Email capture (release notes + new findings). Plain `<form>` posting
  * to the `subscribe` server action — no client JS. `status` comes from the page's
  * `searchParams` after the action redirects back.
  */
@@ -52,7 +52,7 @@ export function WaitlistForm({ status }: { status?: string }) {
         </p>
       ) : (
         <p className="waitlist-note">
-          Releases + early access to the hosted lab. No spam, unsubscribe anytime.
+          Release notes + new findings. No spam, unsubscribe anytime.
         </p>
       )}
     </div>

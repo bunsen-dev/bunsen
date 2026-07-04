@@ -11,8 +11,8 @@ export function Hero() {
         </h1>
         <p className="lede">
           <span className="triad">Any agent. Any experiment. Deep evals.</span>
-          The easiest way to learn about and improve <em>any</em> agentic
-          system.
+          Learn about and improve <em>any</em> agentic system — with the
+          evidence to back every claim.
         </p>
         <div className="cta-row">
           <a className="btn btn-primary" href={links.github}>

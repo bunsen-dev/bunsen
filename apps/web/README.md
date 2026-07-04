@@ -41,7 +41,7 @@ automatically (slug = lowercased filename, title = first `# H1`).
 
 ## Waitlist / updates capture
 
-The final CTA captures emails for releases + early access to the hosted lab (one
+The final CTA captures emails for release notes + new findings (one
 Buttondown list, no segmentation at v1). It is **not** a gate on the CLI — the
 tool is free and source-available.
 
