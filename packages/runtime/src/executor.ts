@@ -1005,9 +1005,8 @@ export async function executeRun(
     }
     // Workspace diff/export runs gitignore-filter.cjs *inside the agent container*
     // (see the diff/export capture below), so on a custom image that needs a
-    // mounted Node it is a /bunsen/runtime/node consumer — regardless of whether
-    // evaluation or the supervisor runs. This ran unconditionally on custom images
-    // before, masked by the now-removed orchestrator's always-true gate.
+    // mounted Node it is a /bunsen/runtime/node consumer — independent of whether
+    // evaluation or the supervisor runs.
     const needsGitignoreFilterInAgent =
       hasInitialWorkspaceSource(experiment) && hasGitignoreFilterBundle;
 
@@ -1058,9 +1057,9 @@ export async function executeRun(
       );
     }
     // Supervised mode drives the agent via the LLM supervisor, which needs the
-    // platform key. Starting the agent no longer requires a key (the invocation
-    // is composed deterministically), so a keyless supervised run would proceed
-    // with supervision quietly disabled — surface that loudly instead.
+    // platform key. Starting the agent itself needs no key (the invocation is
+    // composed deterministically), so without a key a supervised run proceeds
+    // with supervision silently disabled — surface that loudly instead.
     if (useSupervisor && hasSupervisorBundle && !platformApiKey) {
       info(
         'Warning: supervised mode was requested but no BUNSEN_ANTHROPIC_API_KEY / ' +

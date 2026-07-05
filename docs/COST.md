@@ -285,7 +285,7 @@ Reading it:
   scorers are broken out per criterion under `Scorers (N)`. The `Orchestrator`
   line is **historical** — new runs compose the agent invocation
   [deterministically](./AGENT_YAML.md#entrypoint) and emit no orchestrator
-  calls, so it no longer prints for a new run.
+  calls, so it does not print for a new run.
 - **Total** is agent + platform. **Run cache** is the run-wide cache rollup, with
   the fresh-input total spelled out as a reminder that only fresh input is billed
   at the full rate.

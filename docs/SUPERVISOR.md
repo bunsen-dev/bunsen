@@ -2,7 +2,7 @@
 
 In **supervised mode**, the agent under test runs inside a tmux session and a platform **supervisor agent** watches its terminal. The supervisor detects interactive prompts (confirmation dialogs, permission requests, selection menus) and sends keystrokes to keep the agent moving. When the agent finishes its task, the supervisor exits the session so the experiment can complete.
 
-The supervisor is one of Bunsen's two platform agents (supervisor and scorer) — it runs inside the container alongside the agent under test, not on the host. (Agent invocation is no longer a platform agent — it is composed deterministically from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint), no model in the path.)
+The supervisor is one of Bunsen's two platform agents (supervisor and scorer) — it runs inside the container alongside the agent under test, not on the host. (Agent invocation is not a platform agent — it is composed deterministically from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint), no model in the path.)
 
 ## When to use supervised vs direct
 

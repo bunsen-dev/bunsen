@@ -302,7 +302,7 @@ this tier) → platform-reserved `BUNSEN_*` (always win, immutable). Full detail
 
 Only enough to read the sections above; full treatment is each tool's own doc.
 
-- **Invocation composition** (not a platform agent) — before the agent runs, `buildArgvInvocation` composes the `setupCommands` + `invocation` deterministically from the agent's `entrypoint` + task prompt, on the host; no model in the invocation path (see [entrypoint](./AGENT_YAML.md#entrypoint)). The retired LLM orchestrator's bundle survives only as the basis for a future `bn agents scaffold`.
+- **Invocation composition** (not a platform agent) — before the agent runs, `buildArgvInvocation` composes the `setupCommands` + `invocation` deterministically from the agent's `entrypoint` + task prompt, on the host; no model in the invocation path (see [entrypoint](./AGENT_YAML.md#entrypoint)). The `orchestrator.cjs` bundle is retained only as the basis for a future `bn agents scaffold`.
 - **Supervisor** — `supervised` mode only; watches the agent in tmux and answers interactive prompts via the LLM. See [Supervised Mode](./SUPERVISOR.md).
 - **Scorer** — evaluates the finished run (`script`/`judge`/`agent`/`browser-agent`/`aggregate` + the `report` step), in a dedicated container or the agent's own. See [Scorers & Evaluation](./SCORERS.md).
 - **Proxy** — a mitmproxy sidecar that captures **only the agent-under-test's** model traffic (platform agents bypass it), for traces + cost. See [Platform Tools](./PLATFORM_TOOLS.md) and [Cost Accounting](./COST.md).

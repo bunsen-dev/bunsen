@@ -24,7 +24,7 @@ keep it distinct from the two senses below.
 to operate the experiment: the **supervisor** (keeps an interactive agent moving
 in [supervised mode](./SUPERVISOR.md)) and the **scorer** (executes LLM
 criteria). These are infrastructure; you do not author them. (Agent invocation
-itself is no longer a platform agent — it is composed deterministically from the
+itself is not a platform agent — it is composed deterministically from the
 agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint), no model in the
 path.) See [How Bunsen Works](./HOW_IT_WORKS.md).
 

@@ -6,7 +6,7 @@ This document describes how Bunsen's platform tools (orchestrator, scorer, super
 
 Bunsen's platform tools are TypeScript/Node.js applications that run inside experiment containers. They are distributed as JS bundles that run on Node.js.
 
-> **The `orchestrator` bundle no longer runs at run time.** The agent invocation is now composed deterministically by the runtime's invocation composer (`buildArgvInvocation` in `packages/runtime/src/orchestration.ts`) from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint) and the experiment's task prompt — no model in the invocation path, so the invocation is reproducible and comparable across runs. The `orchestrator.cjs` bundle is still built (it appears in the outputs below) and its source is retained as the basis for a future `bn agents scaffold`, but it is not mounted into experiment containers. The tools that still run at run time are `scorer`, `supervisor`, `gitignore-filter`, and `proxy-bootstrap`.
+> **The `orchestrator` bundle is not run at run time.** The agent invocation is composed deterministically by the runtime's invocation composer (`buildArgvInvocation` in `packages/runtime/src/orchestration.ts`) from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint) and the experiment's task prompt — no model in the invocation path, so the invocation is reproducible and comparable across runs. The `orchestrator.cjs` bundle is still built (it appears in the outputs below) and its source is retained as the basis for a future `bn agents scaffold`, but it is not mounted into experiment containers. The tools that still run at run time are `scorer`, `supervisor`, `gitignore-filter`, and `proxy-bootstrap`.
 
 ## Build Process
 

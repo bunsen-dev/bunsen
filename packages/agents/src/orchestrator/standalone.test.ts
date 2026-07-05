@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 import { describe, expect, it } from 'vitest';
 
-// NOTE: The runtime no longer runs this orchestrator. Agent invocation is now
+// NOTE: This orchestrator source is not part of any `bn run` — agent invocation is
 // composed deterministically from `entrypoint.invoke` (see
 // `packages/runtime/src/orchestration.ts` + the golden-invocation tests). This
 // source is retained as the basis for an authoring-time `bn agents scaffold`
