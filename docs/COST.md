@@ -143,7 +143,7 @@ The full per-source breakdown lives in `usage.by_source`, keyed by source:
 | --- | --- |
 | `agent` | The agent under test |
 | `platform` | All platform traffic, aggregated |
-| `orchestrator` | The orchestrator agent |
+| `orchestrator` | The orchestrator agent — **historical**; new runs compose the invocation [deterministically](./AGENT_YAML.md#entrypoint) and emit no orchestrator traces |
 | `supervisor` | The supervisor agent (supervised mode) |
 | `scorer` | A scorer with no per-criterion attribution |
 | `scorer:<criterion>` | A model-using scorer (a `judge`, `agent`, or `browser-agent` [criterion](./SCORERS.md)), attributed to its criterion |
@@ -282,7 +282,10 @@ Reading it:
   money actually goes.
 - **Platform** is the sum of orchestrator + supervisor + scorers, never folded
   into the agent number. Sub-sources only print when they made calls; LLM
-  scorers are broken out per criterion under `Scorers (N)`.
+  scorers are broken out per criterion under `Scorers (N)`. The `Orchestrator`
+  line is **historical** — new runs compose the agent invocation
+  [deterministically](./AGENT_YAML.md#entrypoint) and emit no orchestrator
+  calls, so it no longer prints for a new run.
 - **Total** is agent + platform. **Run cache** is the run-wide cache rollup, with
   the fresh-input total spelled out as a reminder that only fresh input is billed
   at the full rate.

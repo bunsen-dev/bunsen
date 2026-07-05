@@ -169,6 +169,7 @@ One of:
 ## entrypoint
 
 - `command`: string **(required)** — minLength 1
+- `invoke`: array of string
 - `args`: array of string
 - `help`: string — minLength 1
 - _no other fields allowed_
@@ -207,6 +208,7 @@ One of:
   - _no other fields allowed_
 - `entrypoint`: object
   - `command`: string — minLength 1
+  - `invoke`: array of string
   - `args`: array of string
   - `help`: string — minLength 1
   - _no other fields allowed_

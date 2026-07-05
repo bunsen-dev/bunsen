@@ -7,9 +7,10 @@ you at the path that fits what you're doing.
 
 - **Docker** — every run executes in a container. Docker Desktop or Engine, running.
 - **Node.js ≥ 22** — the CLI ships as an npm package.
-- **An Anthropic API key** — Bunsen's orchestrator and LLM evaluation run on
-  Claude. Set `ANTHROPIC_API_KEY` in your environment (or a `.env` file in your
-  project — Bunsen loads it automatically).
+- **An Anthropic API key** — needed for LLM evaluation and Claude-powered agents
+  like `claude-code`. Set `ANTHROPIC_API_KEY` in your environment (or a `.env`
+  file in your project — Bunsen loads it automatically). A no-AI agent scored by
+  a deterministic rubric runs fully offline without one.
 
 ## Install the CLI
 
@@ -28,16 +29,17 @@ Scaffold a project with a tiny bundled example, then run it:
 ```bash
 mkdir my-lab && cd my-lab
 bn init --example          # writes bunsen.config.yaml + a hello-world experiment + echo-agent
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 
 bn run hello-world echo-agent
 ```
 
 What just happened: Bunsen built a container from the experiment's base image,
-the **orchestrator** worked out how to invoke `echo-agent`, ran it against the
-task, captured everything, and scored the result with a deterministic `script`
-criterion. `echo-agent` makes no model calls itself — but the orchestrator and
-evaluation do, which is why the API key is needed even here.
+composed how to invoke `echo-agent` deterministically from its
+[`entrypoint`](./AGENT_YAML.md#entrypoint), ran it against the task, captured
+everything, and scored the result with a deterministic `script` criterion.
+`echo-agent` makes no model calls, the invocation uses no model, and a `script`
+criterion needs none either — so this first run is fully offline, no API key
+required.
 
 ## View the result
 

@@ -227,7 +227,6 @@ export {
   RunCanceledError,
   buildExecLogs,
   cleanupInternalRunFiles,
-  getDirectoryListing,
   buildAgentArtifacts,
   getBuildCacheDir,
   getDepsCacheDir,

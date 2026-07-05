@@ -32,8 +32,9 @@ task prompt, and a `script` criterion that runs `pytest`. Open
 ## 2. Write the task
 
 Set `task.prompt` to a clear, specific instruction — what to do and what success
-looks like. This is the only thing the agent is told; the
-[orchestrator](./HOW_IT_WORKS.md) delivers it verbatim.
+looks like. This is the only thing the agent is told; it's delivered verbatim,
+composed deterministically into the agent's invocation from its
+[`entrypoint`](./AGENT_YAML.md#entrypoint).
 
 ```yaml
 task:

@@ -177,6 +177,10 @@ install:
 
 entrypoint:
   command: gemini
+  # Headless prompt mode: `gemini -p <prompt>`. The prompt flag and its slot
+  # are order-sensitive, so they live in `invoke`. `{prompt}` expands to the
+  # task prompt as one argv token (no shell quoting).
+  invoke: ["-p", "{prompt}"]
   # Guaranteed args appended to every invocation.
   # --yolo: auto-approve every tool call (the Docker container is the
   #         sandbox; gemini-cli's permission prompts would otherwise hang

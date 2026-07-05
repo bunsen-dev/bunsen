@@ -3,8 +3,8 @@
 /**
  * Container Node runtime resolution.
  *
- * Bunsen's platform tools (orchestrator, supervisor, scorers) run *inside* the
- * agent container. Bunsen base images ship Node 20, so on those the container's
+ * Bunsen's platform tools (supervisor, scorers) run *inside* the agent
+ * container. Bunsen base images ship Node 20, so on those the container's
  * own `node` is used. But a custom Dockerfile / non-bunsen base image may have
  * no Node — so for those Bunsen mounts its *own* Node binary at
  * `/bunsen/runtime/node`. This is the platform honoring the same "anti-contract"

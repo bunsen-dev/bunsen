@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 import { describe, expect, it } from 'vitest';
 
-describe('orchestrator standalone prompt design', () => {
+// NOTE: The runtime no longer runs this orchestrator. Agent invocation is now
+// composed deterministically from `entrypoint.invoke` (see
+// `packages/runtime/src/orchestration.ts` + the golden-invocation tests). This
+// source is retained as the basis for an authoring-time `bn agents scaffold`
+// that infers `invoke` for a brand-new CLI (see
+// tasks/todo/INVOKE_TEMPLATE_SCAFFOLDER.md). These assertions characterize that
+// retained source; they are not exercised on any `bn run`.
+describe('orchestrator standalone prompt design (retained for scaffolder)', () => {
   it('teaches the argv contract and forces a single submit_orchestration tool call', async () => {
     const { readFileSync } = await import('node:fs');
     const source = readFileSync(new URL('./standalone.ts', import.meta.url), 'utf-8');

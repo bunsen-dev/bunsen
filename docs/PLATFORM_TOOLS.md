@@ -6,6 +6,8 @@ This document describes how Bunsen's platform tools (orchestrator, scorer, super
 
 Bunsen's platform tools are TypeScript/Node.js applications that run inside experiment containers. They are distributed as JS bundles that run on Node.js.
 
+> **The `orchestrator` bundle no longer runs at run time.** The agent invocation is now composed deterministically by the runtime's invocation composer (`buildArgvInvocation` in `packages/runtime/src/orchestration.ts`) from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint) and the experiment's task prompt — no model in the invocation path, so the invocation is reproducible and comparable across runs. The `orchestrator.cjs` bundle is still built (it appears in the outputs below) and its source is retained as the basis for a future `bn agents scaffold`, but it is not mounted into experiment containers. The tools that still run at run time are `scorer`, `supervisor`, `gitignore-filter`, and `proxy-bootstrap`.
+
 ## Build Process
 
 The build script (`packages/agents/scripts/build-bundles.mjs`) performs:
@@ -58,21 +60,19 @@ The executor detects the image type and adjusts how it runs platform tools:
 
 ```
 Agent container mounts (conditional — see below):
-  /bunsen/lib/orchestrator.cjs            when orchestration is enabled
   /bunsen/lib/gitignore-filter.cjs        when the experiment seeds an initial workspace
   /bunsen/lib/supervisor.cjs              when the supervisor is enabled
   /bunsen/runtime/proxy-bootstrap.cjs     when trace capture is enabled
   /bunsen/lib/scorer.cjs                  only when evaluation.container: agent
 
-Execution:
-  node /bunsen/lib/orchestrator.cjs
+Execution (per mounted bundle):
+  node /bunsen/lib/<tool>.cjs
 ```
 
 By default `scorer.cjs` is not mounted in the agent container at all — it is
 mounted into a separate dedicated scorer container (see below). The agent
 container's bundles are mounted conditionally:
 
-- `orchestrator.cjs` — mounted only when orchestration is not skipped.
 - `gitignore-filter.cjs` — mounted only when the experiment seeds an initial
   workspace source (used for workspace diff/export).
 - `supervisor.cjs` — mounted at `/bunsen/lib/supervisor.cjs` when the supervisor
@@ -101,15 +101,14 @@ apply; only the Node.js binary is added:
 
 ```
 Agent container mounts (conditional — see above):
-  /bunsen/lib/orchestrator.cjs            when orchestration is enabled
   /bunsen/lib/gitignore-filter.cjs        when the experiment seeds an initial workspace
   /bunsen/lib/supervisor.cjs              when the supervisor is enabled
   /bunsen/runtime/proxy-bootstrap.cjs     when trace capture is enabled
   /bunsen/lib/scorer.cjs                  only when evaluation.container: agent
   /bunsen/runtime/node                    (Node.js binary)
 
-Execution:
-  /bunsen/runtime/node /bunsen/lib/orchestrator.cjs
+Execution (per mounted bundle):
+  /bunsen/runtime/node /bunsen/lib/<tool>.cjs
 ```
 
 **How that binary is obtained.** The host path mounted at `/bunsen/runtime/node`

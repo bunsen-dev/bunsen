@@ -256,6 +256,11 @@
       "required": ["command"],
       "properties": {
         "command": { "type": "string", "minLength": 1 },
+        "invoke": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered argv template from the first argument through the prompt slot. Supports substring placeholders {prompt} (task text) and {promptFile} (/bunsen/task/prompt.md); at most one placeholder kind. Defaults to [\"{prompt}\"] when omitted. Placeholder rules are enforced by the loader, not this schema."
+        },
         "args": { "type": "array", "items": { "type": "string" } },
         "help": { "type": "string", "minLength": 1 }
       },
@@ -327,6 +332,7 @@
           "type": "object",
           "properties": {
             "command": { "type": "string", "minLength": 1 },
+            "invoke": { "type": "array", "items": { "type": "string" } },
             "args": { "type": "array", "items": { "type": "string" } },
             "help": { "type": "string", "minLength": 1 }
           },

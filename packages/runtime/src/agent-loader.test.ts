@@ -228,6 +228,92 @@ describe('parseAgentConfig', () => {
 });
 
 // ---------------------------------------------------------------------------
+// entrypoint.invoke — argv template parsing + placeholder validation
+// ---------------------------------------------------------------------------
+
+describe('parseAgentConfig entrypoint.invoke', () => {
+  const withInvoke = (invoke: unknown) =>
+    baseYaml({ entrypoint: { command: 'codex', invoke } });
+
+  it('parses a subcommand-prefixed invoke template', () => {
+    const config = parseAgentConfig(withInvoke(['exec', '{prompt}']));
+    expect(config.entrypoint.invoke).toEqual(['exec', '{prompt}']);
+  });
+
+  it('parses a flag-prefixed invoke template', () => {
+    const config = parseAgentConfig(withInvoke(['-p', '{prompt}']));
+    expect(config.entrypoint.invoke).toEqual(['-p', '{prompt}']);
+  });
+
+  it('parses a {promptFile} invoke template', () => {
+    const config = parseAgentConfig(withInvoke(['--message-file', '{promptFile}']));
+    expect(config.entrypoint.invoke).toEqual(['--message-file', '{promptFile}']);
+  });
+
+  it('parses the substring form (--task={prompt})', () => {
+    const config = parseAgentConfig(withInvoke(['--task={prompt}']));
+    expect(config.entrypoint.invoke).toEqual(['--task={prompt}']);
+  });
+
+  it('allows an empty invoke (wrapper reads $BUNSEN_TASK_FILE)', () => {
+    const config = parseAgentConfig(withInvoke([]));
+    expect(config.entrypoint.invoke).toEqual([]);
+  });
+
+  it('is optional (omitted invoke leaves it undefined)', () => {
+    const config = parseAgentConfig(baseYaml());
+    expect(config.entrypoint.invoke).toBeUndefined();
+  });
+
+  it('rejects a non-array invoke', () => {
+    expect(() => parseAgentConfig(withInvoke('{prompt}'))).toThrow(/invoke must be an array/);
+  });
+
+  it('rejects a non-string token', () => {
+    expect(() => parseAgentConfig(withInvoke(['exec', 5]))).toThrow(/must be a string/);
+  });
+
+  it('rejects an unknown placeholder', () => {
+    expect(() => parseAgentConfig(withInvoke(['{taskDir}']))).toThrow(/unknown placeholder/);
+  });
+
+  it('rejects mixing placeholder kinds', () => {
+    expect(() => parseAgentConfig(withInvoke(['{prompt}', '{promptFile}']))).toThrow(
+      /at most one placeholder kind/,
+    );
+  });
+
+  it('rejects a non-empty invoke with no placeholder (likely a dropped prompt)', () => {
+    expect(() => parseAgentConfig(withInvoke(['exec']))).toThrow(/must contain a prompt placeholder/);
+  });
+
+  it('applies a variant that overrides invoke wholesale', () => {
+    const config = parseAgentConfig(
+      baseYaml({
+        entrypoint: { command: 'codex', invoke: ['exec', '{prompt}'] },
+        variants: { alt: { entrypoint: { invoke: ['run', '{prompt}'] } } },
+      }),
+    );
+    const resolved = applyAgentVariant(config, 'alt');
+    expect(resolved.entrypoint.invoke).toEqual(['run', '{prompt}']);
+    // Base command is preserved (variant only overrode invoke).
+    expect(resolved.entrypoint.command).toBe('codex');
+  });
+
+  it('inherits the base invoke when a variant does not set it', () => {
+    const config = parseAgentConfig(
+      baseYaml({
+        entrypoint: { command: 'codex', invoke: ['exec', '{prompt}'], args: ['--a'] },
+        variants: { alt: { entrypoint: { args: ['--b'] } } },
+      }),
+    );
+    const resolved = applyAgentVariant(config, 'alt');
+    expect(resolved.entrypoint.invoke).toEqual(['exec', '{prompt}']);
+    expect(resolved.entrypoint.args).toEqual(['--b']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Legacy schema rejection — structured migration errors
 // ---------------------------------------------------------------------------
 

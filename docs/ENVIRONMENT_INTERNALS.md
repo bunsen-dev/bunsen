@@ -20,7 +20,7 @@ domains. Keeping them straight is the key to everything else.
 |--------|----------|-------------|-------------|
 | **Substrate** | the experiment | base image, `requires.runtimes`/`packages`, services, the seeded workspace | `experiment.yaml` |
 | **Closure** | the agent | a sealed toolkit it ships itself (`install.deps`, `install.build`, `install.configure`) | `agent.yaml` |
-| **Platform** | Bunsen | the orchestrator/supervisor/scorer bundles, the proxy, and the Node runtime its own tools run on | the runtime, injected |
+| **Platform** | Bunsen | the supervisor/scorer bundles, the proxy, and the Node runtime its own tools run on | the runtime, injected |
 
 - The **substrate** is "what the task needs to exist" — the compiler the code-under-test imports, the apt packages, the language runtime the *image* ships. It does **not** negotiate with the agent.
 - The **closure** is "what the agent brings, pinned to versions it controls." It's sealed: if the agent needs Node, it *ships* Node; it never assumes the substrate has it. That's what makes any-agent × any-experiment compose.
@@ -42,7 +42,7 @@ the authoritative per-mount table (target, RO/RW, when present) lives in
 /bunsen/deps/<name>/            closure           RO   one mount per install.deps entry
 /bunsen/artifacts/             closure           RO   install.build output (/output → here)
 
-/bunsen/lib/*.cjs              platform          RO   orchestrator / scorer / supervisor / gitignore-filter bundles
+/bunsen/lib/*.cjs              platform          RO   scorer / supervisor / gitignore-filter bundles
 /bunsen/runtime/node           platform          RO   the mounted platform Node (custom images only)
 /bunsen/runtime/proxy-bootstrap.cjs  platform    RO   undici proxy shim (when trace capture is on)
 
@@ -93,9 +93,9 @@ container. It applies to:
 - `workspace.setup`
 - the **agent's** own execution
 
-It does **not** apply to the platform tools — the orchestrator, supervisor, and **scorers**:
+It does **not** apply to the platform tools — the supervisor and **scorers**:
 
-- the **orchestrator** and **supervisor** run as their own `docker exec` whose env carries **no PATH key at all** — so they inherit the *image's baseline* PATH, never `/bunsen/deps`.
+- the **supervisor** runs as its own `docker exec` whose env carries **no PATH key at all** — so it inherits the *image's baseline* PATH, never `/bunsen/deps`.
 - **scorers** don't get the deps PATH either, and it's worth being precise about why. The scorer *engine* (`scorer.cjs`) is a platform tool launched on the platform node (`nodeCmd`). The *commands* it dispatches — a `script` criterion's `run:`, an agentic scorer's `run_command` — exec through `buildScorerExecOptions`, which sets the scorer's user and a few `BUNSEN_*` helper vars but **no** deps PATH, so they get the container's **baseline** PATH.
 
 The mechanism is just "separate `docker exec`, separate env." "Agent's tool is
@@ -120,7 +120,7 @@ nodeCmd = needsNodeRuntime ? '/bunsen/runtime/node' : 'node'
 ```
 
 - On a **custom / non-bunsen image** (`needsNodeRuntime`), that's an **absolute path** — PATH is irrelevant; it always runs the platform's mounted Node.
-- On a **Bunsen base image**, it's bare `node`, resolved against the image's baseline PATH (the controlled Node 20 the image ships) — and because the orchestrator's exec has no agent PATH, the agent's Node can't shadow it.
+- On a **Bunsen base image**, it's bare `node`, resolved against the image's baseline PATH (the controlled Node 20 the image ships) — and because the platform's execs carry no agent PATH, the agent's Node can't shadow it.
 
 ### The cross-boundary binary shadow diagnostic
 
@@ -200,7 +200,7 @@ collide:
 
 | | Agent's Node | Platform's Node |
 |---|---|---|
-| Who uses it | the agent-under-test | Bunsen's orchestrator / supervisor / scorers |
+| Who uses it | the agent-under-test | Bunsen's supervisor / scorers |
 | Path | `/bunsen/deps/node/bin/node` (a `closure` dep) | `/bunsen/runtime/node` |
 | Version | whatever the agent declared | one Bunsen-pinned version (`node-runtime-manifest.json`) |
 | On the agent PATH? | yes | no |
@@ -230,7 +230,7 @@ ones are skipped.
 | workspace materialization | run container | execution user | baseline | — | copies `/workspace-source` → `/workspace`, correctly owned |
 | `install.configure` | run container | root (per-step `as:`) | **agent PATH** | — | fast runtime config; before `workspace.setup` |
 | `workspace.setup` | run container | execution user (per-step `as: root`) | **agent PATH** | `/workspace` | per-run prep (`npm install`, …) |
-| **orchestrator** | run container | root-ish exec | **baseline** (no agent PATH) | — | `nodeCmd /bunsen/lib/orchestrator.cjs`; env = platform key + `BUNSEN_*_PATH` + proxy; 1 LLM call → invocation |
+| **invocation composition** | host (no container) | — | — | — | `buildArgvInvocation` composes argv deterministically from the agent's `entrypoint` (`command` + `invoke` + `args`) + `task.prompt` — no model (see [entrypoint](./AGENT_YAML.md#entrypoint)); result → `orchestration/result.json` + manifest |
 | **agent execution** | run container | execution user (`su bunsen`) or root | **agent PATH** | `/workspace` | the agent-under-test; full merged env + reserved `BUNSEN_*` |
 | **supervisor** | run container | exec | **baseline** | — | `nodeCmd /bunsen/lib/supervisor.cjs`, drives tmux; only in `supervised` mode |
 | scorer — **dedicated** (default) | separate scorer container, experiment image | execution user or root | **baseline** (no `/bunsen/deps`/`artifacts` mounted) | — | engine on `nodeCmd`; mounts `/workspace` (RW copy) + `/workspace-source` (RO) |
@@ -283,7 +283,7 @@ runtime fetch).
 
 ### The platform API key is separate
 
-`BUNSEN_ANTHROPIC_API_KEY` (platform — orchestrator/supervisor/scorers) is kept
+`BUNSEN_ANTHROPIC_API_KEY` (platform — supervisor/scorers) is kept
 distinct from the agent's `ANTHROPIC_API_KEY`. It's passed **directly to the platform
 execs**, not set on the container's base environment — so the agent-under-test never
 sees the platform's key (except in `evaluation.container: agent`, where the scorer
@@ -302,12 +302,12 @@ this tier) → platform-reserved `BUNSEN_*` (always win, immutable). Full detail
 
 Only enough to read the sections above; full treatment is each tool's own doc.
 
-- **Orchestrator** — runs once before the agent; reads the experiment + agent config and emits the concrete `setupCommands` + `invocation`. One forced LLM tool-call.
+- **Invocation composition** (not a platform agent) — before the agent runs, `buildArgvInvocation` composes the `setupCommands` + `invocation` deterministically from the agent's `entrypoint` + task prompt, on the host; no model in the invocation path (see [entrypoint](./AGENT_YAML.md#entrypoint)). The retired LLM orchestrator's bundle survives only as the basis for a future `bn agents scaffold`.
 - **Supervisor** — `supervised` mode only; watches the agent in tmux and answers interactive prompts via the LLM. See [Supervised Mode](./SUPERVISOR.md).
 - **Scorer** — evaluates the finished run (`script`/`judge`/`agent`/`browser-agent`/`aggregate` + the `report` step), in a dedicated container or the agent's own. See [Scorers & Evaluation](./SCORERS.md).
 - **Proxy** — a mitmproxy sidecar that captures **only the agent-under-test's** model traffic (platform agents bypass it), for traces + cost. See [Platform Tools](./PLATFORM_TOOLS.md) and [Cost Accounting](./COST.md).
 
-All four are JS bundles (`/bunsen/lib/*.cjs`) that run on the platform Node — the
+The remaining three are JS bundles (`/bunsen/lib/*.cjs`) that run on the platform Node — the
 image's Node 20 on Bunsen base images, the mounted `/bunsen/runtime/node` on custom
 images. They are *platform* domain: they never appear on the agent's PATH and the
 agent never sees their key.

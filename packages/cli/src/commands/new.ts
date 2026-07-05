@@ -209,12 +209,16 @@ install:
 
 entrypoint:
   command: python src/main.py
+  # invoke: ["{prompt}"]   # argv template through the prompt slot; the default
+  #                        # puts the prompt first. e.g. [exec, "{prompt}"] to
+  #                        # place it after a subcommand. See docs/AGENT_YAML.md.
   # help: python src/main.py --help
 
 interaction:
   mode: direct
 
-# Optional: examples help the orchestrator understand invocation
+# Optional: sample prompt/invocation pairs. Documentation and input for a future
+# scaffolder that infers the invoke template — not read at run time.
 examples:
   - prompt: Do the task
     invocation: python src/main.py "Do the task"

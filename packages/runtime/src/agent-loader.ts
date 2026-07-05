@@ -123,6 +123,17 @@ const DEP_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const SHA256_PATTERN = /^[A-Fa-f0-9]{64}$/;
 
 /**
+ * Placeholders allowed inside an `entrypoint.invoke` token. `{prompt}` expands
+ * to the task prompt text; `{promptFile}` expands to the injected task-file
+ * path. Substring expansion happens in the runtime composer
+ * (`buildArgvInvocation`); the loader only validates.
+ */
+const KNOWN_INVOKE_PLACEHOLDERS: ReadonlySet<string> = new Set(['{prompt}', '{promptFile}']);
+
+/** Matches any `{…}` brace group so unknown placeholder attempts fail loudly. */
+const INVOKE_PLACEHOLDER_PATTERN = /\{[^}]*\}/g;
+
+/**
  * Legacy top-level fields from the pre-v1 agent.yaml schema. The parser rejects
  * them with a clear migration hint instead of an opaque "unknown field" error.
  */
@@ -1160,6 +1171,53 @@ function parseWriteFileStep(raw: Record<string, unknown>, ctx: string): WriteFil
   return step;
 }
 
+/**
+ * Parse and validate an `entrypoint.invoke` argv template. Enforces the
+ * placeholder contract the JSON Schema cannot express:
+ * - every token is a string,
+ * - only `{prompt}` / `{promptFile}` placeholders appear,
+ * - at most one placeholder *kind* is used (single prompt-delivery channel),
+ * - a non-empty template contains at least one placeholder (an empty array is
+ *   the explicit "no prompt token" escape for a wrapper that reads the file).
+ */
+function parseInvoke(raw: unknown, ctx: string): string[] {
+  const tokens = parseStringArray(raw, ctx, 'agent.entrypoint.invoke.type');
+  const kinds = new Set<string>();
+  let occurrences = 0;
+  tokens.forEach((token, i) => {
+    for (const match of token.match(INVOKE_PLACEHOLDER_PATTERN) ?? []) {
+      if (!KNOWN_INVOKE_PLACEHOLDERS.has(match)) {
+        fail(
+          'agent.entrypoint.invoke.unknown_placeholder',
+          `${ctx}[${i}]: unknown placeholder ${JSON.stringify(match)}. ` +
+            `Known placeholders: ${[...KNOWN_INVOKE_PLACEHOLDERS].join(', ')}.`,
+          `${ctx}[${i}]`,
+        );
+      }
+      kinds.add(match);
+      occurrences++;
+    }
+  });
+  if (kinds.size > 1) {
+    fail(
+      'agent.entrypoint.invoke.mixed_placeholders',
+      `${ctx}: at most one placeholder kind may be used, but found ${[...kinds].join(' and ')}. ` +
+        `Deliver the prompt through a single channel.`,
+      ctx,
+    );
+  }
+  if (tokens.length > 0 && occurrences === 0) {
+    fail(
+      'agent.entrypoint.invoke.no_placeholder',
+      `${ctx}: a non-empty invoke template must contain a prompt placeholder ` +
+        `(${[...KNOWN_INVOKE_PLACEHOLDERS].join(' or ')}). ` +
+        `Use an empty array only for a wrapper command that reads $BUNSEN_TASK_FILE itself.`,
+      ctx,
+    );
+  }
+  return tokens;
+}
+
 function parseEntrypoint(raw: unknown, ctx: string): Entrypoint {
   if (!isRecord(raw)) {
     fail('agent.entrypoint.type', `${ctx} must be a mapping.`, ctx);
@@ -1171,6 +1229,9 @@ function parseEntrypoint(raw: unknown, ctx: string): Entrypoint {
     { minLength: 1 },
   );
   const out: Entrypoint = { command };
+  if (raw.invoke !== undefined) {
+    out.invoke = parseInvoke(raw.invoke, `${ctx}.invoke`);
+  }
   if (raw.args !== undefined) {
     out.args = parseStringArray(raw.args, `${ctx}.args`, 'agent.entrypoint.args.type');
   }
@@ -1181,7 +1242,7 @@ function parseEntrypoint(raw: unknown, ctx: string): Entrypoint {
   }
   ensureNoUnknownKeys(
     raw,
-    new Set(['command', 'args', 'help']),
+    new Set(['command', 'invoke', 'args', 'help']),
     ctx,
     'agent.entrypoint.unknown_field',
   );
@@ -1543,6 +1604,9 @@ function parseVariantEntrypoint(raw: unknown, ctx: string): Partial<Entrypoint> 
       { minLength: 1 },
     );
   }
+  if (raw.invoke !== undefined) {
+    out.invoke = parseInvoke(raw.invoke, `${ctx}.invoke`);
+  }
   if (raw.args !== undefined) {
     out.args = parseStringArray(raw.args, `${ctx}.args`, 'agent.variant.entrypoint.args.type');
   }
@@ -1553,7 +1617,7 @@ function parseVariantEntrypoint(raw: unknown, ctx: string): Partial<Entrypoint> 
   }
   ensureNoUnknownKeys(
     raw,
-    new Set(['command', 'args', 'help']),
+    new Set(['command', 'invoke', 'args', 'help']),
     ctx,
     'agent.variant.entrypoint.unknown_field',
   );
@@ -1680,6 +1744,8 @@ function mergeEntrypoint(
   if (!overlay) return base;
   const out: Entrypoint = { ...base };
   if (overlay.command !== undefined) out.command = overlay.command;
+  // Arrays replace wholesale (same semantics as entrypoint.args).
+  if (overlay.invoke !== undefined) out.invoke = overlay.invoke;
   if (overlay.args !== undefined) out.args = overlay.args;
   if (overlay.help !== undefined) out.help = overlay.help;
   return out;

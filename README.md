@@ -43,9 +43,11 @@ humans and AI can build on.
 
 ## Quick Start
 
-**Prerequisites:** a running **Docker** daemon and an `ANTHROPIC_API_KEY`
-(Bunsen's orchestrator and LLM evaluation run on Claude). No Node toolchain
-required — the `bn` binary embeds its own runtime.
+**Prerequisites:** a running **Docker** daemon. An `ANTHROPIC_API_KEY` is needed
+for Claude-based evaluation and for Claude-powered agents; the no-AI `echo-agent`
+with script-only scoring runs fully offline (agent invocation is composed
+deterministically — no model in the path). No Node toolchain required — the `bn`
+binary embeds its own runtime.
 
 ```bash
 curl -fsSL https://bunsen.dev/install.sh | sh   # standalone binary onto your PATH
