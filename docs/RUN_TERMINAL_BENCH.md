@@ -50,7 +50,7 @@ A few things worth knowing:
   was authored for amd64, force it with `--platform linux/amd64` (it runs under
   emulation). See [Platforms & Architecture](./PLATFORMS.md).
 - Terminal Bench tasks score with deterministic `script` criteria, so the
-  **scoring itself needs no API key** — only the agent and orchestrator do.
+  **scoring itself needs no API key** — only the agent does.
 
 ## 4. Read the score
 

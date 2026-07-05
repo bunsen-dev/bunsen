@@ -81,7 +81,7 @@ concern, run on a disposable/throwaway host or VM and pass only throwaway API ke
   with no outbound access. See [The Environment Model](./ENVIRONMENT.md) and
   [experiment.yaml Reference](./EXPERIMENT_YAML.md) for where this is configured.
 
-> **Platform agents vs. the agent under test.** The orchestrator, supervisor, and scorer (the *platform
+> **Platform agents vs. the agent under test.** The supervisor and scorer (the *platform
 > agents*) make their own model calls using a separate `BUNSEN_ANTHROPIC_API_KEY`, distinct from the
 > provider keys passed to the agent under test via `defaults.passEnv`. Scoping each independently lets you,
 > for example, give the agent under test only a throwaway key while keeping the evaluation key elsewhere.

@@ -198,7 +198,7 @@ filtered out, the per-model `calls` here do not sum to `usage.total_ai_calls`.
 | `platform_cost_usd` | `number?` | Cost attributable to platform agents. |
 | `pricing_fallback_calls` | `number?` | Calls whose model was absent from the vendored pricing snapshot and priced with a coarse per-provider default — that much of the cost is a rough estimate. Present only when > 0. |
 | `unpriced_models` | `string[]?` | Distinct unrecognized model ids behind `pricing_fallback_calls`, sorted. |
-| `by_source` | `Record<string, RunManifestUsageSource>?` | Per-source breakdown (agent vs orchestrator/supervisor/scorer). |
+| `by_source` | `Record<string, RunManifestUsageSource>?` | Per-source breakdown (agent vs supervisor/scorer; the `orchestrator` source appears only in historical runs — new runs compose the invocation deterministically and emit no orchestrator traces). |
 | `accounting_status` | `'captured' \| 'missing' \| 'skipped'` (optional) | Whether the numbers reflect actual captured traffic. See below. |
 
 `RunManifestUsageSource`:

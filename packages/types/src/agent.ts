@@ -40,6 +40,11 @@ export interface AgentConfig {
 
   /** Default env added by this agent (before variants, before CLI overrides). */
   defaults?: AgentDefaults;
+  /**
+   * Sample prompt/invocation pairs. Documentation and input for a future
+   * `bn agents scaffold` that infers `entrypoint.invoke`; not consulted at
+   * run time (invocation is composed deterministically from `entrypoint`).
+   */
   examples?: AgentExample[];
 
   /** Named overlays applied on top of the base agent. */
@@ -225,8 +230,30 @@ export type ConfigureStep = StepConfig;
 
 export interface Entrypoint {
   command: string;
+  /**
+   * Ordered argv template — the tokens from the first argument through the
+   * prompt slot. This is where order-sensitive prefixes live: a subcommand
+   * (`codex exec …` → `[exec, "{prompt}"]`) or a prompt flag (`gemini -p …` →
+   * `[-p, "{prompt}"]`). Order-insensitive persistent flags stay in
+   * {@link Entrypoint.args} (appended last).
+   *
+   * Each token is a literal argv element (no shell, no escaping). Substring
+   * placeholder expansion happens per token:
+   * - `{prompt}` → the experiment's `task.prompt`, verbatim, as one token.
+   * - `{promptFile}` → `/bunsen/task/prompt.md` (the injected `BUNSEN_TASK_FILE`).
+   *
+   * At most one placeholder *kind* may appear (the prompt is delivered through
+   * a single channel). Omitting `invoke` defaults to `["{prompt}"]` — a bare
+   * positional prompt. An explicit empty array delivers no prompt token (for a
+   * wrapper `command` that reads `$BUNSEN_TASK_FILE` itself).
+   *
+   * `{prompt}` is the *text rendering* of the task; a future structured/
+   * multimodal `task.prompt` is delivered through `{promptFile}` / the task
+   * directory, never solely through `{prompt}`.
+   */
+  invoke?: string[];
   args?: string[];
-  /** Shell command that prints the agent's help. Used by the orchestrator. */
+  /** Shell command that prints the agent's help. Documentation / scaffolder input. */
   help?: string;
 }
 

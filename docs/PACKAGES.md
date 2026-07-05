@@ -18,6 +18,10 @@ The public contract also includes:
 
 Everything else may change without notice.
 
+### Versioning & changelog
+
+The public packages follow [Semantic Versioning](https://semver.org/). Bunsen is **pre-1.0**, so breaking changes to the public surface above may land in minor releases — each one is called out under **Changed** / **Removed** in the [Changelog](../CHANGELOG.md). How releases are cut (version bump → changelog roll → tag) is documented in [`packaging/README.md`](../packaging/README.md#cutting-a-release).
+
 ### Installing the CLI
 
 The `bn` command is the main entry point. Install it globally (or run it with `npx`):
@@ -61,7 +65,7 @@ Point your editor's YAML language server at these URLs (via a `# yaml-language-s
 | Package               | Purpose                                                                          |
 | --------------------- | ------------------------------------------------------------------------------- |
 | `@bunsen-dev/runtime`     | Execution engine: container orchestration, storage, env merging.                |
-| `@bunsen-dev/agents`      | Platform agents (orchestrator, scorer, supervisor) bundled for in-container use. |
+| `@bunsen-dev/agents`      | Platform agents (scorer, supervisor) bundled for in-container use, plus the orchestrator source (retained as the basis for a future scaffolder; not run at run time). |
 | `@bunsen-dev/diff-filter` | Lockfile-aware diff filtering used by scorers.                                   |
 
 Internal packages are implementation detail. External consumers must not depend on them directly.

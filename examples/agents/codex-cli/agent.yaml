@@ -86,9 +86,13 @@ install:
 
 entrypoint:
   command: codex
+  # Non-interactive print mode: `codex exec <prompt>`. The subcommand and the
+  # prompt slot are order-sensitive, so they live in `invoke`. `{prompt}`
+  # expands to the task prompt as one argv token (no shell quoting).
+  invoke: [exec, "{prompt}"]
   # Guaranteed args appended to every invocation. clap accepts these flags
-  # anywhere in argv, so the orchestrator can put `exec <prompt>` first and
-  # these tail flags still bind to the `exec` subcommand.
+  # anywhere in argv, so they still bind to the `exec` subcommand even though
+  # `invoke` places `exec <prompt>` first.
   #
   # --sandbox danger-full-access: container is the sandbox; turn off Landlock.
   # --dangerously-bypass-approvals-and-sandbox: never block on approvals.

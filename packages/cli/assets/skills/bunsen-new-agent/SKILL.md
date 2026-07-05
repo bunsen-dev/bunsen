@@ -60,11 +60,20 @@ an `install.deps` closure. This is what lets one agent run against any experimen
      perms). **Do not install tools here** — that's `deps`/`build`. Steps are `run:` or
      `writeFile:` (a `writeFile` sets exactly one of `from` | `content`).
 
-4. **Define the entrypoint.** `entrypoint.command` (required) is the executable; `args[]` are
-   tokens appended to **every** invocation; `help` is an optional help command. The **task
-   prompt** reaches the agent as the first argv token after the prefix, and is also at
-   `$BUNSEN_TASK_FILE` (`/bunsen/task/prompt.md`). Put non-interactive/auto-approve flags here
-   (e.g. `--dangerously-skip-permissions`, `--yolo`).
+4. **Define the entrypoint.** The invocation is composed **deterministically** (no model in the
+   path) as `command` → `invoke` (with the prompt substituted) → CLI passthrough → `args`.
+   - `entrypoint.command` (required) is the executable. A bare name resolves via `PATH`;
+     `python <script>` / `node <script>` split into interpreter + script (a relative script is
+     rewritten under `/agent`).
+   - `entrypoint.invoke` (optional, default `["{prompt}"]`) is the ordered argv template through
+     the **prompt slot**. Put order-sensitive prefixes here: a subcommand (`invoke: [exec, "{prompt}"]`
+     → `codex exec <prompt>`) or a prompt flag (`invoke: ["-p", "{prompt}"]` → `gemini -p <prompt>`).
+     Placeholders: `{prompt}` (task text as one token) or `{promptFile}` (`/bunsen/task/prompt.md`) —
+     at most one kind. The default puts the prompt first as a bare positional.
+   - `entrypoint.args[]` are order-insensitive tokens appended to **every** invocation. Put
+     non-interactive/auto-approve flags here (e.g. `--dangerously-skip-permissions`, `--yolo`).
+   - `help` is an optional help command (documentation / scaffolder input).
+   The task prompt is also available at `$BUNSEN_TASK_FILE` (`/bunsen/task/prompt.md`).
 
 5. **Choose `interaction.mode`** (required):
    - `direct` — a straight exec. Use when the agent is already non-interactive (headless / `-p`
@@ -89,8 +98,9 @@ an `install.deps` closure. This is what lets one agent run against any experimen
    `$BUNSEN_AGENT_HOME`. You **cannot set** any `BUNSEN_*` var — they're reserved (validate
    rejects them); you can only read them.
 
-8. **Add `examples[]`** — each `{ prompt, invocation }` teaches the orchestrator how a task
-   prompt maps to a real command line. Add at least one.
+8. **Add `examples[]`** — each `{ prompt, invocation }` documents how a task prompt maps to a
+   real command line. They are **not** read at run time (the invocation is composed from
+   `entrypoint`); they're documentation and input for a future scaffolder. Add at least one.
 
 9. **Add `variants` (optional)** — a map of name → partial override that shallow-merges over
    the base. Variants are **behavioral overlays** (run mode, output format, turn caps, system

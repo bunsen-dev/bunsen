@@ -10,11 +10,12 @@ A Bunsen run takes an **experiment** (defined by `experiment.yaml`) and an **age
 (defined by `agent.yaml`), runs the agent reproducibly inside Docker, captures everything it does, and
 then evaluates the result. A few ideas shape how that works:
 
-- **The platform adapts to your agent.** An *orchestrator* (a platform agent, see below) figures out how
-  to invoke any agent naturally from its `agent.yaml`. Your agent doesn't implement any Bunsen-specific
-  interface.
+- **The platform adapts to your agent.** Bunsen composes each agent's invocation **deterministically**
+  from its `agent.yaml` `entrypoint` (`command` + `invoke` template + `args`) — no model in the loop — so
+  it can drive any agent naturally. Your agent doesn't implement any Bunsen-specific interface. See
+  [AGENT_YAML.md#entrypoint](./AGENT_YAML.md#entrypoint).
 - **Experiments define tasks, not interfaces.** An experiment describes its task in natural language;
-  the orchestrator translates that into the agent's actual invocation.
+  Bunsen substitutes that prompt into the agent's `invoke` template to build the actual invocation.
 - **Agent and environment coexist without a merge contract.** The experiment declares task substrate
   (runtimes, packages, services); the agent ships its own toolkit via `install.deps` / `install.build`,
   including any language runtimes it pins. Both live in one container, and the agent's PATH precedence
@@ -28,8 +29,7 @@ then evaluates the result. A few ideas shape how that works:
 
 Two terms to keep straight, both spelled "agent": the **agent under test** is the thing you're running
 and measuring; the `agent` **criterion type** is a scorer that runs a full agent loop to evaluate the
-result. The [Glossary](./GLOSSARY.md) defines both, plus "platform agents" (orchestrator, supervisor,
-scorer).
+result. The [Glossary](./GLOSSARY.md) defines both, plus "platform agents" (supervisor, scorer).
 
 ## What Bunsen Is Built On
 
@@ -40,7 +40,7 @@ scorer).
 | Container runtime | Docker | Each run is isolated and reproducible |
 | Base images | Headless (default), Visual, Desktop | Headless for CLI work, Visual for screenshot scoring, Desktop for GUI agents |
 | Network tracing | mitmproxy sidecar | Captures HTTP(S) traffic with full request/response bodies |
-| Platform agents | Claude API | The orchestrator, scorer, and supervisor are LLM-powered |
+| Platform agents | Claude API | The scorer and supervisor are LLM-powered; the agent invocation is composed deterministically (no model) |
 
 You run experiments from the `bn` CLI and inspect results either on disk or in the local web viewer
 (`bn runs open`, served at `localhost:3456`). See [CLI.md](./CLI.md).
@@ -60,7 +60,6 @@ Each run uses a container with mitmproxy sidecar for trace capture:
 │  │  • declared local workspace sources (read-only mounts)           │
 │  │  • /agent  (agent code, read-only)         │                      │
 │  │  • /output (platform artifacts, internal)   │                      │
-│  │  • /bunsen/lib/orchestrator.cjs  (platform agents, invoked via docker exec) │
 │  │  • /bunsen/lib/supervisor.cjs  (when interaction.mode: supervised)         │
 │  │  • /bunsen/lib/scorer.cjs  (when evaluation.container: agent)              │
 │  │  Container-local (not mounted):            │                      │
@@ -69,8 +68,8 @@ Each run uses a container with mitmproxy sidecar for trace capture:
 │  │                                             │                      │
 │  │  ┌─────────────────────────────────────┐   │                      │
 │  │  │  Agent Process                       │   │                      │
-│  │  │  (invoked by orchestrator.cjs via    │   │                      │
-│  │  │   docker exec, same container)       │   │                      │
+│  │  │  (invoked via an argv                │   │                      │
+│  │  │  composed deterministically)         │   │                      │
 │  │  └──────────────┬──────────────────────┘   │                      │
 │  │                 │ HTTP(S)                   │                      │
 │  └───────────────────────────────┬─────────────┘                      │
@@ -113,18 +112,19 @@ sink) are attached when the container is **created**, before the agent runs. See
 
 ## Platform Agents
 
-> **All three platform agents (orchestrator, scorer, supervisor) execute *inside* the agent container.** Their bundles are mounted at `/bunsen/lib/*.cjs` when the container starts and invoked via `docker exec` — they are not host processes. Each runs on its own isolated Node runtime, separate from the agent under test and from anything the experiment installs.
+> **The scorer and supervisor platform agents execute *inside* the agent container.** Their bundles are mounted at `/bunsen/lib/*.cjs` when the container starts and invoked via `docker exec` — they are not host processes. Each runs on its own isolated Node runtime, separate from the agent under test and from anything the experiment installs. The agent's own invocation is **not** a platform agent: it is composed deterministically from committed config with no model in the path (see [Agent invocation](#agent-invocation) below).
 
-### Orchestrator
+### Agent invocation
 
-Runs **before** the agent under test. Figures out how to invoke it cleanly.
+Composed **before** the agent under test runs — deterministically, with no model in the path. Bunsen builds the agent's argv as a pure function of committed config, so the invocation is reproducible and comparable across runs.
 
-**Inputs:**
-- experiment.yaml (task, environment)
-- agent.yaml (description, entrypoint.command, entrypoint.args, examples, entrypoint.help)
-- Workspace directory listing
+**Inputs (all committed config):**
+- `agent.yaml` — `entrypoint.command`, `entrypoint.invoke` (the argv template), and `entrypoint.args`
+- `experiment.yaml` — `task.prompt`
 
-**Outputs:**
+The `invoke` template is an ordered argv list whose per-token `{prompt}` / `{promptFile}` placeholders mark where the task text lands; omitting it defaults to a bare positional prompt. See [AGENT_YAML.md#entrypoint](./AGENT_YAML.md#entrypoint) for the field in full.
+
+**Output** — recorded on the run manifest's `orchestration` field and as the `orchestration/result.json` artifact:
 ```json
 {
   "setupCommands": ["cd /workspace"],
@@ -135,7 +135,7 @@ Runs **before** the agent under test. Figures out how to invoke it cleanly.
 }
 ```
 
-The orchestrator emits structured argv (no shell-string composition), so dynamic task text reaches the agent verbatim — no escaping, no re-interpretation. The orchestrator ensures agents receive clean, focused prompts without platform boilerplate.
+The invocation is structured argv (not a shell string), so dynamic task text reaches the agent verbatim: each token is POSIX-single-quoted when the command is finally rendered, so nothing has to survive shell re-interpretation. And because no model is consulted, starting an agent needs no `ANTHROPIC_API_KEY` — a no-AI agent with a script- or aggregate-only rubric runs fully offline (a key is still needed for LLM evaluation and for Claude-powered agents under test).
 
 ### Scorer
 

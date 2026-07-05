@@ -42,9 +42,8 @@ import {
   type ResolvedEnvironment,
 } from './environment.js';
 import {
-  buildDefaultArgvInvocation,
+  buildArgvInvocation,
   formatInvocationForLog,
-  parseOrchestrationResult,
   renderArgvInvocation,
 } from './orchestration.js';
 import { resolveAgentSource } from './sources.js';
@@ -344,7 +343,7 @@ export interface ExecutorOptions {
    * selected variant. Errors if the agent declares no `model` block.
    */
   model?: string;
-  /** Post-orchestration args (variant args if specified, otherwise base agent args) */
+  /** Guaranteed args appended after composition (variant args if specified, otherwise base agent args) */
   guaranteedArgs?: string[];
   /** Resolved supervisor setting (variant can override base agent) */
   resolvedSupervisor?: boolean;
@@ -354,7 +353,6 @@ export interface ExecutorOptions {
   cliEnvFlags?: string[];
   /** `--pass-env HOST_NAME` flags from the CLI (host-env allowlist additions). */
   cliPassEnv?: string[];
-  skipOrchestration?: boolean;
   skipEvaluation?: boolean;
   /** Skip AI API trace capture (via mitmproxy sidecar) */
   skipTraces?: boolean;
@@ -382,7 +380,7 @@ export interface ExecutorCallbacks {
   onOutputChunk?: (chunk: string, stream: 'stdout' | 'stderr') => void;
   /** Called for persistent info messages that should remain visible */
   onInfo?: (message: string) => void;
-  /** Called for transient logs that will be cleared later (e.g., orchestrator logs) */
+  /** Called for transient logs that will be cleared later (e.g., image-prep logs) */
   onTransientLog?: (message: string) => void;
   /** Called to clear transient logs */
   onClearTransientLogs?: () => void;
@@ -527,7 +525,6 @@ export async function executeRun(
     cliEnvFiles = [],
     cliEnvFlags = [],
     cliPassEnv = [],
-    skipOrchestration = false,
     skipEvaluation = false,
     skipTraces = false,
     verbose = false,
@@ -663,7 +660,8 @@ export async function executeRun(
     resolvedAgentPath = await resolveAgentSource(agent, baseDir, (msg) => log(msg));
   }
 
-  // CLI args (variant args are now post-orchestration, not passed to orchestrator)
+  // CLI passthrough args. Guaranteed args (entrypoint.args + variant args) are
+  // appended after composition, so they're not part of this list.
   const allArgs = [...args];
 
   // Detect whether this experiment was resolved through a project suite.
@@ -968,31 +966,22 @@ export async function executeRun(
       }
     }
 
-    // Get platform tool bundle paths (for in-container orchestration and evaluation)
-    const orchestratorBundlePath = getPlatformBundlePath('orchestrator');
+    // Get platform tool bundle paths (for in-container evaluation and supervision)
     const scorerBundlePath = getPlatformBundlePath('scorer');
     const supervisorBundlePath = getPlatformBundlePath('supervisor');
     const gitignoreFilterBundlePath = getPlatformBundlePath('gitignore-filter');
-    const hasOrchestratorBundle = fs.existsSync(orchestratorBundlePath);
     const hasScorerBundle = fs.existsSync(scorerBundlePath);
     const hasSupervisorBundle = fs.existsSync(supervisorBundlePath);
     const hasGitignoreFilterBundle = fs.existsSync(gitignoreFilterBundlePath);
 
-    // For custom / non-bunsen base images, the platform tools (orchestrator,
-    // supervisor, scorers) need a Node interpreter inside the container; Bunsen
-    // mounts its own at /bunsen/runtime/node. The host path is resolved once at
-    // the single await gate below (asset / from-source / host-cache / verified
-    // download) and threaded to every consumer.
+    // For custom / non-bunsen base images, the platform tools (supervisor,
+    // scorers) need a Node interpreter inside the container; Bunsen mounts its
+    // own at /bunsen/runtime/node. The host path is resolved once at the single
+    // await gate below (asset / from-source / host-cache / verified download)
+    // and threaded to every consumer.
     const baseImage = resolvedEnv.baseImage;
     const needsNodeRuntime = experiment.hasDockerfile || !isBunsenImage(baseImage);
     let nodeRuntimePath: string | undefined;
-
-    if (!skipOrchestration && !hasOrchestratorBundle) {
-      throw new Error(
-        `Orchestrator bundle not found at ${orchestratorBundlePath}. ` +
-          `Run 'pnpm build:bundles' in packages/agents to build it.`
-      );
-    }
 
     // Scorer bundle only needed if there are LLM-based criteria (not
     // script/aggregate-only) or a dedicated `evaluation.report` step.
@@ -1014,6 +1003,12 @@ export async function executeRun(
     if (hasInitialWorkspaceSource(experiment) && !hasGitignoreFilterBundle) {
       log(`Gitignore filter bundle not found at ${gitignoreFilterBundlePath}, will use shell-based fallback`);
     }
+    // Workspace diff/export runs gitignore-filter.cjs *inside the agent container*
+    // (see the diff/export capture below), so on a custom image that needs a
+    // mounted Node it is a /bunsen/runtime/node consumer — independent of whether
+    // evaluation or the supervisor runs.
+    const needsGitignoreFilterInAgent =
+      hasInitialWorkspaceSource(experiment) && hasGitignoreFilterBundle;
 
     // Determine if supervisor is needed. The agent's `interaction.mode` is the
     // canonical source (already variant-merged); `resolvedSupervisor` is kept as
@@ -1034,20 +1029,19 @@ export async function executeRun(
     // every /bunsen/runtime/node consumer below is safe by construction; on
     // failure resolveContainerNodeRuntime throws an actionable error (offline +
     // uncached, etc.). The condition is a superset of every consumer's gate
-    // (agent-container mount, dedicated scorer, supervisor), so once it fires
-    // nodeRuntimePath is defined wherever the runtime is actually used. Bunsen
-    // base images (the common case) need no mounted runtime and skip this.
-    if (needsNodeRuntime && (!skipOrchestration || !skipEvaluation || useSupervisor)) {
+    // (agent-container mount, dedicated scorer, supervisor, workspace-diff
+    // gitignore-filter), so once it fires nodeRuntimePath is defined wherever the
+    // runtime is actually used. Bunsen base images (the common case) need no
+    // mounted runtime and skip this.
+    if (needsNodeRuntime && (!skipEvaluation || useSupervisor || needsGitignoreFilterInAgent)) {
       nodeRuntimePath = await resolveContainerNodeRuntime(runPlatform, { log });
     }
 
-    // Get API key for platform agents (orchestrator and/or scorer)
+    // Get API key for platform agents (scorer and/or supervisor). Agent
+    // invocation is composed deterministically from config — no key needed
+    // to start the agent — so a no-LLM agent (e.g. echo-agent) with a
+    // script/aggregate-only rubric runs fully offline.
     const platformApiKey = process.env.BUNSEN_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
-    if (!skipOrchestration && !platformApiKey) {
-      throw new Error(
-        'BUNSEN_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY environment variable is required for orchestration'
-      );
-    }
     // Check if evaluation needs an API key (script + aggregate only rubrics
     // without a report step don't need one).
     const needsEvalApiKey =
@@ -1062,15 +1056,19 @@ export async function executeRun(
         'BUNSEN_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY environment variable is required for evaluation'
       );
     }
-
-    // Add mounts for platform tool bundles and run data
-    if (!skipOrchestration) {
-      mounts.push({
-        source: orchestratorBundlePath,
-        target: '/bunsen/lib/orchestrator.cjs',
-        readonly: true,
-      });
+    // Supervised mode drives the agent via the LLM supervisor, which needs the
+    // platform key. Starting the agent itself needs no key (the invocation is
+    // composed deterministically), so without a key a supervised run proceeds
+    // with supervision silently disabled — surface that loudly instead.
+    if (useSupervisor && hasSupervisorBundle && !platformApiKey) {
+      info(
+        'Warning: supervised mode was requested but no BUNSEN_ANTHROPIC_API_KEY / ' +
+          'ANTHROPIC_API_KEY is set — the supervisor cannot run, so the agent will run ' +
+          'unsupervised and interactive prompts will not be answered.'
+      );
     }
+
+    // Add mounts for platform tool bundles and run data.
     // Mount run directory unconditionally — the agent execution path writes
     // agent-script.sh, logs, and completion markers under /bunsen/run regardless
     // of whether evaluation or tmux is enabled.
@@ -1091,13 +1089,15 @@ export async function executeRun(
         readonly: true,
       });
     }
-    // For custom images, mount the Node.js runtime in agent container
-    // Needed for orchestration, supervisor, or agent-container scoring (LLM scorers).
+    // For custom images, mount the Node.js runtime in agent container.
+    // Needed for the supervisor, agent-container scoring (LLM scorers), or the
+    // workspace-diff/export gitignore-filter — every tool that runs `node`
+    // inside the agent container.
     const scoreInAgentContainer = experiment.evaluation.container === 'agent';
     const needsNodeInAgent = needsNodeRuntime && (
-      !skipOrchestration ||
       (useSupervisor && hasSupervisorBundle) ||
-      (scoreInAgentContainer && needsScorerBundle)
+      (scoreInAgentContainer && needsScorerBundle) ||
+      needsGitignoreFilterInAgent
     );
     if (needsNodeInAgent) {
       if (!nodeRuntimePath) {
@@ -1235,8 +1235,9 @@ export async function executeRun(
       await writeFileInContainer(container, STABLE_PATHS.taskFile, experiment.task.prompt);
       saveTaskPrompt(runId, experiment.task.prompt, baseDir);
 
-      // For custom images, symlink the mounted Node.js runtime onto PATH
-      // so orchestrator-generated commands (e.g. "node /agent/...") work
+      // For custom images, symlink the mounted Node.js runtime onto PATH so the
+      // platform tools that run in the agent container (supervisor, in-agent
+      // scorer) can invoke `node`.
       if (needsNodeInAgent) {
         await execShellInContainer(
           container,
@@ -1409,73 +1410,17 @@ fi`,
         });
       }
 
-      // Determine how to run Node.js in the container
-      // Bunsen images have Node.js pre-installed, custom images use our mounted runtime
-      const nodeCmd = needsNodeRuntime ? '/bunsen/runtime/node' : 'node';
-
-      // Get orchestration (run orchestrator in container or use default)
-      let orchestration: OrchestrationResult;
-      if (skipOrchestration) {
-        // Default orchestration: just run the agent command
-        orchestration = {
-          setupCommands: ['cd /workspace'],
-          invocation: buildDefaultArgvInvocation(agent, experiment, allArgs),
-        };
-      } else {
-        activeRun.phase = 'orchestration';
-        // Run orchestrator in container
-        progress('Running orchestrator...');
-        // Names of env vars that the selected variants contribute, so the
-        // orchestrator can call them out in the task prompt it builds. Covers
-        // both agent and experiment variants.
-        const variantEnvVarNames = [
-          ...Object.keys(
-            (agentVariant && agentBase.variants?.[agentVariant]?.defaults?.env) ?? {},
-          ),
-          ...Object.keys(
-            (experimentVariant && experimentBase.variants?.[experimentVariant]?.env) ?? {},
-          ),
-        ];
-        const orchestratorResult = await execInContainer(container, [nodeCmd, '/bunsen/lib/orchestrator.cjs'], {
-          env: {
-            BUNSEN_ANTHROPIC_API_KEY: platformApiKey!,
-            BUNSEN_EXPERIMENT_PATH: '/input/experiment/experiment.yaml',
-            BUNSEN_AGENT_PATH: '/agent/agent.yaml',
-            BUNSEN_CLI_ARGS: JSON.stringify(allArgs),
-            BUNSEN_GUARANTEED_ARGS: JSON.stringify(guaranteedArgs),
-            BUNSEN_VARIANT_ENV_VAR_NAMES: JSON.stringify(variantEnvVarNames),
-            BUNSEN_TRACE_SOURCE: 'orchestrator',
-            ...(proxyInfo ? getProxyEnv(proxyInfo) : {}),
-          },
-          timeout: 60000, // 1 minute timeout for orchestration
-          onOutput: (chunk, stream) => {
-            if (stream === 'stderr') {
-              // Show orchestrator logs as transient (will be cleared when done)
-              transientLog(chunk.trim());
-            }
-          },
-        });
-
-        // Clear transient orchestrator logs
-        clearTransientLogs();
-
-        if (orchestratorResult.exitCode !== 0) {
-          throw new Error(
-            `Orchestrator failed with exit code ${orchestratorResult.exitCode}: ${orchestratorResult.stderr}`
-          );
-        }
-
-        // Parse orchestration result from stdout (JSON)
-        try {
-          orchestration = parseOrchestrationResult(orchestratorResult.stdout.trim());
-        } catch (parseError) {
-          throw new Error(
-            `Failed to parse orchestration result: ${parseError instanceof Error ? parseError.message : parseError}`
-          );
-        }
-
-        log(`Orchestration: ${formatInvocationForLog(orchestration.invocation)}`);
-      }
+      // Compose the agent invocation deterministically from committed config —
+      // the agent's declared entrypoint (command + invoke template + args) and
+      // the experiment's task prompt. No model in the invocation path: the
+      // invocation is a pure function of config, so it is reproducible and
+      // comparable across runs. setupCommands just `cd` into the workspace; the
+      // invocation is rendered below with each arg POSIX-single-quoted so
+      // task-text metacharacters never reach bash for reinterpretation.
+      const orchestration: OrchestrationResult = {
+        setupCommands: ['cd /workspace'],
+        invocation: buildArgvInvocation(agent, experiment, allArgs),
+      };
 
       // Append guaranteed args (from agent.entrypoint.args + variant args).
       // These attach as additional argv tokens — no shell quoting needed.
@@ -3985,19 +3930,3 @@ async function runReportStep(opts: {
   }
 }
 
-/**
- * Get the directory listing of a path for orchestration context
- */
-export function getDirectoryListing(dirPath: string): string {
-  if (!fs.existsSync(dirPath)) {
-    return '(directory does not exist)';
-  }
-
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const lines = entries.map((entry) => {
-    const prefix = entry.isDirectory() ? 'd ' : '- ';
-    return `${prefix}${entry.name}`;
-  });
-
-  return lines.join('\n');
-}

@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
- * Public `OrchestrationResult` shape.
+ * Public `OrchestrationResult` shape — the composed agent invocation recorded
+ * on the run manifest and in `orchestration/result.json`.
  *
  * Invocations are structured as a command + argv array so dynamic task text
  * never has to survive shell reinterpretation. `setupCommands` remains a
- * shell-string list because it is orchestrator-authored (cd, export, etc.) and
- * never carries task text.
+ * shell-string list because it is platform-authored (cd into the workspace,
+ * etc.) and never carries task text.
  */
 
 export interface OrchestrationResult {

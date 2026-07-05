@@ -22,13 +22,13 @@ A complete `agent.yaml` is a single YAML mapping with these top-level keys:
 | ------------- | -------- | --------------------------------- | ----------------------------------------------------------------- |
 | `version`     | yes      | `'v1'`                            | Schema version. Always `v1`.                                      |
 | `name`        | yes      | string (kebab-case)               | Stable identifier; ASCII lowercase, digits, hyphens.             |
-| `description` | no       | string                            | Human-readable summary; also helps the orchestrator.            |
+| `description` | no       | string                            | Human-readable summary.                                         |
 | `install`     | yes      | object                            | Where the agent comes from and how it is installed.             |
-| `entrypoint`  | yes      | object                            | The command used to invoke the agent.                          |
+| `entrypoint`  | yes      | object                            | How the agent is invoked (`command` + `invoke` template + `args`). |
 | `interaction` | yes      | object                            | `direct` exec or `supervised` mode.                            |
 | `model`       | no       | object                            | The env var the agent reads its model from, plus a default.    |
 | `defaults`    | no       | object                            | Default `env` and `passEnv` for runs of this agent.            |
-| `examples`    | no       | `AgentExample[]`                  | Sample prompt/invocation pairs for the orchestrator.          |
+| `examples`    | no       | `AgentExample[]`                  | Sample prompt/invocation pairs (documentation / scaffolder input). |
 | `variants`    | no       | `Record<string, AgentVariant>`    | Named behavioral overlays applied on top of the base agent.    |
 
 `$schema` may also appear at the top level to point editors at the JSON Schema;
@@ -173,24 +173,62 @@ For dropping a system prompt into the location an agent reads at startup, see
 
 ## `entrypoint`
 
-The command used to invoke the agent. The orchestrator builds the final
-invocation from this plus the task prompt.
+How the agent is invoked. The invocation is composed **deterministically** from
+these fields plus the experiment's task prompt — no model in the invocation
+path, so it is reproducible and comparable across runs:
+
+```
+<command> [interpreter/script split] <expanded invoke…> <cli passthrough> <args>
+```
 
 | Field     | Required | Type       | Description                                                       |
 | --------- | -------- | ---------- | --------------------------------------------------------------- |
-| `command` | yes      | string     | The executable (and any leading fixed words).                  |
-| `args`    | no       | `string[]` | Guaranteed args appended to every invocation.                  |
-| `help`    | no       | string     | A `--help` command the orchestrator may run to learn the CLI.  |
+| `command` | yes      | string     | The executable. A bare name resolves via `PATH`; `python <script>` / `node <script>` split into interpreter + script (a relative script is rewritten under `/agent`). |
+| `invoke`  | no       | `string[]` | Ordered argv template from the first argument through the prompt slot. Default `["{prompt}"]`. |
+| `args`    | no       | `string[]` | Guaranteed args appended to **every** invocation (order-insensitive persistent flags). |
+| `help`    | no       | string     | A `--help` command (documentation / scaffolder input).         |
 
-The orchestrator passes the task prompt as a separate argument (structured argv,
-not a shell string), so prompt text reaches the agent verbatim — no escaping, no
-re-interpretation.
+### `invoke` — where the prompt sits in argv
+
+`invoke` is an ordered argv template. Order-sensitive prefixes — a subcommand or
+a prompt flag — live here; order-insensitive persistent flags stay in `args`
+(always appended last). Each token is a literal argv element (no shell, no
+escaping), with per-token **substring** placeholder expansion:
+
+| Placeholder    | Expands to                                              |
+| -------------- | ------------------------------------------------------- |
+| `{prompt}`     | the experiment's `task.prompt`, verbatim, as one token  |
+| `{promptFile}` | `/bunsen/task/prompt.md` (the injected `BUNSEN_TASK_FILE`) |
+
+Rules: only these two placeholders are allowed, and **at most one kind** may
+appear (the prompt is delivered through a single channel). Omitting `invoke`
+defaults to `["{prompt}"]` — a bare positional prompt. An explicit empty array
+delivers no prompt token (for a wrapper `command` that reads `$BUNSEN_TASK_FILE`
+itself). Because expansion is per-token substring, both `["{prompt}"]` and
+`["--task={prompt}"]` work.
+
+Since the prompt is a discrete argv token (structured argv, not a shell string),
+prompt text reaches the agent verbatim — backticks, `$`, quotes, and newlines
+are never re-interpreted.
 
 ```yaml
+# Bare positional prompt (default — invoke omitted):  claude <prompt> …
 entrypoint:
   command: claude
   args:
     - --dangerously-skip-permissions
+
+# After a subcommand:  codex exec <prompt> …
+entrypoint:
+  command: codex
+  invoke: [exec, "{prompt}"]
+  args: [--sandbox, danger-full-access]
+
+# After a flag:  gemini -p <prompt> …
+entrypoint:
+  command: gemini
+  invoke: ["-p", "{prompt}"]
+  args: [--yolo]
 ```
 
 ## `interaction`
@@ -244,8 +282,10 @@ the env precedence order in [The Environment Model](./ENVIRONMENT.md).
 
 ## `examples`
 
-Optional sample prompt/invocation pairs. They help the orchestrator learn how the
-agent expects to be called.
+Optional sample prompt/invocation pairs. They document how the agent expects to
+be called and are input for a future `bn agents scaffold` that infers an
+`entrypoint.invoke` template for a brand-new CLI. They are **not** consulted at
+run time — the invocation is composed deterministically from `entrypoint`.
 
 | Field        | Required | Type   | Description                          |
 | ------------ | -------- | ------ | ------------------------------------ |

@@ -26,11 +26,11 @@ The only cross-boundary signal is the structured **cross-boundary-binary-shadow*
 
 ### The anti-contract
 
-Bunsen base images happen to ship Node 20 and Python 3.11 because those are useful for `install.configure` shell scripts, the orchestrator, and the supervisor. **Agents do not depend on this.** An agent that needs a runtime ships its own via `install.deps`. That's what makes the same agent run against any experiment image — including custom Dockerfiles, Alpine, distroless images — without modification.
+Bunsen base images happen to ship Node 20 and Python 3.11 because those are useful for `install.configure` shell scripts and the supervisor. **Agents do not depend on this.** An agent that needs a runtime ships its own via `install.deps`. That's what makes the same agent run against any experiment image — including custom Dockerfiles, Alpine, distroless images — without modification.
 
 If you find yourself wanting to declare "this agent requires Node 20", the migration is "this agent ships Node 20 as a closure dep". See [Shipping a language runtime](./AGENT_DEPS_COOKBOOK.md#shipping-a-language-runtime) in the cookbook.
 
-**The platform follows the same rule.** Bunsen's own tools — the orchestrator, supervisor, and scorers — also need a Node interpreter *inside* the run container. On a Bunsen base image they use the image's Node 20 (a substrate Bunsen controls and pins). On a custom Dockerfile or non-bunsen base image, the platform does exactly what the anti-contract asks of agents: it **ships its own Node as a `closure` dependency**, mounted read-only at `/bunsen/runtime/node`. That binary is the official Node Linux tarball — the canonical `closure` example from the [linkage taxonomy](#linkage-taxonomy) — resolved on demand and verified against a pinned sha256 (no per-image baking). Like any glibc closure it runs on every Bunsen base image and the common custom bases (debian/ubuntu/CUDA/distroless-glibc); a **musl/Alpine** base is not yet supported for the platform tools — the same `abi.libc` asymmetry agents face. See [Platform Tools](./PLATFORM_TOOLS.md) for the layered resolution + host-cache details.
+**The platform follows the same rule.** Bunsen's own tools — the supervisor and scorers — also need a Node interpreter *inside* the run container. On a Bunsen base image they use the image's Node 20 (a substrate Bunsen controls and pins). On a custom Dockerfile or non-bunsen base image, the platform does exactly what the anti-contract asks of agents: it **ships its own Node as a `closure` dependency**, mounted read-only at `/bunsen/runtime/node`. That binary is the official Node Linux tarball — the canonical `closure` example from the [linkage taxonomy](#linkage-taxonomy) — resolved on demand and verified against a pinned sha256 (no per-image baking). Like any glibc closure it runs on every Bunsen base image and the common custom bases (debian/ubuntu/CUDA/distroless-glibc); a **musl/Alpine** base is not yet supported for the platform tools — the same `abi.libc` asymmetry agents face. See [Platform Tools](./PLATFORM_TOOLS.md) for the layered resolution + host-cache details.
 
 ### Setup phase ordering
 
@@ -349,7 +349,7 @@ model:
 | `install.configure`                | `StepConfig[]`                                    | —            | Fast per-run runtime configuration steps. Each step is either a `run` step (`{run, as?, timeout?}`) or a `writeFile` step (`{writeFile, from?\|content?, as?, timeout?}`, 30 s default timeout) — see ["Step variants: run and writeFile"](#step-variants-run-and-writefile). |
 | `entrypoint.command`               | string                                            | —            | Executable invoked at run start.                                                                           |
 | `entrypoint.args`                  | `string[]`                                        | —            | Guaranteed argv tokens appended to every invocation.                                                       |
-| `entrypoint.help`                  | string                                            | —            | Help command consulted by the orchestrator.                                                                |
+| `entrypoint.help`                  | string                                            | —            | A `--help` command (documentation / scaffolder input); not consulted at run time.                          |
 | `interaction.mode`                 | `"direct"` \| `"supervised"`                      | required (no default) | Run-loop mode (see [Supervised Mode](./SUPERVISOR.md)).                                                         |
 | `model.env`                        | string                                            | —            | Env var the harness reads its model id from (e.g. `ANTHROPIC_MODEL`). Declaring it enables `bn run --model <id>`. See ["Model selection"](#model-selection). |
 | `model.default`                    | string                                            | —            | Model id used when `--model` is not passed. Seeds `model.env` at the agent-defaults tier.                  |
@@ -607,7 +607,7 @@ There is no agent/experiment runtime negotiation, no version intersection, no pa
 | `bunsen/visual`   | Headless + Playwright/Chromium                          |
 | `bunsen/desktop`  | Full desktop environment                                |
 
-Bunsen base images happen to ship Node 20 and Python 3.11; those exist for the orchestrator, the supervisor, and `install.configure` shell scripts. **Agents do not depend on this.** An agent that needs a runtime ships its own via `install.deps`.
+Bunsen base images happen to ship Node 20 and Python 3.11; those exist for the supervisor and `install.configure` shell scripts. **Agents do not depend on this.** An agent that needs a runtime ships its own via `install.deps`.
 
 ### Custom Dockerfiles
 

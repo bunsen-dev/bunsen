@@ -46,7 +46,28 @@ release still succeeds without them (unsigned), and turns on automatically once 
 | `WINDOWS_CERT_PFX_BASE64` / `WINDOWS_CERT_PASSWORD` | Authenticode cert (or use Azure Trusted Signing) |
 | `HOMEBREW_TAP_TOKEN` | a PAT with `contents:write` on the tap + bucket repos (for auto-bump) |
 
-## Cutting a release (and the install.sh timing gap)
+## Cutting a release
+
+A release is a **manually-created GitHub Release**; both `release.yaml` and
+`publish-npm.yaml` trigger on `release: published`. Steps:
+
+1. **Bump the public package versions** (`@bunsen-dev/types`, `@bunsen-dev/sdk`,
+   `@bunsen-dev/cli`) to the new `X.Y.Z`. `publish-npm.yaml` publishes whatever
+   version is in each `package.json`; the binary + tap + bucket use the **tag**, so
+   keep the tag and the package versions in sync.
+2. **Update the changelog.** In [`CHANGELOG.md`](../CHANGELOG.md), rename the
+   `[Unreleased]` section to `[X.Y.Z] - YYYY-MM-DD` and start a fresh empty
+   `[Unreleased]`. Pre-1.0, make sure every public-surface break (schemas, the
+   `bunsen.config.yaml` / `experiment.yaml` / `agent.yaml` shapes, artifact/trace
+   formats) is called out under **Changed** / **Removed** — this section is the
+   source for the GitHub Release notes.
+3. **Tag + publish.** Commit, create the git tag `vX.Y.Z`, and publish a **full**
+   GitHub Release (not a prerelease — see below) using that `CHANGELOG` section as
+   the release body.
+4. CI takes over: `release.yaml` builds/signs/uploads the binaries and bumps the
+   Homebrew tap + Scoop bucket; `publish-npm.yaml` publishes `types` + `sdk` to npm.
+
+### The install.sh timing gap
 
 `release.yaml` triggers on `release: published`, builds the binaries, and uploads
 them — which takes **~10–15 min** for the macOS/Windows matrix. During that window

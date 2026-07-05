@@ -30,7 +30,7 @@ bn run <experiment>[:variant] [agent][:variant] [options]
 | `--pass-env <VAR>`       | Pass a host env var through to the run (repeatable).                |
 | `--platform <platform>`  | Execution platform (`linux/amd64` or `linux/arm64`).               |
 | `--timeout <duration>`   | Execution timeout (e.g. `15m`, `900000ms`).                        |
-| `--skip-eval`            | Skip the evaluation phase (orchestration still runs).             |
+| `--skip-eval`            | Skip the evaluation phase (the agent still runs).                 |
 | `--skip-traces`          | Skip AI API trace capture.                                        |
 | `--record`               | Record the terminal session (tmux + asciinema).                  |
 | `--rebuild-agent`        | Rebuild `install.build` artifacts, bypassing the cache.          |
@@ -155,6 +155,8 @@ loops.
 On startup `bn` discovers the project root and loads the env files declared in
 `defaults.envFiles` of `bunsen.config.yaml` (`.env` by default). Values already
 set in your shell take precedence — an env file never clobbers an explicit shell
-value. This is how `ANTHROPIC_API_KEY` and similar secrets reach the
-orchestrator, evaluation, and (via `passEnv`) the agent. For the full env
-precedence order, see [The Environment Model](./ENVIRONMENT.md).
+value. This is how `ANTHROPIC_API_KEY` and similar secrets reach evaluation and
+(via `passEnv`) the agent. The agent invocation is composed deterministically
+from the agent's `entrypoint` — no model runs to start an agent, so no API key is
+required for that step. For the full env precedence order, see
+[The Environment Model](./ENVIRONMENT.md).

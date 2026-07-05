@@ -80,7 +80,7 @@ const EXAMPLE_AGENT_YAML = `$schema: https://schemas.bunsen.dev/agent.v1.json
 version: v1
 name: echo-agent
 description: |
-  Trivial smoke-test agent: prints whatever prompt the orchestrator hands it.
+  Trivial smoke-test agent: prints whatever prompt it is given.
 
 install:
   source:

@@ -20,12 +20,13 @@ agent-agnostic — an agent under test can be a CLI, a script, an npm package, o
 downloaded binary. In prose we always write "agent under test" (never "AUT") to
 keep it distinct from the two senses below.
 
-**Platform agents** — the three Bunsen-supplied agents that run *inside the
-container* to operate the experiment: the **orchestrator** (works out how to
-invoke the agent under test), the **supervisor** (keeps an interactive agent
-moving in [supervised mode](./SUPERVISOR.md)), and the **scorer** (executes LLM
-criteria). These are infrastructure; you do not author them. See
-[How Bunsen Works](./HOW_IT_WORKS.md).
+**Platform agents** — the Bunsen-supplied agents that run *inside the container*
+to operate the experiment: the **supervisor** (keeps an interactive agent moving
+in [supervised mode](./SUPERVISOR.md)) and the **scorer** (executes LLM
+criteria). These are infrastructure; you do not author them. (Agent invocation
+itself is not a platform agent — it is composed deterministically from the
+agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint), no model in the
+path.) See [How Bunsen Works](./HOW_IT_WORKS.md).
 
 **Run** — one execution of an experiment with an agent. Each run gets its own
 container, its own directory of outputs, and an entry in the
