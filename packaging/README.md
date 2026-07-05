@@ -46,7 +46,7 @@ release still succeeds without them (unsigned), and turns on automatically once 
 | `WINDOWS_CERT_PFX_BASE64` / `WINDOWS_CERT_PASSWORD` | Authenticode cert (or use Azure Trusted Signing) |
 | `HOMEBREW_TAP_TOKEN` | a PAT with `contents:write` on the tap + bucket repos (for auto-bump) |
 
-## Cutting a release (and the install.sh timing gap)
+## Cutting a release
 
 A release is a **manually-created GitHub Release**; both `release.yaml` and
 `publish-npm.yaml` trigger on `release: published`. Steps:

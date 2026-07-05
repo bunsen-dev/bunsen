@@ -18,6 +18,10 @@ The public contract also includes:
 
 Everything else may change without notice.
 
+### Versioning & changelog
+
+The public packages follow [Semantic Versioning](https://semver.org/). Bunsen is **pre-1.0**, so breaking changes to the public surface above may land in minor releases — each one is called out under **Changed** / **Removed** in the [Changelog](../CHANGELOG.md). How releases are cut (version bump → changelog roll → tag) is documented in [`packaging/README.md`](../packaging/README.md#cutting-a-release).
+
 ### Installing the CLI
 
 The `bn` command is the main entry point. Install it globally (or run it with `npx`):

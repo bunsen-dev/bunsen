@@ -123,7 +123,7 @@ under [`docs/`](./docs)):
 - [Scorers & Evaluation](./docs/SCORERS.md) · [Scoring in the Agent Container](./docs/AGENT_CONTAINER_SCORING.md) · [Scoring Service Tasks](./docs/PROCESS_SURVIVAL.md)
 
 **Suites & Reference**
-- [Suites](./docs/SUITES.md) · [CLI Reference](./docs/CLI.md) · [Project Configuration](./docs/PROJECT_CONFIG.md) · [Run Manifest & Events](./docs/RUN_MANIFEST.md) · [Exporting a Run Workspace](./docs/EXPORT_WORKSPACE.md) · [Cost Accounting](./docs/COST.md) · [Platforms & Architecture](./docs/PLATFORMS.md) · [Packages & Schemas](./docs/PACKAGES.md) · [Glossary](./docs/GLOSSARY.md)
+- [Suites](./docs/SUITES.md) · [CLI Reference](./docs/CLI.md) · [Project Configuration](./docs/PROJECT_CONFIG.md) · [Run Manifest & Events](./docs/RUN_MANIFEST.md) · [Exporting a Run Workspace](./docs/EXPORT_WORKSPACE.md) · [Cost Accounting](./docs/COST.md) · [Platforms & Architecture](./docs/PLATFORMS.md) · [Packages & Schemas](./docs/PACKAGES.md) · [Changelog](./CHANGELOG.md) · [Glossary](./docs/GLOSSARY.md)
 
 ## Examples
 
