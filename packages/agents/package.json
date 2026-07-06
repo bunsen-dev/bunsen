@@ -19,7 +19,6 @@
   "scripts": {
     "build": "tsc && node scripts/build-bundles.mjs bundles",
     "build:bundles": "node scripts/build-bundles.mjs all",
-    "build:bundles:orchestrator": "node scripts/build-bundles.mjs orchestrator",
     "build:bundles:scorer": "node scripts/build-bundles.mjs scorer",
     "build:bundles:gitignore-filter": "node scripts/build-bundles.mjs gitignore-filter",
     "build:bundles:runtime": "node scripts/build-bundles.mjs runtime",

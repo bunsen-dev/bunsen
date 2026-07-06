@@ -16,6 +16,15 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Added
 
+- **`bn agents scaffold <agent>`** — infers an agent's `entrypoint.invoke` template with a model
+  at **authoring time** (once per agent, host-side) and writes it into `agent.yaml` as a
+  reviewable diff. It reads the agent's `examples`/`description` and runs the CLI's `--help` on
+  the host when available (`--skip-help` to disable, `--help-text <file>` to supply it), shows the
+  composed sample invocation, refuses to overwrite an existing `invoke` without `--force`, and
+  supports `--dry-run` / `--model <id>`. Requires `ANTHROPIC_API_KEY`. This is the good half of
+  the retired runtime orchestrator — onboarding a brand-new CLI — relocated out of the run loop, so
+  the thing that *runs* stays deterministic and only the thing that *helps you write config* is a
+  model.
 - **`agent.yaml`: `entrypoint.invoke`** — an ordered argv template (the tokens from the first
   argument through the prompt slot) with per-token `{prompt}` / `{promptFile}` substring
   placeholders. It lets an agent declare an order-sensitive prefix — a subcommand
@@ -35,7 +44,7 @@ version and date and a fresh `[Unreleased]` is started.
   composed invocation is still recorded on the run manifest's `orchestration` field and as the
   `orchestration/result.json` artifact.
 - **`agent.yaml`: `examples` is no longer load-bearing at run time.** It is now documentation for
-  human readers (and input for a future `bn agents scaffold`). Previously the LLM orchestrator
+  human readers (and the primary input for `bn agents scaffold`). Previously the LLM orchestrator
   could infer a non-standard invocation from `examples`; an agent that relied on that must now
   declare `entrypoint.invoke` explicitly, otherwise it falls back to a bare positional
   `{prompt}` and may be mis-invoked. This is a runtime-semantics change JSON Schema cannot encode
@@ -44,6 +53,11 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Removed
 
+- **The `orchestrator.cjs` platform bundle no longer ships.** With the runtime orchestrator retired
+  and its authoring-time replacement (`bn agents scaffold`) running host-side, the ~1.4 MB
+  `orchestrator.cjs` is no longer built by `@bunsen-dev/agents` or embedded into the `bn` binary
+  (internal packaging change — no effect on the `bunsen.config.yaml` / `experiment.yaml` /
+  `agent.yaml` schemas or the artifact/trace formats).
 - **Starting an agent no longer requires an API key.** With the LLM orchestrator gone, `bn run`
   no longer needs `ANTHROPIC_API_KEY` to launch an agent, so a no-AI agent (e.g. `echo-agent`)
   with a script/aggregate-only rubric now runs **fully offline**. An API key is still required

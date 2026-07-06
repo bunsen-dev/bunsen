@@ -1,12 +1,12 @@
 # Platform Tools Architecture
 
-This document describes how Bunsen's platform tools (orchestrator, scorer, supervisor, gitignore-filter, and proxy-bootstrap) are built and distributed to experiment containers.
+This document describes how Bunsen's platform tools (scorer, supervisor, gitignore-filter, and proxy-bootstrap) are built and distributed to experiment containers.
 
 ## Overview
 
 Bunsen's platform tools are TypeScript/Node.js applications that run inside experiment containers. They are distributed as JS bundles that run on Node.js.
 
-> **The `orchestrator` bundle is not run at run time.** The agent invocation is composed deterministically by the runtime's invocation composer (`buildArgvInvocation` in `packages/runtime/src/orchestration.ts`) from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint) and the experiment's task prompt — no model in the invocation path, so the invocation is reproducible and comparable across runs. The `orchestrator.cjs` bundle is still built (it appears in the outputs below) and its source is retained as the basis for a future `bn agents scaffold`, but it is not mounted into experiment containers. The tools that still run at run time are `scorer`, `supervisor`, `gitignore-filter`, and `proxy-bootstrap`.
+> **There is no runtime "orchestrator".** The agent invocation is composed deterministically by the runtime's invocation composer (`buildArgvInvocation` in `packages/runtime/src/orchestration.ts`) from the agent's declared [`entrypoint`](./AGENT_YAML.md#entrypoint) and the experiment's task prompt — no model in the invocation path, so the invocation is reproducible and comparable across runs. The model that used to infer invocations per run now lives entirely at **authoring time** as `bn agents scaffold` (host-side, once per agent — see [`packages/agents/src/scaffolder/`](../packages/agents/src/scaffolder/scaffold.ts)); it is inlined into the `bn` binary, not built as a container bundle. The tools that run at run time are `scorer`, `supervisor`, `gitignore-filter`, and `proxy-bootstrap`.
 
 ## Build Process
 
@@ -19,7 +19,6 @@ The build script (`packages/agents/scripts/build-bundles.mjs`) performs:
 
 ```
 packages/agents/dist/
-  orchestrator.cjs      (~1.4MB)
   scorer.cjs            (~1.3MB)
   supervisor.cjs        (~1.1MB)
   proxy-bootstrap.cjs   (~1.0MB)
@@ -33,17 +32,16 @@ packages/agents/runtime/
 ### Build Commands
 
 ```bash
-pnpm build:bundles                    # Build all five bundles + download Node.js
-pnpm build:bundles:orchestrator       # Build just orchestrator
+pnpm build:bundles                    # Build all four bundles + download Node.js
 pnpm build:bundles:scorer             # Build just scorer
 pnpm build:bundles:gitignore-filter   # Build just gitignore-filter
 pnpm build:bundles:runtime            # Just download Node.js binaries
 ```
 
-`pnpm build:bundles` (`build-bundles.mjs all`) builds all five bundles —
-orchestrator, scorer, supervisor, gitignore-filter, and proxy-bootstrap — and
-then downloads the Node.js binaries. There are no dedicated npm scripts for
-supervisor or proxy-bootstrap; build them individually with:
+`pnpm build:bundles` (`build-bundles.mjs all`) builds all four bundles —
+scorer, supervisor, gitignore-filter, and proxy-bootstrap — and then downloads
+the Node.js binaries. There are no dedicated npm scripts for supervisor or
+proxy-bootstrap; build them individually with:
 
 ```bash
 node scripts/build-bundles.mjs supervisor

@@ -36,6 +36,8 @@ import { calibrateCommand } from './commands/calibrate.js';
 import { exportCommand } from './commands/export.js';
 import { buildAgentCommand } from './commands/build-agent.js';
 import { agentsAddCommand } from './commands/agents-add.js';
+import { agentsScaffoldCommand } from './commands/agents-scaffold.js';
+import { DEFAULT_SCAFFOLD_MODEL } from '@bunsen-dev/agents';
 import { cacheListCommand, cacheCleanCommand } from './commands/cache.js';
 import { rebuildIndexCommand } from './commands/rebuild-index.js';
 import { indexStatusCommand } from './commands/index-status.js';
@@ -191,6 +193,18 @@ agentsCommand
   .option('--force', 'Overwrite an agent directory that already exists')
   .option('--format <format>', 'Output format (text|json|yaml)', 'text')
   .action(wrapCommand(agentsAddCommand));
+
+agentsCommand
+  .command('scaffold')
+  .description("Infer the agent's entrypoint.invoke template with a model and write it into agent.yaml")
+  .argument('<agent>', 'Agent name/path')
+  .option('--force', 'Overwrite an existing entrypoint.invoke (written as a reviewable diff)')
+  .option('--help-text <file>', "Supply the CLI's --help text from a file (use '-' for stdin) instead of running it")
+  .option('--skip-help', "Do not run the agent's --help on the host; infer from examples only")
+  .option('--dry-run', 'Print the inferred template without modifying agent.yaml')
+  .option('--model <id>', `Model to infer with (default: ${DEFAULT_SCAFFOLD_MODEL})`)
+  .option('--format <format>', 'Output format (text|json|yaml)', 'text')
+  .action(wrapCommand(agentsScaffoldCommand));
 
 // ---------------------------------------------------------------------------
 // bn suites

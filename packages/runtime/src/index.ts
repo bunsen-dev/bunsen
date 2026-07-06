@@ -375,7 +375,13 @@ export {
 } from './gitignore.js';
 export type { ExclusionResult, GitignoreFilter, GitignoreContent } from './gitignore.js';
 
-export { formatInvocationForLog } from './orchestration.js';
+export {
+  formatInvocationForLog,
+  splitInterpreterCommand,
+  expandInvokeTemplate,
+  DEFAULT_INVOKE,
+} from './orchestration.js';
+export type { ArgvInvocation } from './orchestration.js';
 
 // Run manifest helpers — manifest.json is the on-disk source of truth.
 // All field-level mutations go through the storage.ts writers; the helpers

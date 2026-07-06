@@ -1,10 +1,12 @@
 # @bunsen-dev/agents
 
-Platform agents (orchestrator, scorer, supervisor) that run **inside Docker containers** alongside the agent-under-test.
+Platform agents (scorer, supervisor, gitignore-filter, proxy-bootstrap) that run **inside Docker containers** alongside the agent-under-test, **plus** the host-side `entrypoint.invoke` scaffolder (`src/scaffolder/`) that powers `bn agents scaffold`.
+
+The scaffolder is the one thing here that is *not* a container bundle: it is imported as a normal module by the CLI (via the package entry `src/index.ts`) and inlined into the `bn` binary. It is the authoring-time relocation of the retired runtime "orchestrator" — a model call that used to infer each agent's argv on every run (a reproducibility hole). Now the invocation is composed deterministically by `@bunsen-dev/runtime` and the model runs once per agent at authoring time.
 
 ## Build Process
 
-These agents are bundled into self-contained `.cjs` files using esbuild so they can run inside containers without `node_modules`.
+The container agents are bundled into self-contained `.cjs` files using esbuild so they can run inside containers without `node_modules`. (The scaffolder is not bundled here — see above.)
 
 ```bash
 # Build all bundles + download Node.js runtime binaries
@@ -12,7 +14,6 @@ pnpm build:bundles
 
 # Build a single bundle
 pnpm build:bundles:scorer
-pnpm build:bundles:orchestrator
 ```
 
 > The package's own `build` script (`tsc && build-bundles bundles`) **also emits
@@ -33,11 +34,11 @@ The esbuild step injects an `import.meta.url` shim (`--define`) because esbuild'
 
 ```
 dist/
-  orchestrator.cjs      # ~1.4 MB
   scorer.cjs            # ~1.3 MB
   supervisor.cjs        # ~1.1 MB
   gitignore-filter.cjs  # ~20 KB
   proxy-bootstrap.cjs   # ~0.95 MB (mounted at /bunsen/runtime/proxy-bootstrap.cjs when trace capture is enabled)
+  index.js              # package entry — exports the host-side scaffolder (NOT a container bundle)
 runtime/
   node-linux-x64     # Node.js binary for x64 containers
   node-linux-arm64   # Node.js binary for arm64 containers
@@ -47,7 +48,9 @@ runtime/
 
 **The bundles cannot import from `@bunsen-dev/runtime` directly.** The `@bunsen-dev/runtime` package has transitive dependencies on Docker/SSH libraries (`ssh2`, `cpu-features`) that contain native `.node` files, which esbuild cannot bundle.
 
-Instead, when scorer/orchestrator code needs a small pure utility:
+This constraint applies to the **container bundle entrypoints** (`src/*/standalone.ts`). The scaffolder (`src/scaffolder/`) is host code inlined into the CLI, so it is free to import third-party deps normally — but it still must not import `@bunsen-dev/runtime` (that would create a package cycle), so it re-implements the tiny bits it needs.
+
+Instead, when scorer/supervisor bundle code needs a small pure utility:
 
 - **Import it from a tiny dependency-free shared package** rather than from `@bunsen-dev/runtime`:
   ```typescript
@@ -71,35 +74,25 @@ Instead, when scorer/orchestrator code needs a small pure utility:
 
 ## Architecture
 
-- `src/common/` — shared agent framework (`createAgent`, `tool()`, Anthropic client)
-- `src/orchestrator/` — decides how to invoke the agent-under-test
+- `src/common/` — shared agent framework (`createAgent`, `tool()`, Anthropic client), used by the container bundles and the scaffolder
+- `src/scaffolder/` — host-side `entrypoint.invoke` inference for `bn agents scaffold` (exported via `src/index.ts`; not a container bundle)
 - `src/scorer/` — evaluates agent output (LLM-judge, agentic, visual, code, aggregate, report scorers)
 - `src/supervisor/` — monitors agent execution and can intervene
 - `src/gitignore-filter/` — lists non-ignored files for diff generation
 
-## Orchestrator Policy
+## Scaffolder Policy
 
-When changing `src/orchestrator/`, keep the runtime behavior boundaries clear:
+When changing `src/scaffolder/`, keep these boundaries clear:
 
-- Keep orchestrator prompt policy in [`src/orchestrator/standalone.ts`](./src/orchestrator/standalone.ts). If the runtime orchestrator needs to understand a rule, the rule must be injected from code that `standalone.ts` runs; documentation files alone do not affect the live orchestrator.
-- Treat agent variants as **executor-side configuration**, not as underlying agent CLI syntax. The orchestrator should never invent or forward `--variant` or `:<variant>` when constructing the final invocation.
-- Prefer passing the orchestrator the **resolved effects** of executor configuration, not the raw variant definition. In practice, that means it may need auto-appended args and env var names, but not the variant label itself.
-- Do not expose executor-applied env var values in orchestrator prompts or traces. If env context matters, pass only the variable names.
-- Keep helper modules data-oriented. Helpers can sanitize or reshape config before the orchestrator sees it, but prompt/guidance text should stay centralized in `standalone.ts`.
-- Prefer a narrow orchestration surface. The default is to determine orchestration from the selected experiment config and agent config alone, not from filesystem exploration.
-- Only add filesystem inspection tools back if concrete orchestration cases require them.
-
-### Current variant handling
-
-- The executor passes the orchestrator:
-  - CLI args provided by the user
-  - guaranteed args that will be auto-appended after orchestration
-  - variant env var **names** only
-- The orchestrator prompt is derived from the parsed selected experiment config and agent config only.
+- The suggestion is a **pure function of the agent** — `command`, `examples`, `entrypoint.help`, `description`. It must **not** be conditioned on any experiment, task prompt, or rubric: how you invoke `codex` cannot depend on which bug it is fixing. (This is the specific mistake the retired runtime orchestrator made.)
+- It emits an `entrypoint.invoke` **template** with `{prompt}` / `{promptFile}` placeholders, not a concrete argv. Keep `validateInvokeTemplate` in lockstep with the canonical `parseInvoke` in `@bunsen-dev/runtime`'s `agent-loader.ts` — the CLI re-parses the written file through the real loader, so a template this validator accepts must be one the loader accepts.
+- It is a **suggestion tool**: the committed template is the contract, not the model. Any nondeterminism is absorbed by the human reviewing the `bn agents scaffold` diff before commit.
+- It never invents or forwards `--variant` / `:<variant>`. Persistent `entrypoint.args` are passed for context but must not be repeated in the inferred template (the executor appends them).
+- Running the agent's real `--help` is a legitimate authoring-time affordance (it is captured host-side by the CLI and folded into the prompt) — unlike the locked-down per-run path the orchestrator lived on.
 
 ### Verification
 
-For orchestrator changes, run at least:
+For scaffolder changes, run at least:
 
 ```bash
 pnpm --filter @bunsen-dev/agents test

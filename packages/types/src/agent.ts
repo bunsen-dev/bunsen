@@ -41,8 +41,8 @@ export interface AgentConfig {
   /** Default env added by this agent (before variants, before CLI overrides). */
   defaults?: AgentDefaults;
   /**
-   * Sample prompt/invocation pairs. Documentation and input for a future
-   * `bn agents scaffold` that infers `entrypoint.invoke`; not consulted at
+   * Sample prompt/invocation pairs. Documentation and the primary input for
+   * `bn agents scaffold`, which infers `entrypoint.invoke`; not consulted at
    * run time (invocation is composed deterministically from `entrypoint`).
    */
   examples?: AgentExample[];

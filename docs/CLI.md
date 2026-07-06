@@ -67,6 +67,7 @@ Inspect, validate, and prebuild agents.
 | `bn agents validate [name]`      | Validate `agent.yaml`. `--all` for every agent.                |
 | `bn agents build <agent>`        | Build and cache `install.build` artifacts. `--platform`, `--rebuild`. |
 | `bn agents add [names…]`         | Copy bundled starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into the project's agents dir. No names adds all; `--list` shows them; `--force` overwrites an existing dir. |
+| `bn agents scaffold <agent>`     | Infer the agent's `entrypoint.invoke` with a model (once, at authoring time) and write it into `agent.yaml` as a reviewable diff. Reads `examples` + runs `--help` on the host (`--skip-help`, `--help-text <file>`). `--force` overwrites an existing `invoke`; `--dry-run` previews without writing; `--model <id>` picks the model. Needs `ANTHROPIC_API_KEY`. |
 
 ## `bn suites`
 

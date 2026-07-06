@@ -2,15 +2,19 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
- * Build JS bundles for platform tools (orchestrator, scorer, gitignore-filter).
+ * Build JS bundles for platform tools (scorer, supervisor, gitignore-filter,
+ * proxy-bootstrap).
  *
  * This script:
  * 1. Bundles TypeScript with esbuild to CJS
  * 2. Downloads Node.js binaries for custom images (linux-x64, linux-arm64)
  *
+ * The `entrypoint.invoke` scaffolder (`src/scaffolder/`) is deliberately NOT
+ * bundled here: it is authoring-time HOST code (driven by `bn agents scaffold`),
+ * inlined into the `bn` binary via the CLI's esbuild step — not a container tool.
+ *
  * Output structure:
  *   dist/
- *     orchestrator.cjs
  *     scorer.cjs
  *     gitignore-filter.cjs
  *   runtime/
@@ -18,7 +22,6 @@
  *     node-linux-arm64
  *
  * Usage:
- *   node scripts/build-bundles.mjs orchestrator
  *   node scripts/build-bundles.mjs scorer
  *   node scripts/build-bundles.mjs all
  *   node scripts/build-bundles.mjs runtime   # Just download Node.js binaries
@@ -231,7 +234,7 @@ async function main() {
 
   if (args.length === 0) {
     console.log('Usage: node scripts/build-bundles.mjs <component>');
-    console.log('  component: orchestrator, scorer, supervisor, gitignore-filter, runtime, or all');
+    console.log('  component: scorer, supervisor, gitignore-filter, proxy-bootstrap, runtime, or all');
     process.exit(1);
   }
 
@@ -246,7 +249,6 @@ async function main() {
     // download (tens of MB, only needed for custom/non-bunsen images). It is
     // what `@bunsen-dev/cli`'s build depends on, so `pnpm -r build` produces the
     // bundles topologically without pulling the heavy Node binaries.
-    await buildBundle('orchestrator');
     await buildBundle('scorer');
     await buildBundle('supervisor');
     await buildBundle('gitignore-filter');
