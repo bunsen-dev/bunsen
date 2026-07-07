@@ -10,8 +10,8 @@ import {
   isExecutableOnPath,
   runHostHelp,
   composeInvokePreview,
-  SCAFFOLD_COMMENT_MARKER,
-} from './agents-scaffold-support.js';
+  INFER_INVOKE_COMMENT_MARKER,
+} from './agents-infer-invoke-support.js';
 
 describe('formatInvokeFlow', () => {
   it('renders a YAML flow sequence with double-quoted tokens', () => {
@@ -43,14 +43,14 @@ describe('spliceInvokeIntoAgentYaml', () => {
     '',
   ].join('\n');
 
-  it('inserts invoke immediately after command, with the scaffold comment', () => {
+  it('inserts invoke immediately after command, with the generated comment', () => {
     const { text, action } = spliceInvokeIntoAgentYaml(base, ['exec', '{prompt}'], {
-      comment: `${SCAFFOLD_COMMENT_MARKER}: review me`,
+      comment: `${INFER_INVOKE_COMMENT_MARKER}: review me`,
     });
     expect(action).toBe('inserted');
     const lines = text.split('\n');
     const cmdIdx = lines.indexOf('  command: codex');
-    expect(lines[cmdIdx + 1]).toBe(`  # ${SCAFFOLD_COMMENT_MARKER}: review me`);
+    expect(lines[cmdIdx + 1]).toBe(`  # ${INFER_INVOKE_COMMENT_MARKER}: review me`);
     expect(lines[cmdIdx + 2]).toBe('  invoke: ["exec", "{prompt}"]');
     // args untouched, still present after invoke.
     expect(text).toContain('  args: [--sandbox, danger-full-access]');
@@ -63,11 +63,11 @@ describe('spliceInvokeIntoAgentYaml', () => {
     expect(text).toContain('  mode: direct');
   });
 
-  it('replaces an existing single-line invoke on force, dropping the old scaffold comment', () => {
+  it('replaces an existing single-line invoke on force, dropping the old generated comment', () => {
     const withInvoke = [
       'entrypoint:',
       '  command: codex',
-      `  # ${SCAFFOLD_COMMENT_MARKER}: old note`,
+      `  # ${INFER_INVOKE_COMMENT_MARKER}: old note`,
       '  invoke: ["{prompt}"]',
       '  args: [--sandbox]',
       'interaction:',
@@ -75,13 +75,13 @@ describe('spliceInvokeIntoAgentYaml', () => {
       '',
     ].join('\n');
     const { text, action } = spliceInvokeIntoAgentYaml(withInvoke, ['exec', '{prompt}'], {
-      comment: `${SCAFFOLD_COMMENT_MARKER}: new note`,
+      comment: `${INFER_INVOKE_COMMENT_MARKER}: new note`,
     });
     expect(action).toBe('replaced');
     // Exactly one invoke line, the new one.
-    expect(text.match(/invoke:/g)?.length).toBe(1);
+    expect(text.match(/^[ \t]*invoke:/gm)?.length).toBe(1);
     expect(text).toContain('  invoke: ["exec", "{prompt}"]');
-    expect(text).toContain(`  # ${SCAFFOLD_COMMENT_MARKER}: new note`);
+    expect(text).toContain(`  # ${INFER_INVOKE_COMMENT_MARKER}: new note`);
     expect(text).not.toContain('old note');
     // Sibling keys survive.
     expect(text).toContain('  args: [--sandbox]');
@@ -101,7 +101,7 @@ describe('spliceInvokeIntoAgentYaml', () => {
       '',
     ].join('\n');
     const { text } = spliceInvokeIntoAgentYaml(blockInvoke, ['{prompt}']);
-    expect(text.match(/invoke:/g)?.length).toBe(1);
+    expect(text.match(/^[ \t]*invoke:/gm)?.length).toBe(1);
     expect(text).toContain('  invoke: ["{prompt}"]');
     // The old block items are gone.
     expect(text).not.toMatch(/^\s+- exec$/m);
@@ -141,7 +141,7 @@ describe('spliceInvokeIntoAgentYaml', () => {
     ].join('\n');
     const { text, action } = spliceInvokeIntoAgentYaml(sameIndent, ['exec', '{prompt}']);
     expect(action).toBe('replaced');
-    expect(text.match(/invoke:/g)?.length).toBe(1);
+    expect(text.match(/^[ \t]*invoke:/gm)?.length).toBe(1);
     // Must parse cleanly and carry the new template — no orphaned `- ` items.
     const doc = yaml.load(text) as { entrypoint: { invoke: string[]; args: string[] } };
     expect(doc.entrypoint.invoke).toEqual(['exec', '{prompt}']);

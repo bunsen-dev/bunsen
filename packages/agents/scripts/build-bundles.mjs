@@ -10,7 +10,7 @@
  * 2. Downloads Node.js binaries for custom images (linux-x64, linux-arm64)
  *
  * The `entrypoint.invoke` scaffolder (`src/scaffolder/`) is deliberately NOT
- * bundled here: it is authoring-time HOST code (driven by `bn agents scaffold`),
+ * bundled here: it is authoring-time HOST code (driven by `bn agents infer-invoke`),
  * inlined into the `bn` binary via the CLI's esbuild step — not a container tool.
  *
  * Output structure:

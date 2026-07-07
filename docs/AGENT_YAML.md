@@ -231,13 +231,13 @@ entrypoint:
   args: [--yolo]
 ```
 
-### Scaffolding `invoke`
+### Inferring `invoke`
 
 Onboarding a brand-new CLI? Instead of hand-writing `invoke`, let a model infer
 it:
 
 ```bash
-bn agents scaffold <agent>
+bn agents infer-invoke <agent>
 ```
 
 It reads the agent's `command`, `examples`, and `description`, runs the CLI's
@@ -302,7 +302,7 @@ the env precedence order in [The Environment Model](./ENVIRONMENT.md).
 ## `examples`
 
 Optional sample prompt/invocation pairs. They document how the agent expects to
-be called and are the primary input for [`bn agents scaffold`](#scaffolding-invoke),
+be called and are the primary input for [`bn agents infer-invoke`](#inferring-invoke),
 which infers an `entrypoint.invoke` template for a brand-new CLI. They are
 **not** consulted at run time — the invocation is composed deterministically
 from `entrypoint`.

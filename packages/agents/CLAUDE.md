@@ -1,6 +1,6 @@
 # @bunsen-dev/agents
 
-Platform agents (scorer, supervisor, gitignore-filter, proxy-bootstrap) that run **inside Docker containers** alongside the agent-under-test, **plus** the host-side `entrypoint.invoke` scaffolder (`src/scaffolder/`) that powers `bn agents scaffold`.
+Platform agents (scorer, supervisor, gitignore-filter, proxy-bootstrap) that run **inside Docker containers** alongside the agent-under-test, **plus** the host-side `entrypoint.invoke` scaffolder (`src/scaffolder/`) that powers `bn agents infer-invoke`.
 
 The scaffolder is the one thing here that is *not* a container bundle: it is imported as a normal module by the CLI (via the package entry `src/index.ts`) and inlined into the `bn` binary. It is the authoring-time relocation of the retired runtime "orchestrator" — a model call that used to infer each agent's argv on every run (a reproducibility hole). Now the invocation is composed deterministically by `@bunsen-dev/runtime` and the model runs once per agent at authoring time.
 
@@ -75,7 +75,7 @@ Instead, when scorer/supervisor bundle code needs a small pure utility:
 ## Architecture
 
 - `src/common/` — shared agent framework (`createAgent`, `tool()`, Anthropic client), used by the container bundles and the scaffolder
-- `src/scaffolder/` — host-side `entrypoint.invoke` inference for `bn agents scaffold` (exported via `src/index.ts`; not a container bundle)
+- `src/scaffolder/` — host-side `entrypoint.invoke` inference for `bn agents infer-invoke` (exported via `src/index.ts`; not a container bundle)
 - `src/scorer/` — evaluates agent output (LLM-judge, agentic, visual, code, aggregate, report scorers)
 - `src/supervisor/` — monitors agent execution and can intervene
 - `src/gitignore-filter/` — lists non-ignored files for diff generation
@@ -86,7 +86,7 @@ When changing `src/scaffolder/`, keep these boundaries clear:
 
 - The suggestion is a **pure function of the agent** — `command`, `examples`, `entrypoint.help`, `description`. It must **not** be conditioned on any experiment, task prompt, or rubric: how you invoke `codex` cannot depend on which bug it is fixing. (This is the specific mistake the retired runtime orchestrator made.)
 - It emits an `entrypoint.invoke` **template** with `{prompt}` / `{promptFile}` placeholders, not a concrete argv. Keep `validateInvokeTemplate` in lockstep with the canonical `parseInvoke` in `@bunsen-dev/runtime`'s `agent-loader.ts` — the CLI re-parses the written file through the real loader, so a template this validator accepts must be one the loader accepts.
-- It is a **suggestion tool**: the committed template is the contract, not the model. Any nondeterminism is absorbed by the human reviewing the `bn agents scaffold` diff before commit.
+- It is a **suggestion tool**: the committed template is the contract, not the model. Any nondeterminism is absorbed by the human reviewing the `bn agents infer-invoke` diff before commit.
 - It never invents or forwards `--variant` / `:<variant>`. Persistent `entrypoint.args` are passed for context but must not be repeated in the inferred template (the executor appends them).
 - Running the agent's real `--help` is a legitimate authoring-time affordance (it is captured host-side by the CLI and folded into the prompt) — unlike the locked-down per-run path the orchestrator lived on.
 

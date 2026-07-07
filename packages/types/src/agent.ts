@@ -42,7 +42,7 @@ export interface AgentConfig {
   defaults?: AgentDefaults;
   /**
    * Sample prompt/invocation pairs. Documentation and the primary input for
-   * `bn agents scaffold`, which infers `entrypoint.invoke`; not consulted at
+   * `bn agents infer-invoke`, which infers `entrypoint.invoke`; not consulted at
    * run time (invocation is composed deterministically from `entrypoint`).
    */
   examples?: AgentExample[];

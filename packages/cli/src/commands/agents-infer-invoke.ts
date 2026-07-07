@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
- * `bn agents scaffold <agent>` — infer `entrypoint.invoke` at authoring time.
+ * `bn agents infer-invoke <agent>` — infer `entrypoint.invoke` at authoring time.
  *
  * This is the good half of the retired runtime "orchestrator", relocated out of
  * the run loop (see `docs/PLATFORM_TOOLS.md` and
@@ -40,10 +40,10 @@ import {
   isExecutableOnPath,
   runHostHelp,
   composeInvokePreview,
-  SCAFFOLD_COMMENT_MARKER,
-} from './agents-scaffold-support.js';
+  INFER_INVOKE_COMMENT_MARKER,
+} from './agents-infer-invoke-support.js';
 
-interface AgentsScaffoldOptions {
+interface AgentsInferInvokeOptions {
   force?: boolean;
   helpText?: string;
   /** From `--skip-help` (a distinct flag from commander's built-in `--help`). */
@@ -57,11 +57,11 @@ interface AgentsScaffoldOptions {
 type HelpSource = 'file' | 'host' | 'host-failed' | 'absent' | 'skipped';
 
 const DEFAULT_SAMPLE_PROMPT = 'Fix the failing test in the workspace.';
-const SCAFFOLD_COMMENT = `${SCAFFOLD_COMMENT_MARKER}: inferred invoke template — review before committing.`;
+const INFER_INVOKE_COMMENT = `${INFER_INVOKE_COMMENT_MARKER}: inferred invoke template — review before committing.`;
 
-export async function agentsScaffoldCommand(
+export async function agentsInferInvokeCommand(
   name: string,
-  options: AgentsScaffoldOptions,
+  options: AgentsInferInvokeOptions,
 ): Promise<void> {
   const format = resolveFormat(options);
   const machine = isMachineFormat(format);
@@ -99,7 +99,7 @@ export async function agentsScaffoldCommand(
   // splicer can edit — fail fast here rather than after a spent model call.
   if (!options.dryRun && !hasBlockStyleEntrypoint(raw)) {
     throw new BunsenCliError(
-      'scaffold_entrypoint_unsupported',
+      'infer_invoke_entrypoint_unsupported',
       `${name}'s agent.yaml does not use a block-style \`entrypoint:\` mapping, so \`invoke\` can't be placed automatically.`,
       {
         details: {
@@ -113,8 +113,8 @@ export async function agentsScaffoldCommand(
   const apiKey = process.env.BUNSEN_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new BunsenCliError(
-      'scaffold_api_key_missing',
-      'An Anthropic API key is required to run the scaffolder.',
+      'infer_invoke_api_key_missing',
+      'An Anthropic API key is required to infer the invoke template.',
       {
         details: { hint: 'Set ANTHROPIC_API_KEY (or BUNSEN_ANTHROPIC_API_KEY) in your environment or .env.' },
       },
@@ -139,12 +139,12 @@ export async function agentsScaffoldCommand(
   if (written) {
     let text: string;
     try {
-      text = spliceInvokeIntoAgentYaml(raw, suggestion.invoke, { comment: SCAFFOLD_COMMENT }).text;
+      text = spliceInvokeIntoAgentYaml(raw, suggestion.invoke, { comment: INFER_INVOKE_COMMENT }).text;
     } catch (err) {
       // The splice couldn't place invoke in this entrypoint shape. Blame the
       // shape, not the (already-validated) template.
       throw new BunsenCliError(
-        'scaffold_entrypoint_unsupported',
+        'infer_invoke_entrypoint_unsupported',
         `Could not place \`invoke\` in ${rel} automatically: ${err instanceof Error ? err.message : String(err)}`,
         { details: { hint: byHandHint } },
       );
@@ -157,7 +157,7 @@ export async function agentsScaffoldCommand(
     } catch (err) {
       fs.writeFileSync(agentYamlPath, raw); // restore; leave no broken file behind
       throw new BunsenCliError(
-        'scaffold_write_invalid',
+        'infer_invoke_write_invalid',
         `Writing \`invoke\` into ${rel} produced YAML the loader rejected (its entrypoint block shape may be unusual); the file was left unchanged.`,
         {
           details: {
@@ -216,7 +216,7 @@ export async function agentsScaffoldCommand(
 function acquireHelpText(
   config: AgentConfig,
   agentDir: string,
-  options: AgentsScaffoldOptions,
+  options: AgentsInferInvokeOptions,
   say: (line?: string) => void,
 ): { helpText?: string; helpSource: HelpSource } {
   if (options.helpText) {
@@ -228,7 +228,7 @@ function acquireHelpText(
         : fs.readFileSync(path.resolve(options.helpText), 'utf8');
     } catch (err) {
       throw new BunsenCliError(
-        'scaffold_help_text_unreadable',
+        'infer_invoke_help_text_unreadable',
         `Could not read --help-text ${fromStdin ? 'from stdin' : options.helpText}: ${err instanceof Error ? err.message : String(err)}`,
         { details: { hint: 'Pass a readable file path, or "-" to read the help text from stdin.' } },
       );

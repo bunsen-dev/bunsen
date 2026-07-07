@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
- * Pure support helpers for `bn agents scaffold` (see `agents-scaffold.ts`).
+ * Pure support helpers for `bn agents infer-invoke` (see `agents-infer-invoke.ts`).
  *
  * Kept separate from the command handler so they can be unit-tested without
  * importing `@bunsen-dev/agents` (which pulls in the Anthropic SDK): the model
@@ -20,7 +20,7 @@ import {
 import type { Entrypoint } from '@bunsen-dev/types';
 
 /** Marker embedded in the comment we write, used to recognize (and replace) our own line on re-runs. */
-export const SCAFFOLD_COMMENT_MARKER = 'bn agents scaffold';
+export const INFER_INVOKE_COMMENT_MARKER = 'bn agents infer-invoke';
 
 /**
  * Render an `invoke` template as a YAML flow sequence. Each token is
@@ -45,7 +45,7 @@ export interface SpliceResult {
  * - No existing `invoke:` → insert `invoke: <flow>` (with the comment above it)
  *   immediately after the `command:` line.
  * - Existing `invoke:` → replace that key (and any block-sequence continuation
- *   lines, plus a preceding scaffold-generated comment) in place.
+ *   lines, plus a preceding generated comment) in place.
  *
  * Throws if `entrypoint:` isn't a block-style mapping (the exotic flow-mapping
  * form is left for the author to edit by hand).
@@ -104,12 +104,12 @@ export function spliceInvokeIntoAgentYaml(
   if (invokeIdx !== -1) {
     // Replace: drop the invoke key + its full value (inline flow, a block
     // sequence at the same OR a deeper indent, or a block scalar), plus a
-    // preceding scaffold comment if present.
+    // preceding generated comment if present.
     let start = invokeIdx;
     if (
       start > entrypointIdx + 1 &&
       /^[ \t]*#/.test(lines[start - 1]!) &&
-      lines[start - 1]!.includes(SCAFFOLD_COMMENT_MARKER)
+      lines[start - 1]!.includes(INFER_INVOKE_COMMENT_MARKER)
     ) {
       start -= 1;
     }

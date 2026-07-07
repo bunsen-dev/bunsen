@@ -65,7 +65,7 @@ Point your editor's YAML language server at these URLs (via a `# yaml-language-s
 | Package               | Purpose                                                                          |
 | --------------------- | ------------------------------------------------------------------------------- |
 | `@bunsen-dev/runtime`     | Execution engine: container orchestration, storage, env merging.                |
-| `@bunsen-dev/agents`      | Platform agents (scorer, supervisor) bundled for in-container use, plus the host-side `entrypoint.invoke` scaffolder that powers `bn agents scaffold` (imported into the CLI, not a container bundle). |
+| `@bunsen-dev/agents`      | Platform agents (scorer, supervisor) bundled for in-container use, plus the host-side `entrypoint.invoke` scaffolder that powers `bn agents infer-invoke` (imported into the CLI, not a container bundle). |
 | `@bunsen-dev/diff-filter` | Lockfile-aware diff filtering used by scorers.                                   |
 
 Internal packages are implementation detail. External consumers must not depend on them directly.

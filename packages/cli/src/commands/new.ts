@@ -207,7 +207,7 @@ entrypoint:
   command: python src/main.py
   # invoke: ["{prompt}"]   # argv template through the prompt slot; the default
   #                        # puts the prompt first. e.g. [exec, "{prompt}"] to
-  #                        # place it after a subcommand. Run 'bn agents scaffold
+  #                        # place it after a subcommand. Run 'bn agents infer-invoke
   #                        # ${name}' to infer this. See docs/AGENT_YAML.md.
   # help: python src/main.py --help
 
@@ -215,7 +215,7 @@ interaction:
   mode: direct
 
 # Optional: sample prompt/invocation pairs. Documentation and the input
-# 'bn agents scaffold' uses to infer entrypoint.invoke — not read at run time.
+# 'bn agents infer-invoke' uses to infer entrypoint.invoke — not read at run time.
 examples:
   - prompt: Do the task
     invocation: python src/main.py "Do the task"

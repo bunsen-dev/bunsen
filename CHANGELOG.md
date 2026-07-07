@@ -16,7 +16,7 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Added
 
-- **`bn agents scaffold <agent>`** — infers an agent's `entrypoint.invoke` template with a model
+- **`bn agents infer-invoke <agent>`** — infers an agent's `entrypoint.invoke` template with a model
   at **authoring time** (once per agent, host-side) and writes it into `agent.yaml` as a
   reviewable diff. It reads the agent's `examples`/`description` and runs the CLI's `--help` on
   the host when available (`--skip-help` to disable, `--help-text <file>` to supply it), shows the
@@ -36,7 +36,7 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Changed
 
-- **`bn new` is gone — creation is now noun-first.** `bn new experiment <name>` → **`bn experiments new <name>`** and `bn new agent <name>` → **`bn agents new <name>`**, so every resource verb reads noun-first (`bn agents new / add / scaffold / build / …`). The top-level `bn new` command was removed outright with no alias (pre-1.0, no users yet). `-t/--template` is unchanged.
+- **`bn new` is gone — creation is now noun-first.** `bn new experiment <name>` → **`bn experiments new <name>`** and `bn new agent <name>` → **`bn agents new <name>`**, so every resource verb reads noun-first (`bn agents new / add / infer-invoke / build / …`). The top-level `bn new` command was removed outright with no alias (pre-1.0, no users yet). `-t/--template` is unchanged.
 - **Agent invocation is now composed deterministically.** The in-container LLM "orchestrator"
   (a model call that decided each agent's argv on every `bn run`) has been **retired**. The
   invocation is now a pure function of committed config — the agent's `entrypoint`
@@ -45,7 +45,7 @@ version and date and a fresh `[Unreleased]` is started.
   composed invocation is still recorded on the run manifest's `orchestration` field and as the
   `orchestration/result.json` artifact.
 - **`agent.yaml`: `examples` is no longer load-bearing at run time.** It is now documentation for
-  human readers (and the primary input for `bn agents scaffold`). Previously the LLM orchestrator
+  human readers (and the primary input for `bn agents infer-invoke`). Previously the LLM orchestrator
   could infer a non-standard invocation from `examples`; an agent that relied on that must now
   declare `entrypoint.invoke` explicitly, otherwise it falls back to a bare positional
   `{prompt}` and may be mis-invoked. This is a runtime-semantics change JSON Schema cannot encode
@@ -55,7 +55,7 @@ version and date and a fresh `[Unreleased]` is started.
 ### Removed
 
 - **The `orchestrator.cjs` platform bundle no longer ships.** With the runtime orchestrator retired
-  and its authoring-time replacement (`bn agents scaffold`) running host-side, the ~1.4 MB
+  and its authoring-time replacement (`bn agents infer-invoke`) running host-side, the ~1.4 MB
   `orchestrator.cjs` is no longer built by `@bunsen-dev/agents` or embedded into the `bn` binary
   (internal packaging change — no effect on the `bunsen.config.yaml` / `experiment.yaml` /
   `agent.yaml` schemas or the artifact/trace formats).

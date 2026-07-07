@@ -12,7 +12,7 @@
  * the CLI's `--help` and a couple of `examples`.
  *
  * This module keeps that trick and drops the cost. It runs **once per agent** at
- * authoring time (host-side, driven by `bn agents scaffold`), and its output is
+ * authoring time (host-side, driven by `bn agents infer-invoke`), and its output is
  * a committed, human-reviewed `invoke` template — not a per-run invocation. Any
  * nondeterminism is absorbed by the human reviewing the diff before commit. What
  * *runs* is deterministic; only the thing that *helps you write config* is a

@@ -100,7 +100,7 @@ an `install.deps` closure. This is what lets one agent run against any experimen
 
 8. **Add `examples[]`** — each `{ prompt, invocation }` documents how a task prompt maps to a
    real command line. They are **not** read at run time (the invocation is composed from
-   `entrypoint`); they're documentation and the primary input for `bn agents scaffold`, which
+   `entrypoint`); they're documentation and the primary input for `bn agents infer-invoke`, which
    infers `entrypoint.invoke` from them. Add at least one.
 
 9. **Add `variants` (optional)** — a map of name → partial override that shallow-merges over
