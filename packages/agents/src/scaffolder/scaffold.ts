@@ -1,28 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
- * Authoring-time `entrypoint.invoke` scaffolder.
+ * Authoring-time inference of an agent's `entrypoint.invoke` template.
  *
- * This is the good half of the retired runtime "orchestrator", relocated out of
- * the run loop. The orchestrator used a model call on **every `bn run`** to
- * decide the agent's argv — a reproducibility hole (see
- * `packages/runtime/src/orchestration.ts` for the deterministic composer that
- * replaced it). But the model had one genuinely useful trick: onboarding a
- * brand-new CLI — point Bunsen at a tool and let it infer how to call it from
- * the CLI's `--help` and a couple of `examples`.
+ * At run time the invocation is composed deterministically from committed config
+ * by `packages/runtime/src/orchestration.ts`, with no model in the path — that is
+ * what keeps runs reproducible and comparable. A model is genuinely useful for
+ * one thing, though: onboarding a brand-new CLI — point Bunsen at a tool and let
+ * it infer how to call it from the CLI's `--help` and a couple of `examples`.
+ * That is this module's job.
  *
- * This module keeps that trick and drops the cost. It runs **once per agent** at
- * authoring time (host-side, driven by `bn agents infer-invoke`), and its output is
- * a committed, human-reviewed `invoke` template — not a per-run invocation. Any
- * nondeterminism is absorbed by the human reviewing the diff before commit. What
- * *runs* is deterministic; only the thing that *helps you write config* is a
- * model.
+ * It runs **once per agent** at authoring time (host-side, driven by
+ * `bn agents infer-invoke`), and its output is a committed, human-reviewed
+ * `invoke` template — never a per-run invocation. The human reviewing the diff
+ * absorbs any nondeterminism before commit: what *runs* is deterministic, and
+ * only the thing that *helps you write config* is a model.
  *
  * The suggestion is a **pure function of the agent** — `command`, `examples`,
  * `entrypoint.help`, `description`. It sees no experiment, task prompt, or
- * rubric: how you call `codex` must not depend on which bug you're fixing.
- * (Contrast the retired orchestrator, which was wrongly conditioned on task text
- * + rubric.)
+ * rubric: how you call `codex` must not depend on which bug you're fixing (that
+ * coupling would make invocations task-dependent and break comparability).
  *
  * Unlike the platform bundles (scorer/supervisor/…), this is NOT compiled into a
  * container `.cjs` — it is host code, inlined into the `bn` binary via the CLI's
@@ -37,8 +34,7 @@ import { createAgent, tool, type ToolWithFunc } from '../common/index.js';
 
 /**
  * Model the scaffolder runs on. Opus, deliberately: this runs once per agent and
- * is human-reviewed, so inference quality matters more than per-call cost (the
- * opposite tradeoff from the retired per-run orchestrator, which used Haiku).
+ * is human-reviewed, so inference quality matters far more than per-call cost.
  */
 export const DEFAULT_SCAFFOLD_MODEL = 'claude-opus-4-8';
 

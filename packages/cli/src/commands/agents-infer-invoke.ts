@@ -3,16 +3,15 @@
 /**
  * `bn agents infer-invoke <agent>` — infer `entrypoint.invoke` at authoring time.
  *
- * This is the good half of the retired runtime "orchestrator", relocated out of
- * the run loop (see `docs/PLATFORM_TOOLS.md` and
- * `packages/agents/src/scaffolder/scaffold.ts`). A model call in the invocation
- * path destroyed reproducibility, so agent invocation is now composed
- * deterministically from a committed `entrypoint.invoke` template. But the model
- * had one good trick: onboarding a brand-new CLI — figuring out how to call it
- * from its `--help` and a couple of `examples`. This command keeps that trick and
- * pays for it exactly once per agent: it emits an `invoke` template and writes it
- * into `agent.yaml` as a reviewable diff. The human reviewing the diff absorbs any
- * nondeterminism; the thing that *runs* stays deterministic.
+ * Agent invocation is composed deterministically from a committed
+ * `entrypoint.invoke` template (see `docs/PLATFORM_TOOLS.md` and
+ * `packages/agents/src/scaffolder/scaffold.ts`), with no model in the run path —
+ * which keeps runs reproducible. A model is genuinely useful for one thing:
+ * onboarding a brand-new CLI — figuring out how to call it from its `--help` and
+ * a couple of `examples`. This command does exactly that, paying for a model call
+ * once per agent: it emits an `invoke` template and writes it into `agent.yaml`
+ * as a reviewable diff. The human reviewing the diff absorbs any nondeterminism;
+ * the thing that *runs* stays deterministic.
  *
  * It is a **suggestion tool** — the committed template is the contract, not the
  * model. The suggestion is a pure function of the agent (`command`, `examples`,
