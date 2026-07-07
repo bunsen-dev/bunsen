@@ -4,9 +4,9 @@ import { describe, it, expect } from 'bun:test';
 import { parseExperimentConfig, parseAgentConfig } from '@bunsen-dev/runtime';
 import { getExperimentTemplate, getAgentTemplate } from './new.js';
 
-// Guards the canonical `bn new` first-run flow: the YAML the scaffolder emits
-// must pass the same loader `bn run` uses, or `bn new <name>` -> `bn run` breaks.
-describe('bn new scaffold templates', () => {
+// Guards the canonical first-run flow: the YAML `bn experiments new` / `bn agents new`
+// emit must pass the same loader `bn run` uses, or new -> run breaks.
+describe('bn experiments/agents new scaffold templates', () => {
   for (const template of ['default', 'coding-task']) {
     it(`experiment template "${template}" parses against the v1 loader`, () => {
       const yaml = getExperimentTemplate('scaffold-smoke', template);

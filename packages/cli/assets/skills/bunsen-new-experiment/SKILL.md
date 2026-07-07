@@ -35,8 +35,8 @@ Keep the evaluation block minimal here and hand scorer depth to **bunsen-author-
 2. **Scaffold the experiment.** Names are kebab-case (`^[a-z0-9][a-z0-9-]*$`) and must match
    the directory and the top-level `name:`.
    ```bash
-   bn new experiment <name>           # creates experiments/<name>/experiment.yaml + workspace/
-   bn new experiment <name> -t coding-task   # template with a script + judge starter
+   bn experiments new <name>                 # creates experiments/<name>/experiment.yaml + workspace/
+   bn experiments new <name> -t coding-task  # template with a script + judge starter
    ```
 
 3. **Write the task prompt.** `task.prompt` is the *only* instruction the agent-under-test

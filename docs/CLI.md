@@ -48,20 +48,22 @@ bn run terminal-bench/fix-permissions basic-coding-agent --platform linux/amd64
 
 ## `bn experiments`
 
-Inspect and validate experiments.
+Create, inspect, and validate experiments.
 
 | Command                              | Description                                              |
 | ------------------------------------ | ------------------------------------------------------- |
+| `bn experiments new <name>`          | Scaffold a new experiment (`experiment.yaml` + `workspace/`). `-t/--template`. |
 | `bn experiments list`                | List available experiments (local + suites).           |
 | `bn experiments show <name>`         | Show details about an experiment.                      |
 | `bn experiments validate [name]`     | Validate `experiment.yaml` (schema + cross-resource). `--all` for every experiment; `--fix` to derive missing criterion ids from titles. |
 
 ## `bn agents`
 
-Inspect, validate, and prebuild agents.
+Create, inspect, validate, and prebuild agents.
 
 | Command                          | Description                                                       |
 | -------------------------------- | --------------------------------------------------------------- |
+| `bn agents new <name>`           | Scaffold a new agent (`agent.yaml` + `src/main.py`). `-t/--template`. |
 | `bn agents list`                 | List available agents.                                          |
 | `bn agents show <name>`          | Show details about an agent.                                    |
 | `bn agents validate [name]`      | Validate `agent.yaml`. `--all` for every agent.                |
@@ -114,7 +116,6 @@ Inspect, augment, and calibrate [evaluation](./SCORERS.md) results.
 | Command                          | Description                                                            |
 | -------------------------------- | --------------------------------------------------------------------- |
 | `bn init`                        | Scaffold `bunsen.config.yaml`. `--example` also writes a starter experiment + echo-agent; `--starter-agents` copies the starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into `agents/` (existing agent dirs are skipped unless `--force`); `-f/--force` overwrites. |
-| `bn new <type> <name>`           | Create a new `experiment` or `agent`. `-t/--template`.                |
 | `bn doctor`                      | Environment diagnostics (Docker, git, project config).              |
 | `bn config show`                 | Print the resolved `bunsen.config.yaml`.                            |
 | `bn config validate`             | Validate `bunsen.config.yaml`.                                      |

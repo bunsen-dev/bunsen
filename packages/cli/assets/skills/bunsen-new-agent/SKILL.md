@@ -31,7 +31,7 @@ an `install.deps` closure. This is what lets one agent run against any experimen
 
 1. **Scaffold.** From the project root:
    ```bash
-   bn new agent <name>     # creates agents/<name>/agent.yaml (+ a placeholder src/main.py)
+   bn agents new <name>    # creates agents/<name>/agent.yaml (+ a placeholder src/main.py)
    bn agents list          # what's already available
    ```
    Name is kebab-case (`^[a-z0-9][a-z0-9-]*$`) and matches the directory + top-level `name:`.

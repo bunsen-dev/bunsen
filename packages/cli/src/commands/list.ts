@@ -119,7 +119,7 @@ function renderText(
     console.log(chalk.dim('═'.repeat(50)));
     if (experiments.length === 0) {
       console.log(chalk.dim('No experiments found'));
-      console.log(chalk.dim('Create one with: bn new experiment <name>'));
+      console.log(chalk.dim('Create one with: bn experiments new <name>'));
     } else {
       for (const exp of experiments) {
         console.log();
@@ -138,7 +138,7 @@ function renderText(
     console.log(chalk.dim('═'.repeat(50)));
     if (agents.length === 0) {
       console.log(chalk.dim('No agents found'));
-      console.log(chalk.dim('Create one with: bn new agent <name>'));
+      console.log(chalk.dim('Create one with: bn agents new <name>'));
     } else {
       for (const agent of agents) {
         console.log();

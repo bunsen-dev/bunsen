@@ -28,7 +28,7 @@ import { diffCommand } from './commands/diff.js';
 import { compareCommand } from './commands/compare.js';
 import { listCommand } from './commands/list.js';
 import { infoCommand } from './commands/info.js';
-import { newCommand } from './commands/new.js';
+import { agentsNewCommand, experimentsNewCommand } from './commands/new.js';
 import { openCommand } from './commands/open.js';
 import { cleanCommand } from './commands/clean.js';
 import { humanScoreCommand } from './commands/human-score.js';
@@ -125,7 +125,14 @@ program
 
 const experimentsCommand = program
   .command('experiments')
-  .description('Inspect and validate experiments');
+  .description('Create, inspect, and validate experiments');
+
+experimentsCommand
+  .command('new')
+  .description('Scaffold a new experiment (experiment.yaml + workspace/)')
+  .argument('<name>', 'Name for the new experiment')
+  .option('-t, --template <template>', 'Template to use')
+  .action(experimentsNewCommand);
 
 experimentsCommand
   .command('list')
@@ -154,7 +161,14 @@ experimentsCommand
 
 const agentsCommand = program
   .command('agents')
-  .description('Inspect, validate, and prebuild agents');
+  .description('Create, inspect, validate, and prebuild agents');
+
+agentsCommand
+  .command('new')
+  .description('Scaffold a new agent (agent.yaml + src/main.py)')
+  .argument('<name>', 'Name for the new agent')
+  .option('-t, --template <template>', 'Template to use')
+  .action(agentsNewCommand);
 
 agentsCommand
   .command('list')
@@ -491,18 +505,6 @@ program
   .option('-f, --force', 'Skip confirmation prompt')
   .option('--dry-run', 'Show what would be removed without removing')
   .action(cleanCommand);
-
-// ---------------------------------------------------------------------------
-// Authoring helper — `bn new <type> <name>` — not part of the resource nouns.
-// ---------------------------------------------------------------------------
-
-program
-  .command('new')
-  .description('Create a new experiment or agent')
-  .argument('<type>', 'Type to create (experiment or agent)')
-  .argument('<name>', 'Name for the new experiment or agent')
-  .option('-t, --template <template>', 'Template to use')
-  .action(newCommand);
 
 // ---------------------------------------------------------------------------
 // bn publish — reserved namespace for a future sharing surface. Subcommands

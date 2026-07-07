@@ -14,7 +14,7 @@ From a Bunsen project (run `bn init` first if you don't have a
 `bunsen.config.yaml`):
 
 ```bash
-bn new experiment my-task -t coding-task
+bn experiments new my-task -t coding-task
 ```
 
 This creates:

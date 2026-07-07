@@ -36,6 +36,7 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Changed
 
+- **`bn new` is gone — creation is now noun-first.** `bn new experiment <name>` → **`bn experiments new <name>`** and `bn new agent <name>` → **`bn agents new <name>`**, so every resource verb reads noun-first (`bn agents new / add / scaffold / build / …`). The top-level `bn new` command was removed outright with no alias (pre-1.0, no users yet). `-t/--template` is unchanged.
 - **Agent invocation is now composed deterministically.** The in-container LLM "orchestrator"
   (a model call that decided each agent's argv on every `bn run`) has been **retired**. The
   invocation is now a pure function of committed config — the agent's `entrypoint`

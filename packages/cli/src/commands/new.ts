@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
- * New command - Create a new experiment or agent
+ * Scaffolders for `bn experiments new` and `bn agents new`.
  */
 
 import * as path from 'node:path';
@@ -12,23 +12,19 @@ interface NewOptions {
   template?: string;
 }
 
-export async function newCommand(
-  type: string,
-  name: string,
-  options: NewOptions
-): Promise<void> {
-  try {
-    const cwd = process.cwd();
+/** `bn experiments new <name>` — scaffold a new experiment. */
+export function experimentsNewCommand(name: string, options: NewOptions): Promise<void> {
+  return runNew(() => createExperiment(name, process.cwd(), options.template));
+}
 
-    if (type === 'experiment' || type === 'exp') {
-      createExperiment(name, cwd, options.template);
-    } else if (type === 'agent') {
-      createAgent(name, cwd, options.template);
-    } else {
-      console.error(chalk.red(`Unknown type: ${type}`));
-      console.error(chalk.dim('Use "experiment" or "agent"'));
-      process.exit(1);
-    }
+/** `bn agents new <name>` — scaffold a new agent. */
+export function agentsNewCommand(name: string, options: NewOptions): Promise<void> {
+  return runNew(() => createAgent(name, process.cwd(), options.template));
+}
+
+async function runNew(create: () => void): Promise<void> {
+  try {
+    create();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(chalk.red(`Error: ${message}`));
