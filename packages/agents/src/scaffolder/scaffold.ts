@@ -3,12 +3,11 @@
 /**
  * Authoring-time inference of an agent's `entrypoint.invoke` template.
  *
- * At run time the invocation is composed deterministically from committed config
- * by `packages/runtime/src/orchestration.ts`, with no model in the path — that is
- * what keeps runs reproducible and comparable. A model is genuinely useful for
- * one thing, though: onboarding a brand-new CLI — point Bunsen at a tool and let
- * it infer how to call it from the CLI's `--help` and a couple of `examples`.
- * That is this module's job.
+ * At run time the invocation is built deterministically from committed config by
+ * `packages/runtime/src/orchestration.ts`, so runs are reproducible and
+ * comparable. A model earns its place for one thing: onboarding a brand-new CLI —
+ * point Bunsen at a tool and let it infer how to call it from the CLI's `--help`
+ * and a couple of `examples`. That is this module's job.
  *
  * It runs **once per agent** at authoring time (host-side, driven by
  * `bn agents infer-invoke`), and its output is a committed, human-reviewed

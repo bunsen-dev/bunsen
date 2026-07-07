@@ -2,7 +2,7 @@
 
 Platform agents (scorer, supervisor, gitignore-filter, proxy-bootstrap) that run **inside Docker containers** alongside the agent-under-test, **plus** the host-side `entrypoint.invoke` scaffolder (`src/scaffolder/`) that powers `bn agents infer-invoke`.
 
-The scaffolder is the one thing here that is *not* a container bundle: it is imported as a normal module by the CLI (via the package entry `src/index.ts`) and inlined into the `bn` binary. It runs a model **once per agent at authoring time** to infer that agent's `entrypoint.invoke` template. At run time the invocation is composed deterministically by `@bunsen-dev/runtime` with no model in the path, so keeping this inference at authoring time is what keeps runs reproducible.
+The scaffolder is the one thing here that is *not* a container bundle: it is imported as a normal module by the CLI (via the package entry `src/index.ts`) and inlined into the `bn` binary. It runs a model **once per agent at authoring time** to infer that agent's `entrypoint.invoke` template. At run time the invocation is built deterministically by `@bunsen-dev/runtime` from that committed template, so runs stay reproducible and comparable.
 
 ## Build Process
 
