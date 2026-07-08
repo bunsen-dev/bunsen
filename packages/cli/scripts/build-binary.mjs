@@ -83,7 +83,7 @@ function assertAssetsPresent() {
 
 function packAssets() {
   // Tar the CONTENTS of dist/assets (entries at the archive root), so extraction
-  // drops `orchestrator.cjs`, `proxy/`, `images/`, … directly into the asset dir
+  // drops `scorer.cjs`, `proxy/`, `images/`, … directly into the asset dir
   // that BUNSEN_ASSET_DIR points at. `portable` strips mtimes/uid/gid for a
   // stable archive across hosts.
   const entries = fs.readdirSync(assetsDir).sort();

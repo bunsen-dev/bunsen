@@ -117,8 +117,8 @@ bn cache list
 bn cache prune --force
 bn doctor
 bn init
-bn new experiment <name>
-bn new agent <name>
+bn experiments new <name>
+bn agents new <name>
 bn clean --dry-run
 ```
 

@@ -30,7 +30,7 @@ export const createAgent = ({
   model: defaultModel,
   tools: defaultTools,
   messages: initialMessages = [],
-  temperature: defaultTemperature = 0.2,
+  temperature: defaultTemperature,
   system: defaultSystem,
   apiKey,
 }: CreateAgentParams) => {
@@ -169,7 +169,9 @@ export const createAgent = ({
     const response = await anthropic.messages.create({
       model: modelForRun,
       messages: messageHistory,
-      temperature: tempForRun,
+      // Omit temperature when unset — newer models (e.g. claude-opus-4-8)
+      // reject the now-deprecated parameter outright.
+      ...(tempForRun !== undefined && { temperature: tempForRun }),
       max_tokens: 8192,
       system: systemForRun,
       tools: toolDefinitions.length > 0 ? toolDefinitions : undefined,
@@ -200,14 +202,15 @@ async function runAnthropicCompletion({
   model: string;
   messages: Anthropic.MessageParam[];
   tools: Anthropic.Tool[];
-  temperature: number;
+  temperature?: number;
   system?: string;
 }): Promise<Anthropic.Message> {
   return anthropic.messages.create({
     model,
     messages,
     max_tokens: 8192,
-    temperature,
+    // Omit when unset — deprecated/rejected on newer models.
+    ...(temperature !== undefined && { temperature }),
     system,
     tools: tools.length > 0 ? tools : undefined,
     tool_choice: tools.length > 0 ? { type: 'auto' } : undefined,

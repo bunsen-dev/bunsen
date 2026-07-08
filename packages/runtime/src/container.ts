@@ -1217,10 +1217,10 @@ export async function getRecordingInfo(
 
 /**
  * Get the path to a platform tool JS bundle.
- * @param bundleName - The name of the bundle (orchestrator, scorer, supervisor, or gitignore-filter)
+ * @param bundleName - The name of the bundle (scorer, supervisor, gitignore-filter, or proxy-bootstrap)
  */
 export function getPlatformBundlePath(
-  bundleName: 'orchestrator' | 'scorer' | 'supervisor' | 'gitignore-filter' | 'proxy-bootstrap'
+  bundleName: 'scorer' | 'supervisor' | 'gitignore-filter' | 'proxy-bootstrap'
 ): string {
   // Bundles ship flat at the root of the asset dir.
   return path.join(getAssetDir(), `${bundleName}.cjs`);

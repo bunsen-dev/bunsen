@@ -231,6 +231,25 @@ entrypoint:
   args: [--yolo]
 ```
 
+### Inferring `invoke`
+
+Onboarding a brand-new CLI? Instead of hand-writing `invoke`, let a model infer
+it:
+
+```bash
+bn agents infer-invoke <agent>
+```
+
+It reads the agent's `command`, `examples`, and `description`, runs the CLI's
+`--help` on the host when the command is available (best-effort; `--skip-help`
+to disable, `--help-text <file>` to supply it explicitly), and writes an
+inferred `entrypoint.invoke` into `agent.yaml` as a reviewable diff (with a
+sample composed invocation to eyeball). It **runs once per agent at authoring
+time**, not per run — the committed template is the contract; the model is only
+a drafting aid. It refuses to overwrite an existing `invoke` without `--force`,
+and `--dry-run` prints the suggestion without writing. Requires an Anthropic API
+key (`ANTHROPIC_API_KEY`).
+
 ## `interaction`
 
 How the agent is driven.
@@ -283,9 +302,10 @@ the env precedence order in [The Environment Model](./ENVIRONMENT.md).
 ## `examples`
 
 Optional sample prompt/invocation pairs. They document how the agent expects to
-be called and are input for a future `bn agents scaffold` that infers an
-`entrypoint.invoke` template for a brand-new CLI. They are **not** consulted at
-run time — the invocation is composed deterministically from `entrypoint`.
+be called and are the primary input for [`bn agents infer-invoke`](#inferring-invoke),
+which infers an `entrypoint.invoke` template for a brand-new CLI. They are
+**not** consulted at run time — the invocation is composed deterministically
+from `entrypoint`.
 
 | Field        | Required | Type   | Description                          |
 | ------------ | -------- | ------ | ------------------------------------ |

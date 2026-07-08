@@ -145,7 +145,7 @@ are checkout-only references to learn from.
 
 Any agent can be steered with a system prompt without changing the platform — see
 [System Prompts](./docs/SYSTEM_PROMPTS.md). To scaffold your own from a blank
-template, use `bn new agent <name>` (the `bunsen-new-agent` skill from `bn skills
+template, use `bn agents new <name>` (the `bunsen-new-agent` skill from `bn skills
 install` walks you through the `agent.yaml`); to start from a working one,
 `bn agents add` then edit (see the [CLI Reference](./docs/CLI.md)).
 

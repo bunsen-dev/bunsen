@@ -31,7 +31,7 @@ an `install.deps` closure. This is what lets one agent run against any experimen
 
 1. **Scaffold.** From the project root:
    ```bash
-   bn new agent <name>     # creates agents/<name>/agent.yaml (+ a placeholder src/main.py)
+   bn agents new <name>    # creates agents/<name>/agent.yaml (+ a placeholder src/main.py)
    bn agents list          # what's already available
    ```
    Name is kebab-case (`^[a-z0-9][a-z0-9-]*$`) and matches the directory + top-level `name:`.
@@ -100,7 +100,8 @@ an `install.deps` closure. This is what lets one agent run against any experimen
 
 8. **Add `examples[]`** — each `{ prompt, invocation }` documents how a task prompt maps to a
    real command line. They are **not** read at run time (the invocation is composed from
-   `entrypoint`); they're documentation and input for a future scaffolder. Add at least one.
+   `entrypoint`); they're documentation and the primary input for `bn agents infer-invoke`, which
+   infers `entrypoint.invoke` from them. Add at least one.
 
 9. **Add `variants` (optional)** — a map of name → partial override that shallow-merges over
    the base. Variants are **behavioral overlays** (run mode, output format, turn caps, system

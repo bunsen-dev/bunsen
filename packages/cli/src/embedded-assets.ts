@@ -44,7 +44,7 @@ const MARKER = '.complete';
  * opaquely at proxy/container startup far from the cause. These two cover the
  * bind-mounted proxy addon and a platform agent bundle.
  */
-const SENTINELS = ['orchestrator.cjs', path.join('proxy', 'ai_capture.py')];
+const SENTINELS = ['scorer.cjs', path.join('proxy', 'ai_capture.py')];
 
 /** Root of the per-user cache where embedded assets are unpacked. */
 function assetCacheRoot(): string {

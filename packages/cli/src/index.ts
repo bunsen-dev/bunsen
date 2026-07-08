@@ -28,7 +28,7 @@ import { diffCommand } from './commands/diff.js';
 import { compareCommand } from './commands/compare.js';
 import { listCommand } from './commands/list.js';
 import { infoCommand } from './commands/info.js';
-import { newCommand } from './commands/new.js';
+import { agentsNewCommand, experimentsNewCommand } from './commands/new.js';
 import { openCommand } from './commands/open.js';
 import { cleanCommand } from './commands/clean.js';
 import { humanScoreCommand } from './commands/human-score.js';
@@ -36,6 +36,8 @@ import { calibrateCommand } from './commands/calibrate.js';
 import { exportCommand } from './commands/export.js';
 import { buildAgentCommand } from './commands/build-agent.js';
 import { agentsAddCommand } from './commands/agents-add.js';
+import { agentsInferInvokeCommand } from './commands/agents-infer-invoke.js';
+import { DEFAULT_SCAFFOLD_MODEL } from '@bunsen-dev/agents';
 import { cacheListCommand, cacheCleanCommand } from './commands/cache.js';
 import { rebuildIndexCommand } from './commands/rebuild-index.js';
 import { indexStatusCommand } from './commands/index-status.js';
@@ -123,7 +125,14 @@ program
 
 const experimentsCommand = program
   .command('experiments')
-  .description('Inspect and validate experiments');
+  .description('Create, inspect, and validate experiments');
+
+experimentsCommand
+  .command('new')
+  .description('Scaffold a new experiment (experiment.yaml + workspace/)')
+  .argument('<name>', 'Name for the new experiment')
+  .option('-t, --template <template>', 'Template to use')
+  .action(experimentsNewCommand);
 
 experimentsCommand
   .command('list')
@@ -152,7 +161,14 @@ experimentsCommand
 
 const agentsCommand = program
   .command('agents')
-  .description('Inspect, validate, and prebuild agents');
+  .description('Create, inspect, validate, and prebuild agents');
+
+agentsCommand
+  .command('new')
+  .description('Scaffold a new agent (agent.yaml + src/main.py)')
+  .argument('<name>', 'Name for the new agent')
+  .option('-t, --template <template>', 'Template to use')
+  .action(agentsNewCommand);
 
 agentsCommand
   .command('list')
@@ -191,6 +207,18 @@ agentsCommand
   .option('--force', 'Overwrite an agent directory that already exists')
   .option('--format <format>', 'Output format (text|json|yaml)', 'text')
   .action(wrapCommand(agentsAddCommand));
+
+agentsCommand
+  .command('infer-invoke')
+  .description("Infer the agent's entrypoint.invoke template with a model and write it into agent.yaml")
+  .argument('<agent>', 'Agent name/path')
+  .option('--force', 'Overwrite an existing entrypoint.invoke (written as a reviewable diff)')
+  .option('--help-text <file>', "Supply the CLI's --help text from a file (use '-' for stdin) instead of running it")
+  .option('--skip-help', "Do not run the agent's --help on the host; infer from examples only")
+  .option('--dry-run', 'Print the inferred template without modifying agent.yaml')
+  .option('--model <id>', `Model to infer with (default: ${DEFAULT_SCAFFOLD_MODEL})`)
+  .option('--format <format>', 'Output format (text|json|yaml)', 'text')
+  .action(wrapCommand(agentsInferInvokeCommand));
 
 // ---------------------------------------------------------------------------
 // bn suites
@@ -477,18 +505,6 @@ program
   .option('-f, --force', 'Skip confirmation prompt')
   .option('--dry-run', 'Show what would be removed without removing')
   .action(cleanCommand);
-
-// ---------------------------------------------------------------------------
-// Authoring helper — `bn new <type> <name>` — not part of the resource nouns.
-// ---------------------------------------------------------------------------
-
-program
-  .command('new')
-  .description('Create a new experiment or agent')
-  .argument('<type>', 'Type to create (experiment or agent)')
-  .argument('<name>', 'Name for the new experiment or agent')
-  .option('-t, --template <template>', 'Template to use')
-  .action(newCommand);
 
 // ---------------------------------------------------------------------------
 // bn publish — reserved namespace for a future sharing surface. Subcommands

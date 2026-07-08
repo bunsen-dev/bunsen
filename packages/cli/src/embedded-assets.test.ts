@@ -12,8 +12,8 @@ import { CLI_VERSION } from './version.js';
 // isAssetDirComplete checks) so extraction produces a "complete" dir.
 function makeAssetTarball(dir: string): string {
   const srcDir = fs.mkdtempSync(path.join(dir, 'assets-src-'));
-  fs.writeFileSync(path.join(srcDir, 'orchestrator.cjs'), '// orchestrator');
   fs.writeFileSync(path.join(srcDir, 'scorer.cjs'), '// scorer');
+  fs.writeFileSync(path.join(srcDir, 'supervisor.cjs'), '// supervisor');
   fs.mkdirSync(path.join(srcDir, 'proxy'));
   fs.writeFileSync(path.join(srcDir, 'proxy', 'ai_capture.py'), '# addon');
   fs.writeFileSync(path.join(srcDir, 'proxy', 'model_prices.json'), '{}');
@@ -48,14 +48,14 @@ describe('embedded-assets', () => {
     await ensureEmbeddedAssets(tarPath);
     expect(process.env.BUNSEN_ASSET_DIR).toBe(assetDir);
     expect(isAssetDirComplete(assetDir)).toBe(true);
-    expect(fs.existsSync(path.join(assetDir, 'orchestrator.cjs'))).toBe(true);
+    expect(fs.existsSync(path.join(assetDir, 'scorer.cjs'))).toBe(true);
     expect(fs.existsSync(path.join(assetDir, 'proxy', 'ai_capture.py'))).toBe(true);
   });
 
   it('is idempotent on the cache-hit path', async () => {
     await ensureEmbeddedAssets(tarPath);
     // Stamp the extracted dir; a second call must NOT re-extract (stamp survives).
-    const stamp = path.join(assetDir, 'orchestrator.cjs');
+    const stamp = path.join(assetDir, 'scorer.cjs');
     fs.writeFileSync(stamp, '// stamped');
     await ensureEmbeddedAssets(tarPath);
     expect(fs.readFileSync(stamp, 'utf8')).toBe('// stamped');
@@ -83,7 +83,7 @@ describe('embedded-assets', () => {
     // Simulate a concurrent winner having published a complete dir with a unique
     // marker-content we can detect survival of.
     await ensureEmbeddedAssets(tarPath);
-    const winnerFile = path.join(assetDir, 'orchestrator.cjs');
+    const winnerFile = path.join(assetDir, 'scorer.cjs');
     fs.writeFileSync(winnerFile, '// WINNER');
     // Force the extract path against the already-complete dir — must NOT clobber it.
     await extractTarball(tarPath, assetDir);

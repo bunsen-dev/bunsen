@@ -63,7 +63,6 @@ const exampleAgentsSrc = path.join(repoRoot, 'examples/agents');
 const genSkillReference = path.join(repoRoot, 'scripts/gen-skill-reference.mjs');
 
 const PLATFORM_BUNDLES = [
-  'orchestrator',
   'scorer',
   'supervisor',
   'gitignore-filter',

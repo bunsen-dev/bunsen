@@ -29,7 +29,7 @@ Internal execution engine for Bunsen. Handles configuration loading, Docker cont
 
 Three functions for running things inside containers, each for a different use case:
 
-- **`execInContainer(container, command[])`** — Runs a command array via `docker exec`. Use when you have a simple command with arguments (no shell interpretation needed). Example: `[nodeCmd, '/bunsen/lib/orchestrator.cjs']`
+- **`execInContainer(container, command[])`** — Runs a command array via `docker exec`. Use when you have a simple command with arguments (no shell interpretation needed). Example: `[nodeCmd, '/bunsen/lib/scorer.cjs']`
 
 - **`execShellInContainer(container, script)`** — Wraps script in `['/bin/bash', '-c', script]`. Use for shell constructs (pipes, `&&`, variable expansion). Example: `'mkdir -p /workspace && cp -a /src/. /workspace/'`
 
