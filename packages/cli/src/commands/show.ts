@@ -10,6 +10,7 @@
 import chalk from 'chalk';
 import * as path from 'node:path';
 import {
+  listRuns,
   loadEvaluationResult,
   loadRunManifest,
   loadTracesSummary,
@@ -27,8 +28,25 @@ interface ShowOptions {
   format?: string;
 }
 
-export async function showCommand(runId: string, options: ShowOptions = {}): Promise<void> {
+export async function showCommand(
+  runId: string | undefined,
+  options: ShowOptions = {},
+): Promise<void> {
   const format = resolveFormat(options);
+
+  // No run-id → most recent run, matching `bn runs open`. The note goes to
+  // stderr so `--format json|yaml` stdout stays machine-parseable.
+  if (!runId) {
+    const runs = listRuns();
+    if (runs.length === 0) {
+      throw new BunsenCliError('run_not_found', 'No runs found', {
+        exitCode: EXIT_CODES.GENERIC,
+      });
+    }
+    runId = runs[0]!.run_id;
+    console.error(chalk.dim(`Showing most recent run: ${runId}`));
+  }
+
   const manifest = loadRunManifest(runId);
   if (!manifest) {
     throw new BunsenCliError('run_not_found', `Run not found: ${runId}`, {

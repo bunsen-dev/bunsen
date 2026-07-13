@@ -54,7 +54,7 @@ suites: []
 #   - .env.local
 `;
 
-const EXAMPLE_EXPERIMENT_YAML = `$schema: https://schemas.bunsen.dev/experiment.v1.json
+export const EXAMPLE_EXPERIMENT_YAML = `$schema: https://schemas.bunsen.dev/experiment.v1.json
 version: v1
 name: hello-world
 description: Smoke-test experiment that asks the agent to print "hello, world".
@@ -73,10 +73,12 @@ evaluation:
     - id: prints-greeting
       title: Agent prints "hello, world"
       type: script
-      run: grep -F 'hello, world' /workspace-source/.bunsen/agent-output.log
+      # Agent stdout/stderr is captured to the run context, mounted read-only
+      # into the scorer container at /bunsen/run (see docs/SCORERS.md).
+      run: grep -F 'hello, world' /bunsen/run/logs.txt
 `;
 
-const EXAMPLE_AGENT_YAML = `$schema: https://schemas.bunsen.dev/agent.v1.json
+export const EXAMPLE_AGENT_YAML = `$schema: https://schemas.bunsen.dev/agent.v1.json
 version: v1
 name: echo-agent
 description: |

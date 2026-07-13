@@ -64,3 +64,15 @@ version and date and a fresh `[Unreleased]` is started.
   with a script/aggregate-only rubric now runs **fully offline**. An API key is still required
   for LLM-based evaluation (judge/agent/browser-agent/report scorers) and for Claude-powered
   agents under test.
+
+### Fixed
+
+- **The `bn init --example` hello-world scorer now actually sees the agent's output.** The
+  scaffolded criterion grepped `/workspace-source/.bunsen/agent-output.log`, a path agent stdout
+  never lands at, so the canonical first run scored 0.00 even when the agent printed the right
+  text. It now greps `/bunsen/run/logs.txt` — the run context mounted read-only into the scorer
+  container — and the whole `bn init --example` → `bn run hello-world echo-agent` flow reliably
+  scores 1.0. Contract-level tests now pin the example's agent invocation and scorer path to the
+  runtime's real constants so the scaffold can't silently drift again.
+- **`bn runs show` accepts an omitted run-id, defaulting to the most recent run** — matching
+  `bn runs open` and the README's first-run flow (`bn run … && bn runs show`).

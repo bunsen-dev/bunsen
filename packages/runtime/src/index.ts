@@ -376,6 +376,7 @@ export {
 export type { ExclusionResult, GitignoreFilter, GitignoreContent } from './gitignore.js';
 
 export {
+  buildArgvInvocation,
   formatInvocationForLog,
   splitInterpreterCommand,
   expandInvokeTemplate,

@@ -284,7 +284,7 @@ runsGroup
 runsGroup
   .command('show')
   .description('Show run summary')
-  .argument('<run-id>', 'Run ID')
+  .argument('[run-id]', 'Run ID (defaults to most recent)')
   .option('--format <format>', 'Output format (text|json|yaml)', 'text')
   .action(showCommand);
 
