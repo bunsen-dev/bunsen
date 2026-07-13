@@ -90,7 +90,7 @@ Inspect and manage [runs](./RUN_MANIFEST.md).
 | Command                          | Description                                                            |
 | -------------------------------- | --------------------------------------------------------------------- |
 | `bn runs list`                   | List runs. Filter with `-e/--experiment`, `-a/--agent`, `-n/--last`.  |
-| `bn runs show <run-id>`          | Run summary: score, cost, status.                                    |
+| `bn runs show [run-id]`          | Run summary: score, cost, status (defaults to most recent).          |
 | `bn runs open [run-id]`          | Open a run in the local web viewer (defaults to most recent). `-p, --port`. |
 | `bn runs logs <run-id>`          | Show logs for a run.                                                 |
 | `bn runs diff <run-id>`          | Show workspace changes. `--include-lockfiles`.                       |

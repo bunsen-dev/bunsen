@@ -14,6 +14,8 @@ import {
   slugifyCriterion,
   SCRIPT_SCORER_ENV,
 } from './scorer-container.js';
+import { STABLE_PATHS } from './runtime-contract.js';
+import { RUN_PATHS } from './storage.js';
 
 // =============================================================================
 // resolveScore
@@ -390,6 +392,22 @@ describe('/workspace-source scorer contract', () => {
       runDir: '/host/run',
       outputDir: '/host/scorer-output',
     };
+
+    it(`mounts the run context readonly at ${STABLE_PATHS.runDir} (script scorers read agent logs there)`, () => {
+      // Script scorers read agent stdout/stderr from the run context —
+      // saveLogs() writes `RUN_PATHS.logs` into the host run dir, which this
+      // mount exposes inside the scorer container. The `bn init --example`
+      // scorer greps that exact path, so if this mount target or the logs
+      // filename ever moves, this pin and the init scaffold test break loudly.
+      const mounts = buildScorerContainerMounts(baseOptions);
+      const runMount = mounts.find((m) => m.target === STABLE_PATHS.runDir);
+      expect(runMount).toEqual({
+        source: baseOptions.runDir,
+        target: STABLE_PATHS.runDir,
+        readonly: true,
+      });
+      expect(`${STABLE_PATHS.runDir}/${RUN_PATHS.logs}`).toBe('/bunsen/run/logs.txt');
+    });
 
     it('mounts /workspace-source readonly when the extracted source dir is provided', () => {
       const mounts = buildScorerContainerMounts({
