@@ -11,6 +11,7 @@ import {
   parseResultJson,
   resolveScore,
   resolveSummary,
+  resolveTimeoutOutput,
   slugifyCriterion,
   SCRIPT_SCORER_ENV,
 } from './scorer-container.js';
@@ -119,6 +120,58 @@ describe('resolveSummary', () => {
 
   it('summary file takes precedence over exit code', () => {
     expect(resolveSummary('Custom\n', null, 1)).toBe('Custom');
+  });
+});
+
+// =============================================================================
+// resolveTimeoutOutput — partial credit on criterion timeout
+// =============================================================================
+
+describe('resolveTimeoutOutput', () => {
+  it('honors a valid result.json written before the timeout', () => {
+    const result = resolveTimeoutOutput('{ "score": 0.5, "summary": "212/424 passed" }', null, 60);
+    expect(result.score).toBe(0.5);
+    expect(result.summary).toBe(
+      'Timed out after 60s; scored from last written result.json: 212/424 passed'
+    );
+    expect(result.parsed?.score).toBe(0.5);
+  });
+
+  it('always surfaces the timeout in the summary even when result.json has none', () => {
+    const result = resolveTimeoutOutput('{ "score": 0.25 }', null, 30);
+    expect(result.score).toBe(0.25);
+    expect(result.summary).toContain('Timed out after 30s');
+  });
+
+  it('falls back to the score file when result.json is torn (killed mid-write)', () => {
+    const result = resolveTimeoutOutput('{ "score": 0.', '0.4\n', 60);
+    expect(result.score).toBe(0.4);
+    expect(result.summary).toBe('Timed out after 60s; scored from last written score file (0.4)');
+    expect(result.parsed).toBeUndefined();
+  });
+
+  it('uses the score file when no result.json exists', () => {
+    const result = resolveTimeoutOutput(null, '0.75\n', 120);
+    expect(result.score).toBe(0.75);
+    expect(result.summary).toContain('score file (0.75)');
+  });
+
+  it('scores 0 with a bare timeout summary when the script wrote nothing', () => {
+    expect(resolveTimeoutOutput(null, null, 60)).toEqual({
+      score: 0,
+      summary: 'Timed out after 60s',
+    });
+  });
+
+  it('scores 0 when both result.json and the score file are invalid', () => {
+    const result = resolveTimeoutOutput('not json', 'garbage', 60);
+    expect(result.score).toBe(0);
+    expect(result.summary).toBe('Timed out after 60s');
+  });
+
+  it('result.json wins over the score file (same precedence as a clean exit)', () => {
+    const result = resolveTimeoutOutput('{ "score": 0.9 }', '0.1\n', 60);
+    expect(result.score).toBe(0.9);
   });
 });
 

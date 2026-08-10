@@ -259,6 +259,50 @@ export function resolveSummary(
 }
 
 /**
+ * Resolve a timed-out script criterion from whatever output files the script
+ * managed to write before it was killed.
+ *
+ * A script that reports incrementally (rewriting `result.json` / the score
+ * file as tests pass) keeps the credit it earned; the timeout is always
+ * surfaced in the summary. Resolution: valid `result.json` → valid score
+ * file → 0. A torn/invalid `result.json` (killed mid-write) falls through to
+ * the score file instead of erroring the criterion.
+ */
+export function resolveTimeoutOutput(
+  resultJsonContent: string | null,
+  scoreFileContent: string | null,
+  timeoutSeconds: number
+): { score: number; summary: string; parsed?: ParsedScriptResult } {
+  const timeoutNote = `Timed out after ${timeoutSeconds}s`;
+
+  if (resultJsonContent !== null) {
+    try {
+      const parsed = parseResultJson(resultJsonContent);
+      const detail = parsed.summary ? `: ${parsed.summary}` : '';
+      return {
+        score: parsed.score,
+        summary: `${timeoutNote}; scored from last written result.json${detail}`,
+        parsed,
+      };
+    } catch {
+      // Torn write — fall through to the score file.
+    }
+  }
+
+  if (scoreFileContent !== null) {
+    const resolved = resolveScore(scoreFileContent, 1);
+    if (!resolved.error) {
+      return {
+        score: resolved.score,
+        summary: `${timeoutNote}; scored from last written score file (${resolved.score})`,
+      };
+    }
+  }
+
+  return { score: 0, summary: timeoutNote };
+}
+
+/**
  * Convert criterion name to a filesystem-safe slug
  */
 export function slugifyCriterion(criterion: string): string {
@@ -491,20 +535,37 @@ export async function runCodeScorer(
     const message = error instanceof Error ? error.message : String(error);
     const isTimeout = error instanceof ExecTimeoutError;
 
-    // Save log
     const logAbs = path.join(runDir, 'evaluation', 'criteria', `${slug}.log`);
     fs.mkdirSync(path.dirname(logAbs), { recursive: true });
-    const logContent = isTimeout
-      ? `[TIMEOUT] Command timed out after ${timeout}s\n`
-      : `[ERROR] ${message}\n`;
-    fs.writeFileSync(logAbs, logContent);
 
-    return {
-      score: 0,
-      summary: isTimeout
-        ? `Timed out after ${timeout}s`
-        : `Error: ${message}`,
-    };
+    if (isTimeout) {
+      // Honor whatever the script already wrote (see docs/SCORERS.md,
+      // "Score resolution on timeout"). Output files live on the host side
+      // of the /bunsen/scorer-output mount, so they are readable even
+      // though the exec was killed.
+      const resultContent = fs.existsSync(resultFile) ? fs.readFileSync(resultFile, 'utf-8') : null;
+      const scoreContent = fs.existsSync(scoreFile) ? fs.readFileSync(scoreFile, 'utf-8') : null;
+      const resolved = resolveTimeoutOutput(resultContent, scoreContent, timeout);
+
+      fs.writeFileSync(logAbs, `[TIMEOUT] Command timed out after ${timeout}s\n${resolved.summary}\n`);
+
+      if (resolved.parsed) {
+        const collected = collectScriptResultArtifacts(resolved.parsed.artifacts, {
+          scorerOutputDir: outputDir,
+          runDir,
+          criterionSlug: slug,
+        });
+        return {
+          score: resolved.score,
+          summary: resolved.summary,
+          ...(collected.attached.length > 0 ? { artifacts: collected.attached } : {}),
+        };
+      }
+      return { score: resolved.score, summary: resolved.summary };
+    }
+
+    fs.writeFileSync(logAbs, `[ERROR] ${message}\n`);
+    return { score: 0, summary: `Error: ${message}` };
   }
 
   // Save log file
