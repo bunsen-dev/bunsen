@@ -147,7 +147,9 @@ function renderExperiment(exp: ReturnType<typeof loadExperiment>, cwd: string): 
         detail = criterion.instructions;
         break;
       case 'aggregate':
-        detail = `aggregate: ${criterion.aggregate.function}`;
+        detail = `aggregate: ${criterion.aggregate.function}${
+          criterion.aggregate.at !== undefined ? ` (at: ${criterion.aggregate.at})` : ''
+        }`;
         break;
     }
     if (detail) {

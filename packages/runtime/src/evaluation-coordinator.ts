@@ -22,7 +22,7 @@ import type {
   BrowserAgentCriterion,
   AggregateCriterion,
   ScriptCriterion,
-  AggregateFunction,
+  AggregateSettings,
   JudgeEvidence,
   AllowedScores,
   ScorerType,
@@ -265,9 +265,9 @@ export function criterionTools(c: Criterion): string[] | undefined {
   return undefined;
 }
 
-/** Read the aggregate function for aggregate criteria. */
-export function criterionAggregate(c: Criterion): AggregateFunction | undefined {
-  return c.type === 'aggregate' ? c.aggregate.function : undefined;
+/** Read the aggregate settings for aggregate criteria. */
+export function criterionAggregate(c: Criterion): AggregateSettings | undefined {
+  return c.type === 'aggregate' ? c.aggregate : undefined;
 }
 
 /** Read the script `run` command for script criteria. */
@@ -344,7 +344,7 @@ export function calculateWeightedScore(results: CriterionResult[]): number {
  * Run aggregate function on dependency scores.
  */
 export function runAggregate(
-  aggregate: string,
+  aggregate: AggregateSettings,
   dependencyScores: Record<string, DependencyScore>,
   criteria: Criterion[],
 ): ScorerOutput {
@@ -381,7 +381,7 @@ export function runAggregate(
   let score: number;
   let summary: string;
 
-  switch (aggregate) {
+  switch (aggregate.function) {
     case 'weighted_average': {
       let totalWeight = 0;
       let weightedSum = 0;
@@ -424,8 +424,22 @@ export function runAggregate(
       break;
     }
 
+    case 'threshold': {
+      const at = aggregate.at;
+      if (typeof at !== 'number' || at < 0 || at > 1) {
+        throw new Error(`'threshold' aggregate requires 'at' in [0, 1], got: ${at}`);
+      }
+      const below = validScores.filter((v) => v.score < at);
+      score = below.length === 0 ? 1 : 0;
+      summary =
+        below.length === 0
+          ? `All ${validScores.length} criteria scored >= ${at}`
+          : `Below threshold ${at}: ${below.map((v) => `${v.name} (${v.score.toFixed(2)})`).join(', ')}`;
+      break;
+    }
+
     default:
-      throw new Error(`Unknown aggregate function: ${aggregate}`);
+      throw new Error(`Unknown aggregate function: ${aggregate.function}`);
   }
 
   return { score, summary };

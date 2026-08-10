@@ -2155,7 +2155,7 @@ ${agentScript}
             if (criterion.type === 'aggregate') {
               // Run aggregate locally (no LLM needed)
               output = runAggregate(
-                criterion.aggregate.function,
+                criterion.aggregate,
                 Object.fromEntries(
                   criterion.resolvedDependencies.map((name) => [name, dependencyScores[name]])
                 ),

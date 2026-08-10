@@ -145,6 +145,7 @@ const VALID_AGGREGATE_FUNCTIONS: ReadonlySet<string> = new Set([
   'any',
   'min',
   'max',
+  'threshold',
 ]);
 
 const VALID_EVALUATION_CONTAINERS: ReadonlySet<string> = new Set(['dedicated', 'agent']);
@@ -1369,10 +1370,27 @@ function parseAggregateCriterion(
   }
   ensureNoUnknownKeys(
     raw.aggregate,
-    new Set(['function']),
+    new Set(['function', 'at']),
     `${ctx}.aggregate`,
     'experiment.criterion.aggregate.unknown_field',
   );
+  const aggregateFunction = raw.aggregate.function as AggregateFunction;
+  const at = raw.aggregate.at;
+  if (aggregateFunction === 'threshold') {
+    if (typeof at !== 'number' || Number.isNaN(at) || at < 0 || at > 1) {
+      fail(
+        'experiment.criterion.aggregate.at.invalid',
+        `${ctx}.aggregate.at is required for 'threshold' and must be a number in [0, 1].`,
+        `${ctx}.aggregate.at`,
+      );
+    }
+  } else if (at !== undefined) {
+    fail(
+      'experiment.criterion.aggregate.at.unexpected',
+      `${ctx}.aggregate.at is only valid with 'function: threshold'.`,
+      `${ctx}.aggregate.at`,
+    );
+  }
   const allowed: ReadonlySet<string> = new Set([
     'id',
     'title',
@@ -1389,7 +1407,10 @@ function parseAggregateCriterion(
     ...common,
     type: 'aggregate',
     needs: common.needs!,
-    aggregate: { function: raw.aggregate.function as AggregateFunction },
+    aggregate: {
+      function: aggregateFunction,
+      ...(aggregateFunction === 'threshold' ? { at: at as number } : {}),
+    },
   };
 }
 
