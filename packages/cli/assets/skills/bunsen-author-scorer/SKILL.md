@@ -92,7 +92,10 @@ diffs and can return a false `0.0`).
    precedence first): write JSON to `$BUNSEN_EVAL_RESULT` → write a float to
    `$BUNSEN_SCORE_FILE` → else the exit code (`0` → 1.0, non-zero → 0.0). The
    **`bunsen-score <score> [summary]`** helper on PATH is the easy path. Default timeouts:
-   script `60s`, LLM scorers `600s` — override with a per-criterion `timeout`.
+   script `60s`, LLM scorers `600s` — override with a per-criterion `timeout`. Script
+   criteria see the **image's own PATH** (with `/bunsen/bin` prepended), so toolchains the
+   image puts on `ENV PATH` (`go`, `cargo`, conda) resolve bare — but the shell is
+   non-login `bash -c`: tools set up only via profile hooks still need absolute paths.
 
 10. **Constrain scores and validate — the oracle.** Use `scores: [0, 1]` for pass/fail, a
     discrete scale `[0, 0.25, 0.5, 0.75, 1]`, or a labeled map `{0: none, 1: severe}`. Then:

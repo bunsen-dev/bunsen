@@ -25,6 +25,7 @@ import {
   createPersistentContainer,
   execInContainer,
   execShellInContainer,
+  inspectImageEnvPath,
   writeFileInContainer,
   stopContainer,
   ExecTimeoutError,
@@ -82,6 +83,29 @@ export function buildScorerExecOptions(
  * `runCodeScorer` injection covers the agent-container scoring path where the
  * agent container's base env does not pre-set them.
  */
+/**
+ * PATH used when the image declares none of its own. Mirrors Docker's default
+ * PATH with `/bunsen/bin` (the `bunsen-score` helper + Node symlink) first.
+ */
+export const SCORER_FALLBACK_PATH =
+  '/bunsen/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
+/**
+ * Resolve the PATH the dedicated scorer container is created with.
+ *
+ * The only ordering Bunsen itself depends on is `/bunsen/bin` winning, so the
+ * image's own PATH is preserved (prepended-to, never replaced) whenever the
+ * image declares one. Replacing it wholesale silently dropped toolchains that
+ * live outside `/usr/{local/,}{bin,sbin}` — `go`, `cargo`, conda, nvm — which
+ * the agent container (no PATH override) still saw; a script criterion would
+ * then fail to find a compiler the agent had just used.
+ */
+export function resolveScorerPath(imageEnvPath: string | undefined): string {
+  if (!imageEnvPath) return SCORER_FALLBACK_PATH;
+  const alreadyPresent = imageEnvPath.split(':').includes('/bunsen/bin');
+  return alreadyPresent ? imageEnvPath : `/bunsen/bin:${imageEnvPath}`;
+}
+
 export const SCRIPT_SCORER_ENV: Readonly<Record<string, string>> = Object.freeze({
   BUNSEN_SCORE_FILE: '/bunsen/scorer-output/score',
   BUNSEN_SUMMARY_FILE: '/bunsen/scorer-output/summary',
@@ -406,7 +430,11 @@ export async function createScorerContainer(options: {
   const env: Record<string, string> = {
     ...SCRIPT_SCORER_ENV,
     ...(reservedEnv ?? {}),
-    PATH: '/bunsen/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+    // Create-time Env wins over the image's Config.Env per key, so setting
+    // PATH here replaces the image's — preserve it via prepend (see
+    // resolveScorerPath). The agent container never overrides PATH; the
+    // scorer must see the same toolchain the agent built with.
+    PATH: resolveScorerPath(await inspectImageEnvPath(image)),
   };
 
   if (apiKey) {

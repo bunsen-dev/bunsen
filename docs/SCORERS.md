@@ -149,6 +149,8 @@ bunsen-score 0.85 "Coverage: 85%"    # Score + summary
 
 **Default timeout:** 60 seconds (configurable via the `timeout` field — duration string).
 
+**`PATH` in the scorer container:** the image's own `PATH` is preserved, with `/bunsen/bin` (the `bunsen-score` helper and Bunsen's Node symlink) prepended so Bunsen's helpers always win. Toolchains the image puts outside the standard dirs — `/usr/local/go/bin`, `/usr/local/cargo/bin`, conda, nvm — are on `PATH` for script criteria exactly as they were for the agent. If the image declares no `PATH` at all, a standard default (`/bunsen/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`) is used. Note that scripts run through a non-login, non-interactive `bash -c` — `/etc/profile.d` and `~/.profile` are never sourced, so tools that rely purely on profile hooks (rather than image `ENV`) still need absolute paths.
+
 Use `/workspace-source` in scripts when you need the untouched seeded input, and `/workspace` when you need the agent's final outputs or post-run workspace state.
 
 For verifier-owned scratch data, prefer `/tmp` or `/var/tmp` when the verifier creates or extracts thousands of files. In the dedicated scorer container, `/workspace` is an extracted/mounted copy of the agent workspace and can be noticeably slower for large file-heavy setup. Use `/workspace` when you are validating the agent's outputs; use `/tmp` or `/var/tmp` for temporary verifier staging.

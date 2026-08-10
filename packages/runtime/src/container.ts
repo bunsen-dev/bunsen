@@ -118,6 +118,29 @@ export async function inspectImagePlatform(imageName: string): Promise<RunPlatfo
   }
 }
 
+/**
+ * Read the `PATH` the image's config declares (`Config.Env`), so containers
+ * Bunsen creates with an explicit env can preserve the image's toolchain
+ * (e.g. `/usr/local/go/bin` in `golang`, `/usr/local/cargo/bin` in rust
+ * images) instead of clobbering it.
+ */
+export async function inspectImageEnvPath(imageName: string): Promise<string | undefined> {
+  try {
+    const inspect = await docker.getImage(imageName).inspect();
+    const envEntries = inspect.Config?.Env;
+    if (!Array.isArray(envEntries)) return undefined;
+    for (const entry of envEntries) {
+      if (typeof entry === 'string' && entry.startsWith('PATH=')) {
+        const value = entry.slice('PATH='.length);
+        return value.length > 0 ? value : undefined;
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function formatDockerProgressEvent(event: {
   stream?: string;
   status?: string;

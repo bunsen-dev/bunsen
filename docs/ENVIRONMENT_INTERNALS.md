@@ -103,7 +103,12 @@ first on PATH" is true only *inside the agent's own process tree*.
 
 For scorers, the **dedicated vs. agent-container** choice is about *what's reachable*,
 not PATH. A **dedicated** scorer container (the default) is a fresh container from the
-experiment image and doesn't mount `/bunsen/deps` or `/bunsen/artifacts` at all.
+experiment image and doesn't mount `/bunsen/deps` or `/bunsen/artifacts` at all. Its
+PATH is the image's configured PATH with `/bunsen/bin` (the `bunsen-score` helper and
+the platform Node symlink) prepended — so image-`ENV` toolchains (`/usr/local/go/bin`,
+`/opt/conda/bin`, …) are visible to script criteria exactly as they were to the agent;
+only an image that declares no PATH at all gets a standard fallback list (see
+[SCORERS.md](./SCORERS.md#script-criteria-type-script)).
 **Agent-container** scoring (`evaluation.container: agent`) runs the scorer inside the
 agent's own container, so it sees the agent's final `/workspace`, its running
 services, and anything it installed to standard locations (`/usr/bin`, site-packages —
