@@ -301,6 +301,17 @@ Absent on runs that recorded no diagnostics.
 | `shadowed` | `{ source: 'substrate-apt' \| 'substrate-npm' \| 'substrate-pip'; name: string; version?: string }` | The substrate-side package that also declared this binary and lost the precedence contest. |
 | `resolution` | `string` | Human-readable reason explaining how the conflict resolved. |
 
+### Extensions
+
+`extensions` is the manifest's extensibility zone — optional flags that don't warrant a
+core-schema bump. Current keys:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `timed_out` | `true` | The agent hit `run.timeout` with `onTimeout: score`: the run completed and was scored against whatever the agent left. |
+| `capture_incomplete` | `true` | One or more post-run capture steps (trace processing, workspace diff/export, agent output capture) failed. The run still proceeded to evaluation — scores exist, but the named artifacts may be missing. |
+| `capture_warnings` | `string[]` | One `<step>: <error>` entry per failed capture step. Present iff `capture_incomplete` is set. |
+
 ### Artifacts
 
 `artifacts: RunManifestArtifact[]`:

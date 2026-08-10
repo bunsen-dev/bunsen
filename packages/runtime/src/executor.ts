@@ -1798,91 +1798,36 @@ ${agentScript}
       });
       activeRun.phase = 'capture';
 
+      // A failed capture step degrades the run's artifacts; it must never
+      // discard the completed run itself. Each step below records a warning
+      // and falls through so evaluation still happens (the agent's work is
+      // done and paid for — a missing diff is not a failed experiment).
+      const captureWarnings: string[] = [];
+      const recordCaptureWarning = (label: string, error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        captureWarnings.push(`${label}: ${message}`);
+        progress(`Warning: ${label} failed - continuing to evaluation (${message})`);
+        appendLogs(runId, `\n--- CAPTURE WARNING ---\n${label}: ${message}`, baseDir);
+      };
+
       // Build structured traces for scorer context (don't overwrite traces/agent.jsonl —
       // the proxy is still running and will append scorer/platform traces to it).
       // Streams the file line-by-line; bounded memory regardless of trace size.
-      if (!skipTraces) {
-        const inputPath = path.join(tracesDir, 'agent.jsonl');
-        if (fs.existsSync(inputPath) && fs.statSync(inputPath).size > 0) {
-          log('Processing agent traces...');
-          await buildThreadsForScorer(runId, baseDir);
+      try {
+        if (!skipTraces) {
+          const inputPath = path.join(tracesDir, 'agent.jsonl');
+          if (fs.existsSync(inputPath) && fs.statSync(inputPath).size > 0) {
+            log('Processing agent traces...');
+            await buildThreadsForScorer(runId, baseDir);
+          }
         }
+      } catch (error) {
+        recordCaptureWarning('trace processing', error);
       }
 
-      if (hasInitialWorkspaceSource(experiment)) {
-        log('Capturing workspace diff...');
-
-        if (hasGitignoreFilterBundle) {
-          // Use gitignore-filter for proper gitignore semantics
-          // (handles nested .gitignore files, negation patterns, etc.)
-          const gitignoreCmd = needsNodeRuntime
-            ? '/bunsen/runtime/node /bunsen/lib/gitignore-filter.cjs'
-            : 'node /bunsen/lib/gitignore-filter.cjs';
-
-          const diffScript = `
-            # Get non-ignored file lists from both directories
-            ${gitignoreCmd} /workspace --output /tmp/diff-ws.txt 2>/dev/null
-            ${gitignoreCmd} /workspace-source --output /tmp/diff-src.txt 2>/dev/null
-
-            # Union, deduplicate, exclude .claude directory and empty lines
-            sort -u /tmp/diff-ws.txt /tmp/diff-src.txt | grep -v '^\\.claude/' | grep -v '^$' > /tmp/diff-files.txt 2>/dev/null || true
-
-            # Generate unified diff for each non-ignored file
-            while IFS= read -r file; do
-              diff -Nu "/workspace-source/$file" "/workspace/$file"
-            done < /tmp/diff-files.txt > /output/workspace.diff 2>&1 || true
-
-            # Clean up
-            rm -f /tmp/diff-ws.txt /tmp/diff-src.txt /tmp/diff-files.txt
-          `;
-
-          await execShellInContainer(
-            container,
-            diffScript,
-            {
-              env,
-              workdir: '/',
-              timeout: artifactCaptureTimeoutMs,
-            }
-          );
-        } else {
-          // Fallback: shell-based .gitignore parsing (root .gitignore only)
-          const diffScript = `
-            cd /workspace
-            EXCLUDES="--exclude=.git --exclude=.claude"
-            if [ -f .gitignore ]; then
-              # Parse .gitignore: skip comments, empty lines, negations; remove trailing slashes
-              while IFS= read -r line || [ -n "$line" ]; do
-                line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                [ -z "$line" ] && continue
-                [ "\${line:0:1}" = "#" ] && continue
-                [ "\${line:0:1}" = "!" ] && continue
-                pattern=$(echo "$line" | sed 's|/\\+$||')
-                EXCLUDES="$EXCLUDES --exclude=$pattern"
-              done < .gitignore
-            else
-              # Fallback exclusions when no .gitignore
-              for p in node_modules .pnpm-store vendor __pycache__ .venv venv .pytest_cache dist build out .next .nuxt .output .turbo coverage .nyc_output .idea .vscode .DS_Store; do
-                EXCLUDES="$EXCLUDES --exclude=$p"
-              done
-            fi
-            diff -rNu $EXCLUDES /workspace-source /workspace > /output/workspace.diff 2>&1 || true
-          `;
-
-          await execShellInContainer(
-            container,
-            diffScript,
-            {
-              env,
-              workdir: '/',
-              timeout: artifactCaptureTimeoutMs,
-            }
-          );
-        }
-
-        // Export workspace as tar.gz if requested
-        if (options.exportWorkspace) {
-          log('Exporting workspace...');
+      try {
+        if (hasInitialWorkspaceSource(experiment)) {
+          log('Capturing workspace diff...');
 
           if (hasGitignoreFilterBundle) {
             // Use gitignore-filter for proper gitignore semantics
@@ -1890,19 +1835,27 @@ ${agentScript}
             const gitignoreCmd = needsNodeRuntime
               ? '/bunsen/runtime/node /bunsen/lib/gitignore-filter.cjs'
               : 'node /bunsen/lib/gitignore-filter.cjs';
-            await execShellInContainer(
-              container,
-              `${gitignoreCmd} /workspace --output /output/tar-files.txt`,
-              {
-                env,
-                workdir: '/',
-                timeout: artifactCaptureTimeoutMs,
-              }
-            );
+
+            const diffScript = `
+              # Get non-ignored file lists from both directories
+              ${gitignoreCmd} /workspace --output /tmp/diff-ws.txt 2>/dev/null
+              ${gitignoreCmd} /workspace-source --output /tmp/diff-src.txt 2>/dev/null
+
+              # Union, deduplicate, exclude .claude directory and empty lines
+              sort -u /tmp/diff-ws.txt /tmp/diff-src.txt | grep -v '^\\.claude/' | grep -v '^$' > /tmp/diff-files.txt 2>/dev/null || true
+
+              # Generate unified diff for each non-ignored file
+              while IFS= read -r file; do
+                diff -Nu "/workspace-source/$file" "/workspace/$file"
+              done < /tmp/diff-files.txt > /output/workspace.diff 2>&1 || true
+
+              # Clean up
+              rm -f /tmp/diff-ws.txt /tmp/diff-src.txt /tmp/diff-files.txt
+            `;
 
             await execShellInContainer(
               container,
-              'tar -czf /output/workspace.tar.gz -C /workspace -T /output/tar-files.txt && rm /output/tar-files.txt',
+              diffScript,
               {
                 env,
                 workdir: '/',
@@ -1910,38 +1863,32 @@ ${agentScript}
               }
             );
           } else {
-            // Fallback: use git ls-files if available, otherwise shell-based filtering
-            const exportScript = `
+            // Fallback: shell-based .gitignore parsing (root .gitignore only)
+            const diffScript = `
               cd /workspace
-              if git rev-parse --git-dir > /dev/null 2>&1; then
-                # Git repo: use git ls-files for proper gitignore handling
-                (git ls-files; git ls-files --others --exclude-standard) | sort -u > /output/tar-files.txt
+              EXCLUDES="--exclude=.git --exclude=.claude"
+              if [ -f .gitignore ]; then
+                # Parse .gitignore: skip comments, empty lines, negations; remove trailing slashes
+                while IFS= read -r line || [ -n "$line" ]; do
+                  line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                  [ -z "$line" ] && continue
+                  [ "\${line:0:1}" = "#" ] && continue
+                  [ "\${line:0:1}" = "!" ] && continue
+                  pattern=$(echo "$line" | sed 's|/\\+$||')
+                  EXCLUDES="$EXCLUDES --exclude=$pattern"
+                done < .gitignore
               else
-                # Not a git repo: use find with exclusions
-                EXCLUDES=""
-                if [ -f .gitignore ]; then
-                  while IFS= read -r line || [ -n "$line" ]; do
-                    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-                    [ -z "$line" ] && continue
-                    [ "\${line:0:1}" = "#" ] && continue
-                    [ "\${line:0:1}" = "!" ] && continue
-                    pattern=$(echo "$line" | sed 's|/\\+$||')
-                    EXCLUDES="$EXCLUDES -not -path './$pattern' -not -path './$pattern/*'"
-                  done < .gitignore
-                else
-                  for p in node_modules .pnpm-store vendor __pycache__ .venv venv .pytest_cache dist build out .next .nuxt .output .turbo coverage .nyc_output .idea .vscode .DS_Store .git; do
-                    EXCLUDES="$EXCLUDES -not -path './$p' -not -path './$p/*'"
-                  done
-                fi
-                eval "find . -type f $EXCLUDES" | sed 's|^\\./||' | sort > /output/tar-files.txt
+                # Fallback exclusions when no .gitignore
+                for p in node_modules .pnpm-store vendor __pycache__ .venv venv .pytest_cache dist build out .next .nuxt .output .turbo coverage .nyc_output .idea .vscode .DS_Store; do
+                  EXCLUDES="$EXCLUDES --exclude=$p"
+                done
               fi
-              tar -czf /output/workspace.tar.gz -C /workspace -T /output/tar-files.txt
-              rm /output/tar-files.txt
+              diff -rNu $EXCLUDES /workspace-source /workspace > /output/workspace.diff 2>&1 || true
             `;
 
             await execShellInContainer(
               container,
-              exportScript,
+              diffScript,
               {
                 env,
                 workdir: '/',
@@ -1950,62 +1897,139 @@ ${agentScript}
             );
           }
 
-          log('Workspace exported to workspace.tar.gz');
+          // Export workspace as tar.gz if requested
+          if (options.exportWorkspace) {
+            log('Exporting workspace...');
+
+            if (hasGitignoreFilterBundle) {
+              // Use gitignore-filter for proper gitignore semantics
+              // (handles nested .gitignore files, negation patterns, etc.)
+              const gitignoreCmd = needsNodeRuntime
+                ? '/bunsen/runtime/node /bunsen/lib/gitignore-filter.cjs'
+                : 'node /bunsen/lib/gitignore-filter.cjs';
+              await execShellInContainer(
+                container,
+                `${gitignoreCmd} /workspace --output /output/tar-files.txt`,
+                {
+                  env,
+                  workdir: '/',
+                  timeout: artifactCaptureTimeoutMs,
+                }
+              );
+
+              await execShellInContainer(
+                container,
+                'tar -czf /output/workspace.tar.gz -C /workspace -T /output/tar-files.txt && rm /output/tar-files.txt',
+                {
+                  env,
+                  workdir: '/',
+                  timeout: artifactCaptureTimeoutMs,
+                }
+              );
+            } else {
+              // Fallback: use git ls-files if available, otherwise shell-based filtering
+              const exportScript = `
+                cd /workspace
+                if git rev-parse --git-dir > /dev/null 2>&1; then
+                  # Git repo: use git ls-files for proper gitignore handling
+                  (git ls-files; git ls-files --others --exclude-standard) | sort -u > /output/tar-files.txt
+                else
+                  # Not a git repo: use find with exclusions
+                  EXCLUDES=""
+                  if [ -f .gitignore ]; then
+                    while IFS= read -r line || [ -n "$line" ]; do
+                      line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                      [ -z "$line" ] && continue
+                      [ "\${line:0:1}" = "#" ] && continue
+                      [ "\${line:0:1}" = "!" ] && continue
+                      pattern=$(echo "$line" | sed 's|/\\+$||')
+                      EXCLUDES="$EXCLUDES -not -path './$pattern' -not -path './$pattern/*'"
+                    done < .gitignore
+                  else
+                    for p in node_modules .pnpm-store vendor __pycache__ .venv venv .pytest_cache dist build out .next .nuxt .output .turbo coverage .nyc_output .idea .vscode .DS_Store .git; do
+                      EXCLUDES="$EXCLUDES -not -path './$p' -not -path './$p/*'"
+                    done
+                  fi
+                  eval "find . -type f $EXCLUDES" | sed 's|^\\./||' | sort > /output/tar-files.txt
+                fi
+                tar -czf /output/workspace.tar.gz -C /workspace -T /output/tar-files.txt
+                rm /output/tar-files.txt
+              `;
+
+              await execShellInContainer(
+                container,
+                exportScript,
+                {
+                  env,
+                  workdir: '/',
+                  timeout: artifactCaptureTimeoutMs,
+                }
+              );
+            }
+
+            log('Workspace exported to workspace.tar.gz');
+          }
         }
+      } catch (error) {
+        recordCaptureWarning('workspace diff/export', error);
       }
 
-      // Promote the bunsen-written workspace artifacts from the temp /output
-      // mount into their v1 run-dir locations:
-      //   /output/workspace.diff    -> workspace/diff.patch
-      //   /output/workspace.tar.gz  -> workspace/export.tar.gz
-      log('Capturing workspace artifacts...');
-      if (hasInitialWorkspaceSource(experiment)) {
-        const diffPath = path.join(tempOutputDir, 'workspace.diff');
-        if (fs.existsSync(diffPath)) {
-          const diff = fs.readFileSync(diffPath, 'utf-8');
-          saveWorkspaceDiff(runId, diff, baseDir);
+      try {
+        // Promote the bunsen-written workspace artifacts from the temp /output
+        // mount into their v1 run-dir locations:
+        //   /output/workspace.diff    -> workspace/diff.patch
+        //   /output/workspace.tar.gz  -> workspace/export.tar.gz
+        log('Capturing workspace artifacts...');
+        if (hasInitialWorkspaceSource(experiment)) {
+          const diffPath = path.join(tempOutputDir, 'workspace.diff');
+          if (fs.existsSync(diffPath)) {
+            const diff = fs.readFileSync(diffPath, 'utf-8');
+            saveWorkspaceDiff(runId, diff, baseDir);
+          }
         }
-      }
-      const tarSrc = path.join(tempOutputDir, 'workspace.tar.gz');
-      if (fs.existsSync(tarSrc)) {
-        const tarDst = path.join(getRunDir(runId, baseDir), RUN_PATHS.workspaceTar);
-        fs.mkdirSync(path.dirname(tarDst), { recursive: true });
-        fs.copyFileSync(tarSrc, tarDst);
-      }
+        const tarSrc = path.join(tempOutputDir, 'workspace.tar.gz');
+        if (fs.existsSync(tarSrc)) {
+          const tarDst = path.join(getRunDir(runId, baseDir), RUN_PATHS.workspaceTar);
+          fs.mkdirSync(path.dirname(tarDst), { recursive: true });
+          fs.copyFileSync(tarSrc, tarDst);
+        }
 
-      // Auto-capture whatever the agent wrote to /bunsen/output/. Destination
-      // matches the design doc's `runs/<id>/artifacts/output/` layout so the
-      // run-manifest writer (task 13) can ingest it without a re-shuffle.
-      const agentOutputDestDir = path.join(
-        getRunDir(runId, baseDir),
-        'artifacts',
-        'output',
-      );
-      const outputCapture = captureAgentOutput({
-        hostOutputDir: agentOutputHostDir,
-        destDir: agentOutputDestDir,
-      });
-      if (outputCapture.artifacts.length > 0 || outputCapture.flags.length > 0) {
-        fs.writeFileSync(
-          path.join(agentOutputDestDir, '.capture.json'),
-          JSON.stringify(
-            {
-              artifacts: outputCapture.artifacts,
-              flags: outputCapture.flags,
-              totalBytes: outputCapture.totalBytes,
-              totalLimitExceeded: outputCapture.totalLimitExceeded,
-            },
-            null,
-            2,
-          ),
+        // Auto-capture whatever the agent wrote to /bunsen/output/. Destination
+        // matches the design doc's `runs/<id>/artifacts/output/` layout so the
+        // run-manifest writer (task 13) can ingest it without a re-shuffle.
+        const agentOutputDestDir = path.join(
+          getRunDir(runId, baseDir),
+          'artifacts',
+          'output',
         );
+        const outputCapture = captureAgentOutput({
+          hostOutputDir: agentOutputHostDir,
+          destDir: agentOutputDestDir,
+        });
+        if (outputCapture.artifacts.length > 0 || outputCapture.flags.length > 0) {
+          fs.writeFileSync(
+            path.join(agentOutputDestDir, '.capture.json'),
+            JSON.stringify(
+              {
+                artifacts: outputCapture.artifacts,
+                flags: outputCapture.flags,
+                totalBytes: outputCapture.totalBytes,
+                totalLimitExceeded: outputCapture.totalLimitExceeded,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+        log(
+          `Captured ${outputCapture.artifacts.length} agent output file(s) ` +
+            `(${outputCapture.totalBytes} bytes` +
+            (outputCapture.totalLimitExceeded ? ', total cap exceeded' : '') +
+            `)`,
+        );
+      } catch (error) {
+        recordCaptureWarning('artifact capture', error);
       }
-      log(
-        `Captured ${outputCapture.artifacts.length} agent output file(s) ` +
-          `(${outputCapture.totalBytes} bytes` +
-          (outputCapture.totalLimitExceeded ? ', total cap exceeded' : '') +
-          `)`,
-      );
 
       // Clean up temp output directories
       fs.rmSync(tempOutputDir, { recursive: true, force: true });
@@ -2023,6 +2047,14 @@ ${agentScript}
           // clean finish without a core-schema bump.
           m.extensions = m.extensions ?? {};
           m.extensions.timed_out = true;
+        }
+        if (captureWarnings.length > 0) {
+          // Same extensibility zone: the run completed but one or more capture
+          // steps failed, so artifacts (diff/export/traces/output) may be
+          // missing even though scores exist.
+          m.extensions = m.extensions ?? {};
+          m.extensions.capture_incomplete = true;
+          m.extensions.capture_warnings = captureWarnings;
         }
       });
 
@@ -2078,15 +2110,20 @@ ${agentScript}
             // Default path: extract workspace and create separate scorer container
             log('Extracting workspace for scorer container...');
             const extractedScorerInputDir = path.join(os.tmpdir(), `bunsen-scorer-input-${runId}`);
+            // Uses the run's artifactCaptureTimeout (default 120s) — for large
+            // workspaces this docker cp is the slowest capture step, and the
+            // documented escape hatch must cover it.
             extractedWorkspaceDir = await extractContainerDirectory(
               container.id,
               '/workspace',
-              path.join(extractedScorerInputDir, 'workspace')
+              path.join(extractedScorerInputDir, 'workspace'),
+              artifactCaptureTimeoutMs
             );
             extractedWorkspaceSourceDir = await extractContainerDirectory(
               container.id,
               '/workspace-source',
-              path.join(extractedScorerInputDir, 'workspace-source')
+              path.join(extractedScorerInputDir, 'workspace-source'),
+              artifactCaptureTimeoutMs
             );
           }
 
@@ -3747,13 +3784,14 @@ function createMounts(
 async function extractContainerDirectory(
   containerId: string,
   containerPath: string,
-  hostDir: string
+  hostDir: string,
+  timeoutMs: number
 ): Promise<string> {
   const { execSync } = await import('node:child_process');
   fs.mkdirSync(hostDir, { recursive: true });
   execSync(
     `docker cp ${containerId}:${containerPath}/. "${hostDir}/"`,
-    { timeout: 120000 }
+    { timeout: timeoutMs }
   );
   return hostDir;
 }

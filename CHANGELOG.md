@@ -67,6 +67,15 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Fixed
 
+- **A failed post-run capture step no longer discards a completed run.** Previously any error in
+  the capture phase — most commonly a `docker cp` / diff timeout on an artifact-heavy workspace —
+  escaped, marked the run `failed`, and evaluation never ran, throwing away completed (possibly
+  hours-long) agent work with no way to rescore. Capture steps (trace processing, workspace
+  diff/export, agent output capture) now degrade independently: the failure is logged, recorded on
+  the manifest (`extensions.capture_incomplete` + `extensions.capture_warnings`), and the run
+  proceeds to evaluation. Relatedly, `run.artifactCaptureTimeout` now actually covers the slowest
+  capture step — the workspace extraction feeding the dedicated scorer container — which was
+  hard-coded to 120s regardless of the documented setting.
 - **The `bn init --example` hello-world scorer now actually sees the agent's output.** The
   scaffolded criterion grepped `/workspace-source/.bunsen/agent-output.log`, a path agent stdout
   never lands at, so the canonical first run scored 0.00 even when the agent printed the right
