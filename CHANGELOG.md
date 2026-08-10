@@ -52,6 +52,14 @@ version and date and a fresh `[Unreleased]` is started.
   — hence this note. (In-repo, only `codex-cli` and `gemini-cli` needed the migration; both were
   updated.)
 
+- **Script criteria now see the image's `PATH`.** The dedicated scorer container previously *replaced*
+  the image's `PATH` with a pinned list, so toolchains living outside `/usr/{local/,}{bin,sbin}` —
+  `go` in `golang` images, `cargo`/`rustc` in rust images, conda, nvm — were invisible to `type: script`
+  criteria even though the agent had just used them. The scorer now preserves the image's configured
+  `PATH` and prepends `/bunsen/bin` (Bunsen's helpers keep winning); the pinned list remains only as a
+  fallback for images that declare no `PATH`. Scorers that relied on the sanitized `PATH` ordering
+  (image binaries were previously shadowed by `/usr/bin`) will now see image entries first.
+
 ### Removed
 
 - **The `orchestrator.cjs` platform bundle no longer ships.** With the runtime orchestrator retired

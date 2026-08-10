@@ -10,12 +10,48 @@ import {
   collectScriptResultArtifacts,
   parseResultJson,
   resolveScore,
+  resolveScorerPath,
   resolveSummary,
   slugifyCriterion,
+  SCORER_FALLBACK_PATH,
   SCRIPT_SCORER_ENV,
 } from './scorer-container.js';
 import { STABLE_PATHS } from './runtime-contract.js';
 import { RUN_PATHS } from './storage.js';
+
+// =============================================================================
+// resolveScorerPath
+// =============================================================================
+
+describe('resolveScorerPath', () => {
+  it('prepends /bunsen/bin to the image PATH', () => {
+    expect(resolveScorerPath('/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin')).toBe(
+      '/bunsen/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin'
+    );
+  });
+
+  it('preserves toolchain dirs outside /usr/{local/,}bin (the golang/rust image case)', () => {
+    const golangPath = '/usr/local/go/bin:/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+    const resolved = resolveScorerPath(golangPath);
+    expect(resolved.split(':')).toContain('/usr/local/go/bin');
+    expect(resolved.split(':')[0]).toBe('/bunsen/bin');
+  });
+
+  it('falls back to the pinned default when the image declares no PATH', () => {
+    expect(resolveScorerPath(undefined)).toBe(SCORER_FALLBACK_PATH);
+    expect(SCORER_FALLBACK_PATH.split(':')[0]).toBe('/bunsen/bin');
+  });
+
+  it('does not double-prepend when the image PATH already contains /bunsen/bin', () => {
+    const withBunsen = '/bunsen/bin:/usr/local/bin:/usr/bin';
+    expect(resolveScorerPath(withBunsen)).toBe(withBunsen);
+  });
+
+  it('keeps /bunsen/bin first so Bunsen helpers win over image binaries', () => {
+    const adversarial = '/opt/tools/bin:/usr/bin';
+    expect(resolveScorerPath(adversarial).split(':')[0]).toBe('/bunsen/bin');
+  });
+});
 
 // =============================================================================
 // resolveScore
