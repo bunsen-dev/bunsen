@@ -93,6 +93,15 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Fixed
 
+- **The agent container can no longer read the experiment directory.** The experiment dir was
+  mounted read-only at `/input/experiment` in every agent run container — exposing `verifiers/`
+  (held-out fixtures, golden tests, answer keys) and `experiment.yaml` (the full rubric, including
+  judge instructions and gates) to the agent under test, and silently defeating the documented
+  dedicated-mode guarantee that `verifiers/` stays hidden. The mount was a vestige of the retired
+  in-container orchestrator and had no remaining consumer; it is now gone. Files an agent should
+  see go through `workspace.sources`. (An undocumented out-of-tree script that read
+  `/input/experiment` would break — that path was never part of the runtime contract's
+  `STABLE_PATHS`.)
 - **A failed post-run capture step no longer discards a completed run.** Previously any error in
   the capture phase — most commonly a `docker cp` / diff timeout on an artifact-heavy workspace —
   escaped, marked the run `failed`, and evaluation never ran, throwing away completed (possibly
