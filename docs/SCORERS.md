@@ -283,6 +283,25 @@ Combine dependency scores mathematically without an LLM call.
 | `any`              | 1.0 if any dep scores > 0.5, else 0.0                |
 | `min`              | Minimum of `needs` scores                            |
 | `max`              | Maximum of `needs` scores                            |
+| `threshold`        | 1.0 if every dep scores `>= at`, else 0.0 (requires `at`, a number in [0, 1]) |
+
+`threshold` generalizes `all` to any cutoff — e.g. a headline "almost solved" metric derived from a
+partial-credit test criterion, without a script criterion re-reading state:
+
+```yaml
+- id: almost-resolved
+  title: Almost resolved (>= 95% of tests)
+  type: aggregate
+  needs: [behavioral-tests]
+  aggregate:
+    function: threshold
+    at: 0.95
+  weight: 0
+```
+
+Because the aggregate is computed by Bunsen from already-recorded scores, it cannot be influenced by
+anything running in the scorer container — prefer it over passing derived pass/fail state between
+criteria through files.
 
 **Requirements:**
 - Must have a `needs` field
@@ -327,7 +346,7 @@ evaluation:
 | `run`         | string                                                       | Shell command for `type: script` only.                                                            |
 | `evidence`    | `('diff' \| 'logs' \| 'traces')[]`                           | `judge`-only. Default: `[diff]`.                                                                  |
 | `scorer`      | `judge`: `{ model? }` · `agent`/`browser-agent`: `{ model?, tools? }` | Optional per-criterion model selection; the `tools` allowlist applies to `agent`/`browser-agent` only. |
-| `aggregate`   | `{ function: AggregateFunction }`                            | Required for `type: aggregate`.                                                                   |
+| `aggregate`   | `{ function: AggregateFunction, at?: number }`               | Required for `type: aggregate`. `at` is required for `function: threshold`, rejected otherwise.   |
 
 The accepted set of fields per type is enforced by schema validation — `bn experiments validate` rejects, for example, `evidence` on a `script` criterion.
 

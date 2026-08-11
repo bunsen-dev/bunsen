@@ -236,9 +236,14 @@ export interface AggregateCriterion extends CriterionBase {
 
 export interface AggregateSettings {
   function: AggregateFunction;
+  /**
+   * Threshold for `function: threshold` — 1.0 if every dependency scores
+   * `>= at`, else 0.0. Required for `threshold`, rejected for other functions.
+   */
+  at?: number;
 }
 
-export type AggregateFunction = 'weighted_average' | 'all' | 'any' | 'min' | 'max';
+export type AggregateFunction = 'weighted_average' | 'all' | 'any' | 'min' | 'max' | 'threshold';
 
 // ---------------------------------------------------------------------------
 // Report

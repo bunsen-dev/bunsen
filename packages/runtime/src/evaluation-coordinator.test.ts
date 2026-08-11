@@ -225,7 +225,7 @@ describe('runAggregate', () => {
       b: { score: 0.6, summary: 'Test' },
     };
 
-    const result = runAggregate('weighted_average', deps, criteria);
+    const result = runAggregate({ function: 'weighted_average' }, deps, criteria);
     expect(result.score).toBeCloseTo(0.7);
   });
 
@@ -235,7 +235,7 @@ describe('runAggregate', () => {
       b: { score: 1, summary: 'Test' },
     };
 
-    const result = runAggregate('all', deps, criteria);
+    const result = runAggregate({ function: 'all' }, deps, criteria);
     expect(result.score).toBe(1);
   });
 
@@ -245,7 +245,7 @@ describe('runAggregate', () => {
       b: { score: 0.9, summary: 'Test' },
     };
 
-    const result = runAggregate('all', deps, criteria);
+    const result = runAggregate({ function: 'all' }, deps, criteria);
     expect(result.score).toBe(0);
   });
 
@@ -255,7 +255,7 @@ describe('runAggregate', () => {
       b: { score: 0.3, summary: 'Test' },
     };
 
-    const result = runAggregate('any', deps, criteria);
+    const result = runAggregate({ function: 'any' }, deps, criteria);
     expect(result.score).toBe(1);
   });
 
@@ -265,7 +265,7 @@ describe('runAggregate', () => {
       b: { score: 0.4, summary: 'Test' },
     };
 
-    const result = runAggregate('any', deps, criteria);
+    const result = runAggregate({ function: 'any' }, deps, criteria);
     expect(result.score).toBe(0);
   });
 
@@ -275,7 +275,7 @@ describe('runAggregate', () => {
       b: { score: 0.6, summary: 'Test' },
     };
 
-    const result = runAggregate('min', deps, criteria);
+    const result = runAggregate({ function: 'min' }, deps, criteria);
     expect(result.score).toBeCloseTo(0.6);
   });
 
@@ -285,8 +285,57 @@ describe('runAggregate', () => {
       b: { score: 0.6, summary: 'Test' },
     };
 
-    const result = runAggregate('max', deps, criteria);
+    const result = runAggregate({ function: 'max' }, deps, criteria);
     expect(result.score).toBeCloseTo(0.8);
+  });
+
+  it('calculates threshold (all deps clear it)', () => {
+    const deps: Record<string, DependencyScore> = {
+      a: { score: 0.97, summary: 'Test' },
+      b: { score: 0.95, summary: 'Test' },
+    };
+
+    const result = runAggregate({ function: 'threshold', at: 0.95 }, deps, criteria);
+    expect(result.score).toBe(1);
+    expect(result.summary).toContain('>= 0.95');
+  });
+
+  it('calculates threshold (one dep below)', () => {
+    const deps: Record<string, DependencyScore> = {
+      a: { score: 0.97, summary: 'Test' },
+      b: { score: 0.94, summary: 'Test' },
+    };
+
+    const result = runAggregate({ function: 'threshold', at: 0.95 }, deps, criteria);
+    expect(result.score).toBe(0);
+    expect(result.summary).toContain('b (0.94)');
+  });
+
+  it('threshold comparison is >= (a score exactly at the threshold clears it)', () => {
+    const deps: Record<string, DependencyScore> = {
+      a: { score: 0.95, summary: 'Test' },
+    };
+
+    expect(runAggregate({ function: 'threshold', at: 0.95 }, deps, criteria).score).toBe(1);
+  });
+
+  it('threshold at 1.0 matches all-semantics on perfect scores', () => {
+    const deps: Record<string, DependencyScore> = {
+      a: { score: 1, summary: 'Test' },
+      b: { score: 1, summary: 'Test' },
+    };
+
+    expect(runAggregate({ function: 'threshold', at: 1 }, deps, criteria).score).toBe(1);
+  });
+
+  it('threshold without at throws', () => {
+    const deps: Record<string, DependencyScore> = {
+      a: { score: 0.8, summary: 'Test' },
+    };
+
+    expect(() => runAggregate({ function: 'threshold' }, deps, criteria)).toThrow(
+      "'threshold' aggregate requires 'at'"
+    );
   });
 
   it('throws for unknown aggregate', () => {
@@ -294,7 +343,7 @@ describe('runAggregate', () => {
       a: { score: 0.8, summary: 'Test' },
     };
 
-    expect(() => runAggregate('unknown', deps, criteria)).toThrow('Unknown aggregate function');
+    expect(() => runAggregate({ function: 'unknown' as never }, deps, criteria)).toThrow('Unknown aggregate function');
   });
 });
 

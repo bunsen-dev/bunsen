@@ -315,10 +315,21 @@
               "properties": {
                 "function": {
                   "type": "string",
-                  "enum": ["weighted_average", "all", "any", "min", "max"]
-                }
+                  "enum": ["weighted_average", "all", "any", "min", "max", "threshold"]
+                },
+                "at": { "type": "number", "minimum": 0, "maximum": 1 }
               },
-              "additionalProperties": false
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": { "function": { "const": "threshold" } },
+                    "required": ["function"]
+                  },
+                  "then": { "required": ["at"] },
+                  "else": { "not": { "required": ["at"] } }
+                }
+              ]
             }
           },
           "additionalProperties": false

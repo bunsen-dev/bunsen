@@ -18,7 +18,7 @@
  */
 
 import type { RunPlatform, AllowedScores } from './common.js';
-import type { AggregateFunction, JudgeEvidence } from './experiment.js';
+import type { AggregateSettings, JudgeEvidence } from './experiment.js';
 import type { ScriptResultArtifact } from './evaluation.js';
 import type { RunManifestScorerType } from './manifest.js';
 
@@ -214,7 +214,7 @@ export interface ScorerConfig {
   contextDir: string;
   workspacePath: string;
   dependencyScores?: Record<string, DependencyScore>;
-  aggregate?: AggregateFunction;
+  aggregate?: AggregateSettings;
   context?: JudgeEvidence[];
 }
 

@@ -111,6 +111,109 @@ describe('parseExperimentConfig', () => {
     ]);
   });
 
+  it('parses a threshold aggregate and keeps its at value', () => {
+    const config = parseV1(
+      yaml.dump({
+        version: 'v1',
+        name: 'thresh',
+        task: { prompt: 'x' },
+        environment: { image: { base: 'b' } },
+        evaluation: {
+          criteria: [
+            { id: 's', title: 'Script', type: 'script', run: 'pytest' },
+            {
+              id: 'almost',
+              title: 'Almost',
+              type: 'aggregate',
+              needs: ['s'],
+              aggregate: { function: 'threshold', at: 0.95 },
+              weight: 0,
+            },
+          ],
+        },
+      }),
+    );
+    expect(config.evaluation.criteria[1]).toMatchObject({
+      type: 'aggregate',
+      aggregate: { function: 'threshold', at: 0.95 },
+    });
+  });
+
+  it('rejects threshold aggregate without at', () => {
+    expect(() =>
+      parseV1(
+        yaml.dump({
+          version: 'v1',
+          name: 'thresh',
+          task: { prompt: 'x' },
+          environment: { image: { base: 'b' } },
+          evaluation: {
+            criteria: [
+              { id: 's', title: 'S', type: 'script', run: 'pytest' },
+              {
+                id: 'agg',
+                title: 'Agg',
+                type: 'aggregate',
+                needs: ['s'],
+                aggregate: { function: 'threshold' },
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow(/aggregate\.at is required for 'threshold'/);
+  });
+
+  it('rejects threshold aggregate with at outside [0, 1]', () => {
+    expect(() =>
+      parseV1(
+        yaml.dump({
+          version: 'v1',
+          name: 'thresh',
+          task: { prompt: 'x' },
+          environment: { image: { base: 'b' } },
+          evaluation: {
+            criteria: [
+              { id: 's', title: 'S', type: 'script', run: 'pytest' },
+              {
+                id: 'agg',
+                title: 'Agg',
+                type: 'aggregate',
+                needs: ['s'],
+                aggregate: { function: 'threshold', at: 1.5 },
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow(/aggregate\.at is required for 'threshold' and must be a number in \[0, 1\]/);
+  });
+
+  it('rejects at on non-threshold aggregate functions', () => {
+    expect(() =>
+      parseV1(
+        yaml.dump({
+          version: 'v1',
+          name: 'thresh',
+          task: { prompt: 'x' },
+          environment: { image: { base: 'b' } },
+          evaluation: {
+            criteria: [
+              { id: 's', title: 'S', type: 'script', run: 'pytest' },
+              {
+                id: 'agg',
+                title: 'Agg',
+                type: 'aggregate',
+                needs: ['s'],
+                aggregate: { function: 'all', at: 0.9 },
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow(/aggregate\.at is only valid with 'function: threshold'/);
+  });
+
   it('parses evaluation.report as a dedicated field', () => {
     const config = parseV1(
       baseYaml({

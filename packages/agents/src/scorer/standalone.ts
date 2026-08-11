@@ -288,7 +288,7 @@ function runAggregateScorer(config: ScorerConfig): ScorerOutput {
   let score: number;
   let summary: string;
 
-  switch (aggregate) {
+  switch (aggregate.function) {
     case 'weighted_average': {
       // Simple average (weights are handled by coordinator)
       const avg = validScores.reduce((sum, v) => sum + v.score, 0) / validScores.length;
@@ -329,8 +329,22 @@ function runAggregateScorer(config: ScorerConfig): ScorerOutput {
       break;
     }
 
+    case 'threshold': {
+      const at = aggregate.at;
+      if (typeof at !== 'number' || at < 0 || at > 1) {
+        throw new Error(`'threshold' aggregate requires 'at' in [0, 1], got: ${at}`);
+      }
+      const below = validScores.filter((v) => v.score < at);
+      score = below.length === 0 ? 1 : 0;
+      summary =
+        below.length === 0
+          ? `All ${validScores.length} criteria scored >= ${at}`
+          : `Below threshold ${at}: ${below.map((v) => `${v.name} (${v.score.toFixed(2)})`).join(', ')}`;
+      break;
+    }
+
     default:
-      throw new Error(`Unknown aggregate function: ${aggregate}`);
+      throw new Error(`Unknown aggregate function: ${aggregate.function}`);
   }
 
   return { score, summary };

@@ -133,7 +133,8 @@ _Extends `criterionBase`._
 - `needs`: `criterionNeeds` **(required)**
 - `gate`: `criterionGate`
 - `aggregate`: object **(required)**
-  - `function`: `"weighted_average"` | `"all"` | `"any"` | `"min"` | `"max"` **(required)**
+  - `function`: `"weighted_average"` | `"all"` | `"any"` | `"min"` | `"max"` | `"threshold"` **(required)**
+  - `at`: number — min 0, max 1
   - _no other fields allowed_
 - _no other fields allowed_
 

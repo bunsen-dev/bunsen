@@ -34,6 +34,14 @@ version and date and a fresh `[Unreleased]` is started.
   defaults to `["{prompt}"]` (a bare positional prompt), so existing agents are unaffected.
   Reflected in the `agent.v1.json` schema.
 
+- **`experiment.yaml`: `threshold` aggregate function** — `aggregate: { function: threshold, at: 0.95 }`
+  scores 1.0 when every `needs` dependency scored `>= at`, else 0.0 (`all` is the `at: 1.0` special
+  case; comparison is `>=`). Lets suites derive headline metrics like "almost solved (>= 95% of
+  tests)" from scores Bunsen already recorded instead of round-tripping state between criteria
+  through files in the scorer container — which a hostile submission sharing that container could
+  forge. `at` is validated (required for `threshold`, a number in [0, 1], rejected on other
+  functions) and reflected in the `experiment.v1.json` schema.
+
 ### Changed
 
 - **`bn new` is gone — creation is now noun-first.** `bn new experiment <name>` → **`bn experiments new <name>`** and `bn new agent <name>` → **`bn agents new <name>`**, so every resource verb reads noun-first (`bn agents new / add / infer-invoke / build / …`). The top-level `bn new` command was removed outright with no alias (pre-1.0, no users yet). `-t/--template` is unchanged.
