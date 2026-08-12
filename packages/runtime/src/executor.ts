@@ -2075,6 +2075,7 @@ ${agentScript}
             return t !== 'aggregate';
           }) || experiment.evaluation.report !== undefined;
 
+        let extractedScorerInputDir: string | undefined;
         let extractedWorkspaceDir: string | undefined;
         let extractedWorkspaceSourceDir: string | undefined;
         let scorerContainerInfo: ScorerContainerInfo | undefined;
@@ -2109,7 +2110,11 @@ ${agentScript}
           } else if (hasContainerScorers) {
             // Default path: extract workspace and create separate scorer container
             log('Extracting workspace for scorer container...');
-            const extractedScorerInputDir = path.join(os.tmpdir(), `bunsen-scorer-input-${runId}`);
+            // Assigned BEFORE the first docker cp so the finally below removes
+            // the tree even when extraction fails partway — a partial copy of
+            // the agent's workspace (which may hold credentials the agent
+            // wrote) must not outlive the run in the OS temp dir.
+            extractedScorerInputDir = path.join(os.tmpdir(), `bunsen-scorer-input-${runId}`);
             // Uses the run's artifactCaptureTimeout (default 120s) — for large
             // workspaces this docker cp is the slowest capture step, and the
             // documented escape hatch must cover it.
@@ -2405,9 +2410,9 @@ ${agentScript}
               });
               if (activeRun) activeRun.scorerContainer = null;
             }
-            if (extractedWorkspaceDir) {
+            if (extractedScorerInputDir) {
               try {
-                fs.rmSync(path.dirname(extractedWorkspaceDir), { recursive: true, force: true });
+                fs.rmSync(extractedScorerInputDir, { recursive: true, force: true });
               } catch {
                 // Ignore cleanup errors
               }

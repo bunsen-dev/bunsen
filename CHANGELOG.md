@@ -75,7 +75,10 @@ version and date and a fresh `[Unreleased]` is started.
   the manifest (`extensions.capture_incomplete` + `extensions.capture_warnings`), and the run
   proceeds to evaluation. Relatedly, `run.artifactCaptureTimeout` now actually covers the slowest
   capture step — the workspace extraction feeding the dedicated scorer container — which was
-  hard-coded to 120s regardless of the documented setting.
+  hard-coded to 120s regardless of the documented setting. A failed extraction also no longer
+  orphans a partial copy of the agent's workspace in the OS temp dir: the extraction root is now
+  removed on every path, so workspace content (which may include credentials an agent wrote to
+  disk) cannot outlive the run outside the run directory.
 - **The `bn init --example` hello-world scorer now actually sees the agent's output.** The
   scaffolded criterion grepped `/workspace-source/.bunsen/agent-output.log`, a path agent stdout
   never lands at, so the canonical first run scored 0.00 even when the agent printed the right
