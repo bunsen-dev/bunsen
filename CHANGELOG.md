@@ -44,6 +44,16 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Changed
 
+- **A timed-out script criterion now honors the results the script already wrote.** Previously a
+  criterion that hit its `timeout` scored an unconditional 0 — `result.json` / the score file were
+  never read on that path, so incremental partial credit ("write `result.json` after each test
+  batch") silently could not work, and the bare 0.0 was indistinguishable from a genuine failure.
+  Resolution on timeout now matches a clean exit minus the exit-code fallback: valid
+  `$BUNSEN_EVAL_RESULT` → valid `$BUNSEN_SCORE_FILE` → 0, with `Timed out after {N}s` always
+  leading the summary (a torn `result.json` from a mid-write kill falls back to the score file).
+  A suite that relied on timeout meaning a hard 0 should stop writing output files before the
+  work is actually verified.
+
 - **`bn new` is gone — creation is now noun-first.** `bn new experiment <name>` → **`bn experiments new <name>`** and `bn new agent <name>` → **`bn agents new <name>`**, so every resource verb reads noun-first (`bn agents new / add / infer-invoke / build / …`). The top-level `bn new` command was removed outright with no alias (pre-1.0, no users yet). `-t/--template` is unchanged.
 - **Agent invocation is now composed deterministically.** The in-container LLM "orchestrator"
   (a model call that decided each agent's argv on every `bn run`) has been **retired**. The

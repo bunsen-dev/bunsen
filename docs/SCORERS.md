@@ -96,6 +96,22 @@ Run a shell command in the scorer container. The simplest and cheapest evaluatio
 4. Exit `0` (no files) → `"Passed"`.
 5. Non-zero exit (no files) → `"Failed (exit code {code})"`.
 
+**Score resolution on timeout:**
+
+When the script exceeds its `timeout`, whatever it already wrote wins — same precedence as a clean
+exit, minus the exit-code fallback (there is no exit code): a valid `$BUNSEN_EVAL_RESULT` is
+honored, else a valid `$BUNSEN_SCORE_FILE`, else the criterion scores 0. The summary always leads
+with `Timed out after {N}s` so a timeout is never silent. This is what makes incremental partial
+credit work: a long test harness that rewrites `result.json` after each batch keeps the credit it
+earned when the budget runs out. Two caveats:
+
+- Write `result.json` atomically (write to a temp file, then `mv` over it) if you rewrite it
+  repeatedly — the script is killed at an arbitrary point, and a torn/invalid `result.json` falls
+  back to the score file, then 0.
+- The recorded score is indistinguishable from the same score earned without a timeout except by
+  its summary (and the `[TIMEOUT]` marker in the criterion log). If a timeout must gate other
+  criteria differently, encode that in the score your script writes.
+
 **Structured `result.json`:**
 
 For scorers that need to attach artifacts (coverage reports, generated diffs, screenshots, etc.) write a JSON document to `$BUNSEN_EVAL_RESULT`:
