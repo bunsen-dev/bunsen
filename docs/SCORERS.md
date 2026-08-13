@@ -103,8 +103,15 @@ exit, minus the exit-code fallback (there is no exit code): a valid `$BUNSEN_EVA
 honored, else a valid `$BUNSEN_SCORE_FILE`, else the criterion scores 0. The summary always leads
 with `Timed out after {N}s` so a timeout is never silent. This is what makes incremental partial
 credit work: a long test harness that rewrites `result.json` after each batch keeps the credit it
-earned when the budget runs out. Two caveats:
+earned when the budget runs out. Three caveats:
 
+- **Keep the denominator fixed at the full expected work, not the work completed so far.** An
+  incremental scorer that writes `passed_so_far / attempted_so_far` inflates on timeout: after 2
+  of 3 test branches it checkpoints a flattering `1.0` — a timed-out run claiming a perfect
+  score, and the inflation is worst exactly when the timeout bites hardest. Score each checkpoint
+  against the total planned work (count not-yet-run tests as failures/not-run in the
+  denominator): `20/30 = 0.667`, not `20/20 = 1.0`. This failure mode is more dangerous than a
+  torn write because it fails *upward* and looks like success.
 - Write `result.json` atomically (write to a temp file, then `mv` over it) if you rewrite it
   repeatedly — the script is killed at an arbitrary point, and a torn/invalid `result.json` falls
   back to the score file, then 0.
