@@ -73,7 +73,12 @@ version and date and a fresh `[Unreleased]` is started.
   hours-long) agent work with no way to rescore. Capture steps (trace processing, workspace
   diff/export, agent output capture) now degrade independently: the failure is logged, recorded on
   the manifest (`extensions.capture_incomplete` + `extensions.capture_warnings`), and the run
-  proceeds to evaluation. Relatedly, `run.artifactCaptureTimeout` now actually covers the slowest
+  proceeds to evaluation. Degradation is evidence-aware: a `judge` criterion whose `evidence`
+  (e.g. `[diff]`) depended on the failed step is recorded `skipped` with `score: null` — the same
+  "couldn't measure ≠ scored 0" semantics gates use — so a degraded run can never record a judge
+  score computed against missing evidence, while script criteria (which score the real extracted
+  workspace) still run. An aggregate whose dependencies were all skipped is likewise skipped.
+  `bn runs show` prints a warning banner on capture-degraded runs. Relatedly, `run.artifactCaptureTimeout` now actually covers the slowest
   capture step — the workspace extraction feeding the dedicated scorer container — which was
   hard-coded to 120s regardless of the documented setting. A failed extraction also no longer
   orphans a partial copy of the agent's workspace in the OS temp dir: the extraction root is now

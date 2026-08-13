@@ -13,6 +13,7 @@ import type {
   OrchestrationResult,
   ContainerMount,
   Criterion,
+  JudgeEvidence,
   ReportConfig,
   RunPlatform,
   AgentDepSpec,
@@ -71,6 +72,7 @@ import {
   getExecutionOrder,
   buildScorerConfig,
   runAggregate,
+  blockedJudgeEvidence,
   buildEvaluationResult,
   validateRubric,
   checkGate,
@@ -1803,6 +1805,10 @@ ${agentScript}
       // and falls through so evaluation still happens (the agent's work is
       // done and paid for — a missing diff is not a failed experiment).
       const captureWarnings: string[] = [];
+      // Evidence categories destroyed by a failed capture step. Judge criteria
+      // whose evidence intersects this set are skipped during evaluation
+      // (blockedJudgeEvidence) instead of scoring against missing evidence.
+      const failedEvidence = new Set<JudgeEvidence>();
       const recordCaptureWarning = (label: string, error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         captureWarnings.push(`${label}: ${message}`);
@@ -1823,6 +1829,7 @@ ${agentScript}
         }
       } catch (error) {
         recordCaptureWarning('trace processing', error);
+        failedEvidence.add('traces');
       }
 
       try {
@@ -1972,6 +1979,7 @@ ${agentScript}
         }
       } catch (error) {
         recordCaptureWarning('workspace diff/export', error);
+        failedEvidence.add('diff');
       }
 
       try {
@@ -2178,6 +2186,52 @@ ${agentScript}
               };
 
               log(`  ${criterion.id}: SKIPPED - ${skippedResult.summary}`);
+              emit({
+                event: 'criterion.completed',
+                data: {
+                  id: criterion.id,
+                  score: null,
+                  durationMs: Date.now() - criterionStart,
+                  status: 'skipped',
+                },
+              });
+              continue;
+            }
+
+            // Capture-degraded runs: a judge whose evidence a failed capture
+            // step destroyed is skipped (score: null) — never scored against
+            // missing evidence. Aggregates whose dependencies were ALL
+            // skipped have nothing to aggregate and skip likewise (mixed
+            // null/scored deps proceed; runAggregate ignores nulls).
+            const blockedEvidence = blockedJudgeEvidence(criterion, failedEvidence);
+            const aggregateStarved =
+              criterion.type === 'aggregate' &&
+              criterion.resolvedDependencies.length > 0 &&
+              criterion.resolvedDependencies.every(
+                (name) => dependencyScores[name]?.score === null,
+              );
+            if (blockedEvidence.length > 0 || aggregateStarved) {
+              const summary =
+                blockedEvidence.length > 0
+                  ? `Skipped: required evidence unavailable (${blockedEvidence.join(', ')}) — a capture step failed before evaluation`
+                  : 'Skipped: every dependency was skipped, nothing to aggregate';
+              progress(`Skipping: ${criterion.id} (${blockedEvidence.length > 0 ? 'evidence unavailable' : 'dependencies skipped'})`);
+
+              const skippedResult: CriterionResult = {
+                id: criterion.id,
+                weight: criterion.resolvedWeight,
+                score: null,
+                summary,
+                status: 'skipped',
+                scorerType: criterion.type,
+              };
+              if (criterion.scores) {
+                skippedResult.allowedScores = criterion.scores;
+              }
+              criterionResults.push(skippedResult);
+              dependencyScores[criterion.id] = { score: null, summary };
+
+              log(`  ${criterion.id}: SKIPPED - ${summary}`);
               emit({
                 event: 'criterion.completed',
                 data: {

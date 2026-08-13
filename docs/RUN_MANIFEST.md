@@ -309,7 +309,7 @@ core-schema bump. Current keys:
 | Key | Type | Meaning |
 |---|---|---|
 | `timed_out` | `true` | The agent hit `run.timeout` with `onTimeout: score`: the run completed and was scored against whatever the agent left. |
-| `capture_incomplete` | `true` | One or more post-run capture steps (trace processing, workspace diff/export, agent output capture) failed. The run still proceeded to evaluation — scores exist, but the named artifacts may be missing. |
+| `capture_incomplete` | `true` | One or more post-run capture steps (trace processing, workspace diff/export, agent output capture) failed. The run still proceeded to evaluation — scores exist, but the named artifacts may be missing. `judge` criteria whose `evidence` depended on a failed step are recorded `skipped` (`score: null`), never scored against missing evidence. |
 | `capture_warnings` | `string[]` | One `<step>: <error>` entry per failed capture step. Present iff `capture_incomplete` is set. |
 
 ### Artifacts
