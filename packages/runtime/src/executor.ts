@@ -3792,7 +3792,7 @@ ${script}
   };
 }
 
-function createMounts(
+export function createMounts(
   experiment: ResolvedExperiment,
   agentPath: string,
   artifactsPath?: string,
@@ -3809,11 +3809,12 @@ function createMounts(
     });
   }
 
-  mounts.push({
-    source: experiment.dir,
-    target: '/input/experiment',
-    readonly: true,
-  });
+  // The experiment dir is deliberately NOT mounted into the agent container.
+  // It contains verifiers/ (held-out fixtures, golden tests) and
+  // experiment.yaml (the full rubric the agent is graded against) — the
+  // dedicated scorer container mounts verifiers/ itself, and nothing on the
+  // agent side reads the experiment dir. Anything the agent should see goes
+  // through workspace.sources.
 
   mounts.push({
     source: agentPath,

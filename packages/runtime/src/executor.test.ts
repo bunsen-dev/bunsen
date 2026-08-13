@@ -13,6 +13,7 @@ import {
   buildWorkspaceMaterializationScript,
   buildWorkspaceSourceAssemblyScript,
   cleanupInternalRunFiles,
+  createMounts,
   handleSignal,
   setActiveRunForTest,
   detectDepConflicts,
@@ -60,6 +61,46 @@ function makeResolvedExperiment(
     ...overrides,
   } as ResolvedExperiment;
 }
+
+describe('createMounts (agent run container)', () => {
+  it('never mounts the experiment dir — verifiers/ and experiment.yaml stay hidden from the agent', () => {
+    const experiment = makeResolvedExperiment({
+      dir: '/host/experiments/secret-suite',
+      hasVerifiers: true,
+    });
+    const mounts = createMounts(experiment, '/host/agents/echo', '/host/artifacts', []);
+
+    // The rubric (experiment.yaml) and held-out fixtures (verifiers/) live in
+    // experiment.dir; in dedicated scoring mode the scorer container mounts
+    // verifiers/ itself, so the agent container must see none of it.
+    expect(mounts.some((m) => m.source === experiment.dir)).toBe(false);
+    expect(mounts.some((m) => m.target.startsWith('/input'))).toBe(false);
+  });
+
+  it('still mounts agent, artifacts, deps, and local workspace sources', () => {
+    const experiment = makeResolvedExperiment({
+      workspaceSources: [
+        {
+          type: 'path',
+          sourcePath: '/host/seed',
+          target: undefined,
+          original: { path: './seed' },
+          index: 0,
+        },
+      ],
+    });
+    const mounts = createMounts(experiment, '/host/agents/echo', '/host/artifacts', [
+      { name: 'dep-a', artifactsPath: '/host/deps/dep-a' } as PreparedAgentDep,
+    ]);
+
+    expect(mounts).toEqual([
+      { source: '/host/seed', target: '/bunsen/workspace-sources/local/0', readonly: true },
+      { source: '/host/agents/echo', target: '/agent', readonly: true },
+      { source: '/host/artifacts', target: '/bunsen/artifacts', readonly: true },
+      { source: '/host/deps/dep-a', target: '/bunsen/deps/dep-a', readonly: true },
+    ]);
+  });
+});
 
 describe('resolveRunPlatform', () => {
   it('uses explicit CLI platform when compatible with experiment constraints', () => {
