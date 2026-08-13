@@ -74,6 +74,19 @@ function renderText(manifest: RunManifestV1, runId: string): void {
     manifest.status === 'canceled' ? chalk.magenta :
     chalk.yellow;
   console.log(`Status:     ${statusColor(manifest.status)}`);
+  if (manifest.extensions?.capture_incomplete === true) {
+    console.log(
+      chalk.yellow(
+        '⚠ Capture incomplete: some post-run artifacts are missing; criteria whose evidence was lost were skipped, not scored.'
+      )
+    );
+    const warnings = manifest.extensions.capture_warnings;
+    if (Array.isArray(warnings)) {
+      for (const w of warnings) {
+        console.log(chalk.dim(`    ${String(w)}`));
+      }
+    }
+  }
   console.log(`Experiment: ${manifest.experiment.id}`);
   if (manifest.agent.variant) {
     console.log(`Agent:      ${manifest.agent.id}:${chalk.cyan(manifest.agent.variant)}`);

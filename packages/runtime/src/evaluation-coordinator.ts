@@ -276,6 +276,26 @@ export function criterionRun(c: Criterion): string | undefined {
 }
 
 /**
+ * Evidence categories this criterion needs that a failed capture step made
+ * unavailable. Non-empty means the criterion must be skipped (score: null)
+ * rather than scored against missing evidence — a judge grading an absent
+ * diff would record a plausible-looking but meaningless number.
+ *
+ * Only `judge` criteria consume platform-assembled evidence; `agent` /
+ * `browser-agent` scorers fetch their own ground truth via tools and
+ * `script` criteria run against the real extracted workspace, so all of
+ * those proceed on degraded runs.
+ */
+export function blockedJudgeEvidence(
+  c: Criterion,
+  failedEvidence: ReadonlySet<JudgeEvidence>,
+): JudgeEvidence[] {
+  if (c.type !== 'judge' || failedEvidence.size === 0) return [];
+  const needed = c.evidence ?? ['diff'];
+  return needed.filter((e) => failedEvidence.has(e));
+}
+
+/**
  * Build scorer config for a criterion
  */
 export function buildScorerConfig(

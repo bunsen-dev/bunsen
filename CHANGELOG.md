@@ -93,6 +93,23 @@ version and date and a fresh `[Unreleased]` is started.
 
 ### Fixed
 
+- **A failed post-run capture step no longer discards a completed run.** Previously any error in
+  the capture phase — most commonly a `docker cp` / diff timeout on an artifact-heavy workspace —
+  escaped, marked the run `failed`, and evaluation never ran, throwing away completed (possibly
+  hours-long) agent work with no way to rescore. Capture steps (trace processing, workspace
+  diff/export, agent output capture) now degrade independently: the failure is logged, recorded on
+  the manifest (`extensions.capture_incomplete` + `extensions.capture_warnings`), and the run
+  proceeds to evaluation. Degradation is evidence-aware: a `judge` criterion whose `evidence`
+  (e.g. `[diff]`) depended on the failed step is recorded `skipped` with `score: null` — the same
+  "couldn't measure ≠ scored 0" semantics gates use — so a degraded run can never record a judge
+  score computed against missing evidence, while script criteria (which score the real extracted
+  workspace) still run. An aggregate whose dependencies were all skipped is likewise skipped.
+  `bn runs show` prints a warning banner on capture-degraded runs. Relatedly, `run.artifactCaptureTimeout` now actually covers the slowest
+  capture step — the workspace extraction feeding the dedicated scorer container — which was
+  hard-coded to 120s regardless of the documented setting. A failed extraction also no longer
+  orphans a partial copy of the agent's workspace in the OS temp dir: the extraction root is now
+  removed on every path, so workspace content (which may include credentials an agent wrote to
+  disk) cannot outlive the run outside the run directory.
 - **The `bn init --example` hello-world scorer now actually sees the agent's output.** The
   scaffolded criterion grepped `/workspace-source/.bunsen/agent-output.log`, a path agent stdout
   never lands at, so the canonical first run scored 0.00 even when the agent printed the right

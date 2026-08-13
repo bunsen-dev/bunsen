@@ -11,6 +11,7 @@ import type {
   DependencyScore,
 } from '@bunsen-dev/types';
 import {
+  blockedJudgeEvidence,
   resolveDependencies,
   topologicalSort,
   determineScorerType,
@@ -344,6 +345,54 @@ describe('runAggregate', () => {
     };
 
     expect(() => runAggregate({ function: 'unknown' as never }, deps, criteria)).toThrow('Unknown aggregate function');
+  });
+});
+
+describe('blockedJudgeEvidence', () => {
+  const failedDiff = new Set<'diff' | 'logs' | 'traces'>(['diff']);
+
+  it('blocks a judge with default evidence when diff capture failed', () => {
+    const judge: Criterion = { id: 'j', title: 'J', type: 'judge', instructions: 'x' };
+    expect(blockedJudgeEvidence(judge, failedDiff)).toEqual(['diff']);
+  });
+
+  it('does not block a judge whose explicit evidence avoids the failed category', () => {
+    const judge: Criterion = {
+      id: 'j',
+      title: 'J',
+      type: 'judge',
+      instructions: 'x',
+      evidence: ['logs'],
+    };
+    expect(blockedJudgeEvidence(judge, failedDiff)).toEqual([]);
+  });
+
+  it('reports only the failed subset of multi-category evidence', () => {
+    const judge: Criterion = {
+      id: 'j',
+      title: 'J',
+      type: 'judge',
+      instructions: 'x',
+      evidence: ['diff', 'logs', 'traces'],
+    };
+    expect(blockedJudgeEvidence(judge, new Set(['diff', 'traces']))).toEqual(['diff', 'traces']);
+  });
+
+  it('never blocks script, agent, browser-agent, or aggregate criteria', () => {
+    const criteria: Criterion[] = [
+      { id: 's', title: 'S', type: 'script', run: 'true' },
+      { id: 'a', title: 'A', type: 'agent', instructions: 'x' },
+      { id: 'ba', title: 'BA', type: 'browser-agent', instructions: 'x' },
+      { id: 'agg', title: 'G', type: 'aggregate', needs: ['s'], aggregate: { function: 'all' } },
+    ];
+    for (const c of criteria) {
+      expect(blockedJudgeEvidence(c, failedDiff)).toEqual([]);
+    }
+  });
+
+  it('returns empty when no capture step failed', () => {
+    const judge: Criterion = { id: 'j', title: 'J', type: 'judge', instructions: 'x' };
+    expect(blockedJudgeEvidence(judge, new Set())).toEqual([]);
   });
 });
 
