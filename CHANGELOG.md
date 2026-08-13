@@ -14,6 +14,8 @@ version and date and a fresh `[Unreleased]` is started.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-13
+
 ### Added
 
 - **`bn agents infer-invoke <agent>`** — infers an agent's `entrypoint.invoke` template with a model
