@@ -54,7 +54,11 @@ A release is a **manually-created GitHub Release**; both `release.yaml` and
 1. **Bump the public package versions** (`@bunsen-dev/types`, `@bunsen-dev/sdk`,
    `@bunsen-dev/cli`) to the new `X.Y.Z`. `publish-npm.yaml` publishes whatever
    version is in each `package.json`; the binary + tap + bucket use the **tag**, so
-   keep the tag and the package versions in sync.
+   keep the tag and the package versions in sync. **Also bump `CLI_VERSION` in
+   `packages/cli/src/version.ts`** — it's what `bn --version` reports from the
+   standalone binary, and a guard test (`version.test.ts`) fails the build when it
+   drifts from `packages/cli/package.json` (v0.3.0 shipped self-reporting 0.2.0
+   because this step was missed).
 2. **Update the changelog.** In [`CHANGELOG.md`](../CHANGELOG.md), rename the
    `[Unreleased]` section to `[X.Y.Z] - YYYY-MM-DD` and start a fresh empty
    `[Unreleased]`. Pre-1.0, make sure every public-surface break (schemas, the
