@@ -14,6 +14,18 @@ version and date and a fresh `[Unreleased]` is started.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-13
+
+### Fixed
+
+- **`bn --version` now reports the actual version.** The v0.3.0 standalone binaries self-reported
+  `0.2.0`: the hand-maintained `CLI_VERSION` constant (bundled into the binary, which can't read
+  `package.json` at runtime) was missed by the release checklist. Besides the confusing version
+  string, this made `bn upgrade` consider an up-to-date install perpetually outdated and stamped
+  `bn skills install` with the wrong version. The constant is now guarded by a test that fails
+  when it drifts from `packages/cli/package.json`, and the release checklist names it. No other
+  changes — v0.3.1 is functionally identical to v0.3.0.
+
 ## [0.3.0] - 2026-08-13
 
 ### Added
