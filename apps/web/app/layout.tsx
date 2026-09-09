@@ -17,7 +17,7 @@ const jetbrains = JetBrains_Mono({
 
 const title = "Bunsen — Any agent. Any experiment. Deep evals.";
 const description =
-  "Bunsen is a source-available, autonomous research lab for agentic systems. Run any agent on any experiment in a container, score it with deep agentic evals, and compare across harnesses — for humans and AI alike.";
+  "Bunsen is a open-source, autonomous research lab for agentic systems. Run any agent on any experiment in a container, score it with deep agentic evals, and compare across harnesses — for humans and AI alike.";
 
 const ogImageAlt = "Bunsen — Any agent. Any experiment. Deep evals.";
 
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Bunsen — An autonomous research lab for agentic systems",
     description:
-      "Any agent. Any experiment. Deep evals. A source-available research lab where Bunsen's own agents drive the agent under test, read its traces, and write up the findings, citing their evidence — so you can compare across models and harnesses.",
+      "Any agent. Any experiment. Deep evals. A open-source research lab where Bunsen's own agents drive the agent under test, read its traces, and write up the findings, citing their evidence — so you can compare across models and harnesses.",
     type: "website",
     url: "https://bunsen.dev/",
     siteName: "Bunsen",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title,
     description:
-      "A source-available, autonomous research lab for agentic systems. Any agent, any experiment, deep evals.",
+      "A open-source, autonomous research lab for agentic systems. Any agent, any experiment, deep evals.",
     images: ["/og-image.png"],
   },
 };

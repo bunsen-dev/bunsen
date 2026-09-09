@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Guards the *content* of the bundled cross-agent skills (not the install
  * plumbing — that is skills.test.ts). These assertions are the reason the

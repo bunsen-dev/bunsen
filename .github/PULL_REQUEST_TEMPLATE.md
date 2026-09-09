@@ -1,7 +1,6 @@
 <!--
 Keep PRs focused. The "why" matters more than the "what" — the diff already
-shows the what. First-time contributors: cla-assistant.io will prompt you to
-sign the CLA once on this PR. See CONTRIBUTING.md.
+shows the what. See CONTRIBUTING.md.
 -->
 
 ## What

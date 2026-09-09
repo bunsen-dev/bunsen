@@ -13,10 +13,12 @@ describe("site config", () => {
     }
   });
 
-  it("never markets Bunsen as 'open source' (it is source-available)", () => {
+  it("markets Bunsen as open source under Apache-2.0", () => {
+    expect(site.licenseLine).toContain("Apache-2.0");
+    expect(site.licenseLine).toContain("Open source");
     for (const value of Object.values(site)) {
       if (typeof value === "string") {
-        expect(value.toLowerCase()).not.toContain("open source");
+        expect(value).not.toMatch(/source[ -]available|poly[f]orm/i);
       }
     }
   });

@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """
 Self-contained unit tests for ai_capture.py SSE parsing, usage extraction,
 and per-call cost estimation.

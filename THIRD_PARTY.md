@@ -1,10 +1,9 @@
 # Third-Party Code in This Repository
 
-Bunsen's own code is licensed under PolyForm Shield 1.0.0 (see [LICENSE](./LICENSE) and
+Bunsen's own code is licensed under Apache-2.0 (see [LICENSE](./LICENSE) and
 [LICENSING.md](./LICENSING.md)). This repository also **bundles third-party code**, which remains under
-its own upstream license — the Shield license does **not** apply to any path listed here. Each entry
-keeps its upstream `LICENSE`/`LICENSE.txt` file in place; that file is the authoritative statement of
-terms for that directory.
+its own upstream license. Each entry keeps its upstream `LICENSE`/`LICENSE.txt` file in place;
+that file is the authoritative statement of terms for that directory.
 
 This document is the provenance catalog: what each bundled component is, where it came from, why it's
 here, and what (if anything) was changed.
@@ -55,7 +54,7 @@ the upstream license file at its root.
 - **Why AGPL does not spread to Bunsen:** the binary is shipped **unmodified** as an independently
   built component and is invoked **only as a subprocess** (the CLI is spawned; bots talk to it over
   HTTP). This is mere aggregation — running an unmodified program at arm's length — so it does not
-  make Bunsen's own code (PolyForm Shield) a derivative work. We do **not** modify the engine, link it
+  make Bunsen's own code (Apache-2.0) a derivative work. We do **not** modify the engine, link it
   into our code, or expose a modified engine as a network service (AGPL §13). Anyone redistributing a
   built image conveys an AGPL-3.0 binary and must keep this notice + the source pointer above and offer
   corresponding source (it is public at the pinned tag). The image carries the same pointer as OCI

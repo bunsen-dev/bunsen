@@ -21,14 +21,14 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!s) {
     return {
       title: "Docs — Bunsen",
-      description: "Documentation for Bunsen, a source-available research lab for agentic systems.",
+      description: "Documentation for Bunsen, a open-source research lab for agentic systems.",
     };
   }
   const doc = getDoc(s);
   if (!doc) return {};
   return {
     title: `${doc.meta.title} — Bunsen docs`,
-    description: `${doc.meta.title} — documentation for Bunsen, a source-available research lab for agentic systems.`,
+    description: `${doc.meta.title} — documentation for Bunsen, a open-source research lab for agentic systems.`,
   };
 }
 

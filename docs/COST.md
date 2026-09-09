@@ -34,8 +34,8 @@ numbers?](#can-you-trust-the-numbers).
 > To actually bound spend, use the controls that gate it: provider-side budgets
 > and rate limits, scoped and low-limit API keys, throwaway keys on a disposable
 > host (see the [Trust Model](./TRUST_MODEL.md)), and a conservative `run.timeout`.
-> Bunsen is `AS IS` software and disclaims liability for these charges — see "No
-> Liability" and the Additional Terms in [`LICENSE`](../LICENSE).
+> See the [Trust Model](./TRUST_MODEL.md) for guidance on credentials and executing
+> untrusted code.
 
 ## How a call is priced
 

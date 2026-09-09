@@ -13,7 +13,7 @@
 #   BUNSEN_INSTALL_DIR=...  install dir (default: $HOME/.local/bin)
 #
 # SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 set -eu
 
 REPO="bunsen-dev/bunsen"

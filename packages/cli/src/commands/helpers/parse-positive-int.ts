@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 import { BunsenCliError } from '../../errors.js';
 import { EXIT_CODES } from '../../exit-codes.js';
 

@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Tests for the v1 experiment.yaml loader (parser, variant merge, workspace
  * source resolution, criterion-graph validation).

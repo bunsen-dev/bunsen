@@ -3,18 +3,11 @@
 Thanks for your interest in improving Bunsen! Contributions of all kinds are welcome — bug reports, fixes,
 docs, new experiments, and features.
 
-## License & the CLA (please read first)
+## License
 
-Bunsen is **source-available** under the [PolyForm Shield License 1.0.0](./LICENSE), not OSI open source.
-In short: you can freely use Bunsen at work, self-host it, modify it, fork it, and redistribute it for
-any purpose **except** providing a product or service that competes with Bunsen. See
-[LICENSING.md](./LICENSING.md) for the plain-English summary and the third-party component licenses.
-
-Because Bunsen is also offered under a separate commercial license, contributions are accepted under a
-**Contributor License Agreement** ([CLA.md](./CLA.md)) — you keep ownership of your work, and you grant the
-maintainer the rights needed to ship Bunsen under its source-available license, offer separate commercial
-terms, and move the project to a future Bunsen entity. Signing is handled automatically:
-**[cla-assistant.io](https://cla-assistant.io)** will prompt you once on your first pull request.
+Bunsen is open source under [Apache-2.0](./LICENSE).
+By contributing, you agree that your contributions are licensed under Apache-2.0 (§5).
+There is no Contributor License Agreement or DCO sign-off requirement.
 
 ## Development setup
 
@@ -38,7 +31,7 @@ your `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` in a local `.env`
 - **Update docs** — README and the relevant files in `docs/` — when behavior changes.
 - **Formatting** is handled by Prettier (`.prettierrc`); run `pnpm lint` before pushing.
 - **Source headers:** owned source files carry an SPDX header
-  (`SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0`). Run
+  (`SPDX-License-Identifier: Apache-2.0`). Run
   `node scripts/add-spdx-headers.mjs --apply` to tag new files (it's idempotent).
 - **Coordination** happens through focused issues and PRs. Some development checkouts may include private
   planning folders, but contributors should not rely on them.
