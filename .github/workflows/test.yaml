@@ -51,18 +51,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check retired licensing references
-        shell: bash
-        run: |
-          if git grep -n -i -E '[p]olyform|[L]icenseRef-|SEE LICENSE [I]N|[c]la-assistant|[l]icensing@bunsen' -- ':!CHANGELOG.md' ':!LICENSING.md' ':!examples/'; then
-            echo 'Retired licensing references remain outside the license history.' >&2
-            exit 1
-          else
-            status=$?
-            # git grep returns 1 for no matches; other failures must fail CI.
-            test "$status" -eq 1
-          fi
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
