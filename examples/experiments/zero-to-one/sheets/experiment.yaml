@@ -1,0 +1,468 @@
+$schema: https://schemas.bunsen.dev/experiment.v1.json
+version: v1
+name: sheets
+description: >-
+  Build a spreadsheet ("Excel clone") from scratch with a real formula engine —
+  spreadsheet-specific operator precedence, lazy IF, a typed error lattice, a strict
+  10-significant-figure display rule, a memoized/topological dependency graph, dates,
+  lookups, and conditional aggregates. Every interaction flow is scored by a deterministic
+  Playwright `type: script` verifier asserting the exact computed cell value, so a
+  cross-agent `bn runs compare -e sheets` reads as a feature-parity grid.
+task:
+  prompt: |-
+    Build a spreadsheet ("Excel clone") web app in /workspace, from scratch. This is a
+    HARD spec — implement a REAL formula engine, not a toy. Build ONLY what is described.
+
+    SCOPE — build exactly this, nothing more:
+      - A single spreadsheet (one sheet), columns A–J, rows 1–50, that ALWAYS starts
+        EMPTY and resets on a page reload. No saved state.
+      - DO NOT build (out of scope, wasted effort): persistence (localStorage/server),
+        file open/save/new/import/export/CSV, a menu bar/toolbar/ribbon/buttons, multiple
+        sheets or tabs, undo/redo, cell formatting (bold/colors/borders), charts,
+        column/row resizing, copy/paste/fill.
+
+    SERVING (stack-agnostic):
+      - Build with ANY stack you like; a Python 3 and a Node.js toolchain are installed and
+        you may install anything else (network access is available). Provide an executable
+        /workspace/start.sh that installs/builds whatever it needs, then starts the app IN
+        THE FOREGROUND serving over HTTP at http://localhost:5173. Do NOT background the
+        server and do NOT let start.sh exit — the harness backgrounds it and waits.
+      - IMPLEMENTATION SIZE: this is a large app — SPLIT your implementation across MULTIPLE
+        small source files (e.g. separate parser, evaluator/engine, dates, lookups, conditional
+        aggregates, and UI modules), writing them incrementally. Do NOT put everything in one
+        enormous file or emit the whole program in a single response.
+
+    DOM CONTRACT (exact — the app is tested programmatically through it):
+      1. The app is served at http://localhost:5173 (started via start.sh).
+      2. Grid: columns A–J, rows 1–50, a real grid with fixed, visible cell sizes. Each
+         cell's COMPUTED/displayed value is the trimmed text content of
+         [data-testid="cell-A1"] through [data-testid="cell-J50"]. Empty cells render as
+         empty text but keep their fixed size.
+      3. Active cell: exactly one cell is active; its address (e.g. "B3") is the trimmed
+         text of [data-testid="active-cell"]. Single-clicking a cell activates it.
+      4. Editing: DOUBLE-CLICK a cell → [data-testid="cell-input"] appears, focused,
+         pre-filled with the cell's RAW content. Enter commits; Escape cancels.
+      5. Formula bar: [data-testid="formula-bar"] shows the RAW source of the ACTIVE cell,
+         echoed EXACTLY as entered (no reformatting / re-spacing / re-casing). The cell
+         BODY shows the COMPUTED value; the formula bar shows the SOURCE.
+      6. Keyboard navigation (when NOT editing): Arrow keys move the active cell within
+         bounds; the active-cell indicator AND formula bar update. Works immediately after
+         a single click — handle key events at the document level.
+
+    FORMULA LANGUAGE — implement EXACTLY:
+      - A cell whose raw text starts with "=" is a FORMULA; otherwise a LITERAL: a finite
+        number if it parses as one, else TEXT.
+      - VALUE TYPES: every value is one of number, text, boolean, empty, an error token, or a
+        DATE (see DATES below). Errors are TYPED VALUES, not thrown exceptions.
+      - OPERATORS, precedence tightest -> loosest:
+            %  (postfix percent)  >  unary minus  >  ^  >  * /  >  + -  >  &
+        ^ is RIGHT-associative; all binary arithmetic is LEFT-associative.
+          * A leading unary minus binds TIGHTER than ^: "=-2^2" = (-2)^2 = 4 (NOT -4);
+            "=-3^2" = 9; a unary minus is also allowed as the exponent: "=2^-2" = 0.25.
+          * "=2^3^2" = 2^(3^2) = 512 (right-associative), NOT (2^3)^2 = 64.
+          * "%" is POSTFIX, dividing the preceding value by 100, highest precedence:
+            "=50%" = 0.5, "=200%" = 2, "=50%*4" = 2, "=2^50%" = 2^0.5.
+          * "&" concatenates operands as TEXT and has LOWER precedence than + - * / :
+            '="x"&1+1' = "x"&(1+1) = "x2"; "=1+2&3+4" = "37". Numeric operands of & are
+            coerced to text using the SAME number-display rule below, so "=1&(1/4)" = "10.25".
+      - CELL REFERENCES (e.g. A1) resolve to the referenced cell's COMPUTED value. A
+        reference to an EMPTY (never-set) cell coerces to the number 0. A reference to a
+        cell holding non-numeric TEXT used in arithmetic (+ - * /) yields #VALUE!.
+      - RANGE FUNCTIONS over a rectangular range like A1:A3 — SUM, AVERAGE, MAX, MIN, COUNT.
+      - FUNCTION REGISTRY: the only valid function names are SUM, AVERAGE, MAX, MIN, COUNT,
+        IF, IFERROR, ISERROR, AND, OR, NOT, ROUND, DATE, YEAR, MONTH, DAY, WEEKDAY, DATEDIF,
+        EDATE, EOMONTH, DAYS, VLOOKUP, INDEX, MATCH, SUMIF, COUNTIF, AVERAGEIF, plus the literals
+        TRUE and FALSE. Any other function name yields #NAME? (there is no NA() function).
+      - IF(cond, then, else): evaluate cond, then evaluate and return EXACTLY ONE branch —
+        `then` if cond is truthy (a nonzero number or TRUE), `else` otherwise (0 or FALSE).
+        The unselected branch MUST NOT be evaluated (an error inside it never surfaces).
+        cond is ALWAYS evaluated; if cond errors, the IF result is that error. IF
+        re-evaluates automatically when an input flips the condition.
+      - IFERROR(value, fallback): returns value unless value is an error token, in which
+        case it returns fallback (fallback is evaluated only then). A legitimate 0, FALSE,
+        or empty is NOT an error and is returned unchanged.
+      - ISERROR(value): boolean TRUE iff value is an error token, else FALSE (including for
+        0, FALSE, empty).
+      - COMPARISONS "=" (equality), "<>" (not-equal), and "<, >, <=, >=" compare two numbers
+        and yield a boolean displayed as exactly uppercase TRUE / FALSE. (The leading "=" that
+        marks a cell as a formula is separate; INSIDE a formula, "=" is the equality operator,
+        e.g. "=IF(A1=0, 1, 2)".) AND(...), OR(...), NOT(x) operate on booleans (nonzero=TRUE,
+        0=FALSE). A boolean used in arithmetic counts as 1 (TRUE) / 0 (FALSE).
+      - ERROR TOKENS: #DIV/0! (division by zero), #CIRCULAR! (any reference cycle, incl. a
+        self-reference like A1 containing =A1), #VALUE! (non-numeric text in arithmetic),
+        #NAME? (unknown function name), #REF! (a reference to a cell outside the A1:J50
+        grid — a column past J, e.g. K1, or a row past 50, e.g. A51), and #N/A (produced ONLY
+        by lookups — see LOOKUPS). Errors are typed values: arithmetic with
+        an error operand yields an error; a range function over a range containing an error
+        yields that error; a cell that merely REFERENCES a cell holding an error reproduces
+        that EXACT same token, never rewritten. When more than one error could result, the
+        FIRST operand's error in left-to-right order wins. Cycle detection MUST NOT hang.
+      - RECALCULATION — TRANSITIVE, EFFICIENT, AND REVERSIBLE: maintain a dependency graph
+        and recompute every cell that transitively depends on an edited cell, automatically,
+        with no manual recalc. The engine MUST evaluate each cell AT MOST ONCE per
+        recalculation (memoize within a pass, or evaluate in topological order); it MUST NOT
+        re-derive a cell by recursively recomputing its dependencies from scratch on every
+        reference. A chain where each cell references the previous TWICE ("C2=C1+C1",
+        "C3=C2+C2", …) MUST recompute after a single edit WITHOUT work that grows
+        exponentially in chain length — editing the head of a 30-deep such chain MUST update
+        the last cell within a couple of seconds, not hang the page. A cycle COMPLETED BY A
+        LATER EDIT must mark every cell in the cycle #CIRCULAR!, and BREAKING the cycle must
+        CLEAR it from every formerly-cyclic cell (re-evaluate dependents on every edit).
+      - ROUND(value, n): round to n decimal places using round-HALF-AWAY-FROM-ZERO (ties go
+        to larger magnitude: ROUND(2.5,0)=3, ROUND(-2.5,0)=-3), reflecting the EXACT decimal
+        value, not a binary-float artifact: ROUND(1.005,2)=1.01, ROUND(2.675,2)=2.68.
+
+    DATES (a 6th value type):
+      - A DATE is a timezone-free calendar date, stored internally as a serial day count in the
+        proleptic Gregorian calendar with epoch 1970-01-01 = 0 (1970-01-02 = 1, 1969-12-31 = -1).
+        There is NO Excel 1900 leap-year bug, no time-of-day, and no timezone. Do NOT derive a
+        displayed date from a local/wall-clock Date or a toISOString() round-trip.
+      - DATE DISPLAY: a DATE displays as ISO YYYY-MM-DD, zero-padded to 4/2/2 digits, hyphen
+        separators, no time / zone / locale. A DATE is NEVER shown as its raw serial number.
+      - LEAP YEARS (proleptic Gregorian): leap iff divisible by 4, EXCEPT centuries only if
+        divisible by 400. So 2024 and 2000 are leap; 2023 and 1900 are NOT.
+      - DATE(year,month,day): args truncated toward zero to integers; the result is
+        OVERFLOW-NORMALIZED (never errors, never clamps): from year-01-01 add (month-1) months
+        (rolling across years), then (day-1) days (rolling across months/years). So
+        DATE(2023,2,29)=2023-03-01, DATE(2024,13,1)=2025-01-01, DATE(2024,1,0)=2023-12-31,
+        DATE(2025,0,15)=2024-12-15.
+      - YEAR/MONTH/DAY(date) -> the integer year / month (1-12) / day (1-31) of the normalized
+        date, as a number.
+      - WEEKDAY(date) -> 1..7 with Sunday=1, Monday=2, ..., Saturday=7.
+      - DATEDIF(start,end,unit): unit is an uppercase TEXT literal "D"/"M"/"Y". "D" = whole days
+        end-start. "Y" = COMPLETE years (an anniversary counts only once the same month-and-day
+        is reached/passed). "M" = COMPLETE months (counts only once the same day-of-month is
+        reached/passed).
+      - EDATE(date,months): the date `months` months later (months may be negative); the
+        day-of-month is CLAMPED to the target month's last day (EDATE(2024-01-31,1)=2024-02-29).
+      - EOMONTH(date,months): the LAST day of the month `months` later.
+      - DAYS(end,start): end-start as a number.
+      - DATE TYPE PROPAGATION: date+number->date, date-number->date, date-date->NUMBER (days);
+        YEAR/MONTH/DAY/WEEKDAY/DATEDIF/DAYS->number; DATE/EDATE/EOMONTH->date. A comparison on
+        dates uses the serial value -> TRUE/FALSE. A date operand of & coerces to its ISO text
+        (="D:"&DATE(2024,2,29) = "D:2024-02-29"). A date in *, /, ^, %, or unary minus uses its
+        serial integer. A valid date passed to IFERROR is returned unchanged (not an error).
+
+    LOOKUPS:
+      - #N/A is a NEW error token (exactly the 4 characters #N/A), a full member of the error
+        lattice: it propagates through references unchanged, poisons arithmetic and range
+        functions, is caught by IFERROR, and makes ISERROR return TRUE. Lookups are the ONLY
+        producer of #N/A; there is no NA() function (NA() yields #NAME?).
+      - VLOOKUP(key, range, colIndex, [exact]): scan the FIRST column of the range top-to-bottom;
+        return the matched row's value at 1-based colIndex (1 = the range's first column). The 4th
+        arg DEFAULTS TO TRUE (approximate) when omitted; exact=FALSE forces exact.
+        * exact=FALSE: the first row whose first-column value equals key (numeric equality for
+          numbers, case-sensitive equality for text); if none equals key -> #N/A.
+        * approximate (TRUE or omitted): the first column is ASSUMED SORTED ASCENDING; return the
+          row with the LARGEST first-column value that is <= key; if key < every value -> #N/A.
+        * colIndex < 1 or > the range width -> #REF!, and this #REF! takes PRIORITY over a row miss.
+      - INDEX(range, rowIndex, colIndex): exactly 3 arguments; return the single cell at 1-based
+        (rowIndex, colIndex) relative to the range's TOP-LEFT. Out-of-bounds rowIndex/colIndex ->
+        #REF!. (The 2-arg and 0-index "whole row/column" forms are not supported.)
+      - MATCH(key, range, [matchType]): range MUST be a single row or column; return the 1-based
+        position of key. matchType DEFAULTS TO 1. 0 = exact (first element equal to key, else
+        #N/A). 1 = approximate (range assumed sorted ascending; position of the largest element
+        <= key, else #N/A if key is below every element).
+      - ARGUMENT-ERROR PRECEDENCE: if any argument to VLOOKUP/INDEX/MATCH evaluates to an error
+        token, that token is the result (first erroring argument, left to right), checked BEFORE
+        any numeric bounds validation. So INDEX(range, MATCH(...miss...), c) returns #N/A, not
+        #REF!.
+
+    CONDITIONAL AGGREGATES:
+      - COUNTIF(range,criteria); SUMIF(range,criteria,[sumRange]) (sums the range itself when
+        sumRange omitted); AVERAGEIF(range,criteria,[avgRange]).
+      - CRITERIA is parsed from the CONTENT of a text value (e.g. =SUMIF(A1:A5,">5") — the 2nd
+        arg is an ordinary text value whose content is parsed, NOT a pre-evaluated relational
+        expression). Parse a leading operator from {>=, <=, <>, >, <, =} (longest-first); the
+        remainder is the operand; with no leading operator the operator is = (equality). If the
+        operand parses as a finite number the criterion is NUMERIC, otherwise TEXT.
+      - A NUMERIC criterion (incl. =/bare with a numeric operand) compares numerically and ONLY a
+        NUMBER cell can match. A boolean, text, empty, or error cell NEVER matches a numeric
+        criterion — including "<>0" (a non-number does NOT satisfy <>0). A boolean TRUE is NOT
+        counted as 1 here; an empty cell is NOT treated as 0 here. Criteria matching is NEVER
+        JS-style coercion.
+      - A TEXT criterion (=/bare or <> with a non-numeric operand) matches a cell only when that
+        cell is TEXT equal to the operand, compared CASE-INSENSITIVELY (ASCII A-Z) with NO
+        whitespace trimming. "<>"+text matches any cell that is NOT a text cell equal to that
+        operand. There are NO wildcards: * and ? are literal characters, not patterns.
+      - ERROR POISONING: if any cell in the criteria range, OR (for SUMIF/AVERAGEIF) any cell at a
+        summed/averaged position, is an error token, the whole function returns that token (the
+        first such error in row-major order). An error cell is NEVER a silent non-match.
+      - EMPTY TOTALS: AVERAGEIF over zero matching cells -> #DIV/0!; SUMIF over zero matches -> 0;
+        COUNTIF over zero matches -> 0.
+      - ALIGNMENT: sumRange/avgRange aligns to the criteria range cell-by-cell in row-major order
+        by ordinal position (same number of cells), offset from ITS OWN top-left corner — even
+        when it sits in a different column or row.
+
+    NUMBER DISPLAY (exact — this is stricter than a typical toy):
+      - An INTEGER-valued result displays its exact integer in full decimal form, with NO
+        decimal point and NO scientific notation, for magnitudes below 1e15 (e.g.
+        999999*999999 -> 999998000001).
+      - A NON-INTEGER result displays rounded to at most 10 SIGNIFICANT FIGURES (NOT decimal
+        places), with trailing zeros and any trailing decimal point trimmed (100/3 ->
+        33.33333333, 1/3 -> 0.3333333333, 1/8 -> 0.125).
+      - The displayed text MUST NOT contain IEEE-754 artifact digits: 0.1+0.2 -> 0.3.
+      - Any result equal to zero, including negative zero, displays exactly "0", never "-0".
+      - Text values display verbatim.
+
+    LAYOUT: at a narrow viewport (375px wide) the PAGE must not scroll horizontally; if the
+    grid is wider than the viewport it scrolls inside its own container (overflow: auto).
+
+    Deliver a working app in /workspace with an executable start.sh serving on port 5173.
+workspace:
+  sources:
+    - path: ./workspace          # empty (agent builds from scratch incl. start.sh); no seed file
+environment:
+  image:
+    base: bunsen/visual          # required for Playwright/Chromium in the verifiers
+run:
+  timeout: 90m                   # a full spreadsheet engine + dates/lookups/aggregates is a
+                                 # substantial single-pass build.
+evaluation:
+  criteria:
+
+    # ===== 0. SMOKE GATE (starts the ONE shared server via start.sh) =====
+    - id: app-boots
+      title: App boots, grid (A1..J50) + formula bar render, starts empty
+      type: script
+      scores: [0, 1]
+      timeout: 600s
+      gate:
+        ifBelow: 1
+      run: |
+        set -e
+        cd /workspace
+        if [ ! -f start.sh ]; then
+          echo "ERROR: /workspace/start.sh is missing (required to serve the app)" >&2
+          exit 1
+        fi
+        (bash start.sh > /tmp/sheets-server.log 2>&1 &)
+        node /bunsen/verifiers/boot_check.mjs
+
+    # ===== 1. BASELINE (basic spreadsheet functionality) =====
+    - { id: flow-literals,      title: "[baseline] Literals render; formula bar shows raw", type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_literals.mjs }
+    - { id: flow-arithmetic,    title: "[baseline] Arithmetic precedence + parentheses",    type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_arithmetic.mjs }
+    - { id: flow-ranges,        title: "[baseline] Range functions SUM/AVERAGE/MAX",        type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_ranges.mjs }
+    - { id: flow-recalc-chain,  title: "[baseline] Transitive recalculation",               type: script, scores: [0,1], weight: 1,   timeout: 90s, run: node /bunsen/verifiers/flow_recalc_chain.mjs }
+    - { id: flow-circular,      title: "[baseline] Circular-reference detection",           type: script, scores: [0,1], weight: 1,   timeout: 90s, run: node /bunsen/verifiers/flow_circular.mjs }
+    - { id: flow-div-zero,      title: "[baseline] Divide-by-zero -> #DIV/0!",              type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_div_zero.mjs }
+    - { id: flow-keyboard-nav,  title: "[baseline] Arrow-key navigation",                   type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_keyboard_nav.mjs }
+    - { id: responsive,         title: "[baseline] No horizontal page overflow at 375px",   type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_responsive.mjs }
+    - { id: flow-comparison,    title: "[baseline] Comparison + boolean tokens (TRUE/FALSE)", type: script, scores: [0,1], weight: 0.5, timeout: 90s, run: node /bunsen/verifiers/flow_comparison.mjs }
+
+    # ===== 2. GROUP A — operator semantics & precedence (the parser traps) =====
+    - { id: a-unary-exp,        title: "A1: unary minus binds tighter than ^ (-2^2 = 4)",   type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_unary_exp.mjs }
+    - { id: a-exp-assoc,        title: "A2: ^ is right-associative (2^3^2 = 512) + verbatim bar", type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_exp_assoc.mjs }
+    - { id: a-amp-precedence,   title: "A3: & is lower precedence than + - * /",            type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_amp_precedence.mjs }
+    - { id: a-amp-coercion,     title: "A4: & concatenates with display-rule coercion",     type: script, scores: [0,1], weight: 1, timeout: 90s, run: node /bunsen/verifiers/flow_amp_coercion.mjs }
+    - { id: a-percent,          title: "A5: postfix % binds tightest (50%*4 = 2)",          type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_percent.mjs }
+
+    # ===== 3. GROUP B — lazy / conditional evaluation =====
+    - { id: b-nested-if,        title: "B1: nested IF short-circuits + recalcs through cond", type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_nested_if.mjs }
+    - { id: b-iferror,          title: "B2: IFERROR/ISERROR taxonomy (0/FALSE not an error)", type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_iferror.mjs }
+    - { id: b-if-shortcircuit,  title: "B3: IF evaluates only the taken branch",            type: script, scores: [0,1], weight: 1, timeout: 90s, run: node /bunsen/verifiers/flow_if_shortcircuit.mjs }
+
+    # ===== 4. GROUP C — typed error lattice =====
+    - { id: c-value-empty,      title: "C1: text->#VALUE!, empty->0, number lattice",       type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_value_empty.mjs }
+    - { id: c-error-poison,     title: "C2: errors poison ranges + arithmetic",             type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_error_poison.mjs }
+    - { id: c-error-identity,   title: "C3: error token identity survives a reference",     type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_error_identity.mjs }
+    - { id: c-name-ref,         title: "C4: #NAME? (unknown fn) vs #REF! (col past J / row past 50)", type: script, scores: [0,1], weight: 1, timeout: 90s, run: node /bunsen/verifiers/flow_name_ref.mjs }
+
+    # ===== 5. GROUP D — numeric correctness & display =====
+    - { id: d-display-precision, title: "D1: 10-sig-fig display, no float noise, -0 -> 0",  type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_display_precision.mjs }
+    - { id: d-round,            title: "D2: ROUND half-away-from-zero, decimal-exact",      type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_round.mjs }
+
+    # ===== 6. GROUP E — real dependency graph (efficient transitive recalculation) =====
+    - { id: e-exp-hang,         title: "E1: exponential double-ref chain (requires a memoized engine)", type: script, scores: [0,1], weight: 3, timeout: 300s, run: node /bunsen/verifiers/flow_exp_hang.mjs }
+    - { id: e-bignum-chain,     title: "E2: 40-deep chain, exact big-integer display",      type: script, scores: [0,1], weight: 2, timeout: 300s, run: node /bunsen/verifiers/flow_bignum_chain.mjs }
+    - { id: e-cycle-recovery,   title: "E3: cycle formed then broken; #CIRCULAR! clears",   type: script, scores: [0,1], weight: 2, timeout: 300s, run: node /bunsen/verifiers/flow_cycle_recovery.mjs }
+
+    # ===== 7. GROUP F — DATES (a 6th value type) =====
+    - { id: f-date-construct-display,      title: "F1: DATE construct + ISO display + YEAR/MONTH/DAY",  type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_f_construct.mjs }
+    - { id: f-date-overflow-normalization, title: "F2: DATE overflow normalization (no clamp/reject)",  type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_f_overflow.mjs }
+    - { id: f-leap-year-weekday,           title: "F3: leap rule (1900/2000) + WEEKDAY Sun=1",          type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_f_leap_weekday.mjs }
+    - { id: f-date-arithmetic-types,       title: "F4: date+n -> date; date-date -> number",            type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_f_arithmetic.mjs }
+    - { id: f-edate-eomonth-clamp,         title: "F5: EDATE/EOMONTH end-of-month clamp",               type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_f_edate_eomonth.mjs }
+    - { id: f-datedif-units,               title: "F6: DATEDIF D/M/Y complete-period boundaries",       type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_f_datedif.mjs }
+    - { id: f-date-lattice-interplay,      title: "F7: dates in comparisons / IF / & / IFERROR",        type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_f_lattice.mjs }
+
+    # ===== 8. GROUP G — LOOKUPS (+ the #N/A token) =====
+    - { id: g-vlookup-exact,          title: "G1: VLOOKUP exact match + #N/A miss",            type: script, scores: [0,1], weight: 1.5, timeout: 90s, run: node /bunsen/verifiers/flow_g_vlookup_exact.mjs }
+    - { id: g-vlookup-approx-default, title: "G2: VLOOKUP approximate (default) sorted match",  type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_g_vlookup_approx.mjs }
+    - { id: g-match-position-types,   title: "G3: MATCH 1-based, exact vs approximate",         type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_g_match.mjs }
+    - { id: g-index-rc,               title: "G4: INDEX 1-based (row,col) + #REF! bounds",      type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_g_index.mjs }
+    - { id: g-index-match-combo,      title: "G5: INDEX+MATCH; arg-error propagates as #N/A",   type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_g_index_match.mjs }
+    - { id: g-lookup-colindex-ref,    title: "G6: VLOOKUP colIndex OOB -> #REF! (priority)",    type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_g_colindex_ref.mjs }
+    - { id: g-na-token-lattice,       title: "G7: #N/A propagates / poisons / ISERROR / IFERROR", type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_g_na_lattice.mjs }
+
+    # ===== 9. GROUP H — CONDITIONAL AGGREGATES =====
+    - { id: h-numeric-boundary,           title: "H1: >5 vs >=5 boundary (COUNT/SUM/AVERAGEIF)",   type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_h_numeric_boundary.mjs }
+    - { id: h-notequal-empty,             title: "H2: <>0; empty excluded; <7 sum",               type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_h_notequal_empty.mjs }
+    - { id: h-offset-sumrange,            title: "H3: SUMIF/AVERAGEIF offset sumRange + ci text",  type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_h_offset.mjs }
+    - { id: h-numeric-excludes-nonnumber, title: "H4: numeric criteria match only NUMBER cells",   type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_h_type_gate.mjs }
+    - { id: h-text-exact-no-wildcard,     title: "H5: text criteria case-insensitive, no wildcards", type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_h_text.mjs }
+    - { id: h-error-poison,               title: "H6: error in range/sumRange poisons aggregate",  type: script, scores: [0,1], weight: 3, timeout: 90s, run: node /bunsen/verifiers/flow_h_poison.mjs }
+    - { id: h-nomatch-recalc,             title: "H7: zero-match totals + recalc on edit",         type: script, scores: [0,1], weight: 2, timeout: 90s, run: node /bunsen/verifiers/flow_h_nomatch_recalc.mjs }
+
+    # ===== 10. AGGREGATES =====
+    - id: functional-correctness
+      title: Functional correctness (weighted fraction of all flows)
+      type: aggregate
+      weight: 1
+      needs:
+        - flow-literals
+        - flow-arithmetic
+        - flow-ranges
+        - flow-recalc-chain
+        - flow-circular
+        - flow-div-zero
+        - flow-keyboard-nav
+        - flow-comparison
+        - a-unary-exp
+        - a-exp-assoc
+        - a-amp-precedence
+        - a-amp-coercion
+        - a-percent
+        - b-nested-if
+        - b-iferror
+        - b-if-shortcircuit
+        - c-value-empty
+        - c-error-poison
+        - c-error-identity
+        - c-name-ref
+        - d-display-precision
+        - d-round
+        - e-exp-hang
+        - e-bignum-chain
+        - e-cycle-recovery
+        - f-date-construct-display
+        - f-date-overflow-normalization
+        - f-leap-year-weekday
+        - f-date-arithmetic-types
+        - f-edate-eomonth-clamp
+        - f-datedif-units
+        - f-date-lattice-interplay
+        - g-vlookup-exact
+        - g-vlookup-approx-default
+        - g-match-position-types
+        - g-index-rc
+        - g-index-match-combo
+        - g-lookup-colindex-ref
+        - g-na-token-lattice
+        - h-numeric-boundary
+        - h-notequal-empty
+        - h-offset-sumrange
+        - h-numeric-excludes-nonnumber
+        - h-text-exact-no-wildcard
+        - h-error-poison
+        - h-nomatch-recalc
+      aggregate:
+        function: weighted_average
+
+    - id: engine-quality
+      title: Real engine? (strict — lazy IF + typed errors + memoized graph)
+      type: aggregate
+      weight: 0                  # informational: the single "is this a real engine?" bit
+      needs:
+        - e-exp-hang
+        - e-bignum-chain
+        - e-cycle-recovery
+        - b-nested-if
+        - b-iferror
+        - c-error-poison
+        - c-error-identity
+        - f-date-arithmetic-types
+        - f-date-lattice-interplay
+        - g-na-token-lattice
+        - g-index-match-combo
+        - h-error-poison
+        - h-nomatch-recalc
+      aggregate:
+        function: all
+
+    - id: all-flows-pass
+      title: Strict parity (every hard flow exactly right)
+      type: aggregate
+      weight: 0
+      needs:
+        - a-unary-exp
+        - a-exp-assoc
+        - a-amp-precedence
+        - a-amp-coercion
+        - a-percent
+        - b-nested-if
+        - b-iferror
+        - b-if-shortcircuit
+        - c-value-empty
+        - c-error-poison
+        - c-error-identity
+        - c-name-ref
+        - d-display-precision
+        - d-round
+        - e-exp-hang
+        - e-bignum-chain
+        - e-cycle-recovery
+        - f-date-construct-display
+        - f-date-overflow-normalization
+        - f-leap-year-weekday
+        - f-date-arithmetic-types
+        - f-edate-eomonth-clamp
+        - f-datedif-units
+        - f-date-lattice-interplay
+        - g-vlookup-exact
+        - g-vlookup-approx-default
+        - g-match-position-types
+        - g-index-rc
+        - g-index-match-combo
+        - g-lookup-colindex-ref
+        - g-na-token-lattice
+        - h-numeric-boundary
+        - h-notequal-empty
+        - h-offset-sumrange
+        - h-numeric-excludes-nonnumber
+        - h-text-exact-no-wildcard
+        - h-error-poison
+        - h-nomatch-recalc
+      aggregate:
+        function: all
+
+    - id: dates-correct
+      title: Dates correct (Group F)
+      type: aggregate
+      weight: 0
+      needs: [f-date-construct-display, f-date-overflow-normalization, f-leap-year-weekday, f-date-arithmetic-types, f-edate-eomonth-clamp, f-datedif-units, f-date-lattice-interplay]
+      aggregate: { function: all }
+
+    - id: lookups-correct
+      title: Lookups correct (Group G)
+      type: aggregate
+      weight: 0
+      needs: [g-vlookup-exact, g-vlookup-approx-default, g-match-position-types, g-index-rc, g-index-match-combo, g-lookup-colindex-ref, g-na-token-lattice]
+      aggregate: { function: all }
+
+    - id: conditional-aggregates-correct
+      title: Conditional aggregates correct (Group H)
+      type: aggregate
+      weight: 0
+      needs: [h-numeric-boundary, h-notequal-empty, h-offset-sumrange, h-numeric-excludes-nonnumber, h-text-exact-no-wildcard, h-error-poison, h-nomatch-recalc]
+      aggregate: { function: all }
+
+  report:
+    needs: all
+    instructions: |
+      Group the results: baseline (can it build a spreadsheet at all) vs the hard groups
+      A (operator precedence), B (lazy IF), C (typed errors), D (display/rounding), E
+      (dependency-graph/perf). Call out the `engine-quality` strict aggregate as the
+      headline "did the agent build a REAL engine?" signal, and specifically whether
+      e-exp-hang passed (a naive recompute-every-reference engine does exponential work and
+      times out, scoring 0 there).
+      For each failure, cite the verifier's expected-vs-actual. Distinguish a contract
+      misread (wrong data-testid / missing start.sh / a new function not registered ->
+      #NAME?) from a real engine defect (e.g. eager IF evaluation leaking #DIV/0!, or
+      unmemoized recursion hanging E1). Also group the new axes: F (dates), G (lookups),
+      H (conditional aggregates), with per-axis pass/fail from the `dates-correct`,
+      `lookups-correct`, `conditional-aggregates-correct` aggregates. Headline F/G/H
+      tells: WEEKDAY off-by-one (getUTCDay), EDATE roll-forward instead of clamp, DATEDIF
+      anniversary boundary, VLOOKUP approximate default, `#N/A` not integrated as a real
+      token, COUNTIF counting TRUE-as-1 or an empty cell, and an error cell silently
+      skipped instead of poisoning an aggregate.
