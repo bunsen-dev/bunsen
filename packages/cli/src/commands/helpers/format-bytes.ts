@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Human-readable byte size for CLI output. Used by `bn cache list` and
  * `bn index status` (and any future commands that surface on-disk sizes).

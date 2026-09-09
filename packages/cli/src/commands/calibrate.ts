@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Calibrate command - Compare human scores to LLM scores
  */

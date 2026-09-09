@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * `bn index status` — report SQLite run-index location, size, and freshness.
  *

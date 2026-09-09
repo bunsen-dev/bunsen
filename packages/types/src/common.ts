@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Shared primitives referenced by more than one v1 resource type.
  */

@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Guard against version drift: CLI_VERSION is a hand-maintained constant
  * (bundled into the standalone binary, where package.json is not readable),

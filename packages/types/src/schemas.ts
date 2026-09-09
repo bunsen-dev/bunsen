@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Local JSON Schema loader. Bunsen's schemas are bundled inside `@bunsen-dev/types`
  * and read from disk; `$schema` URLs are stable identifiers for tooling (IDE

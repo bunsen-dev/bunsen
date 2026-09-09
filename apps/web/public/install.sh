@@ -12,8 +12,6 @@
 #   BUNSEN_VERSION=v0.2.0   install a specific tag (default: latest)
 #   BUNSEN_INSTALL_DIR=...  install dir (default: $HOME/.local/bin)
 #
-# SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-# SPDX-License-Identifier: Apache-2.0
 set -eu
 
 REPO="bunsen-dev/bunsen"

@@ -20,4 +20,3 @@ What you ran to convince yourself it works (commands, new tests, manual steps).
 - [ ] `pnpm test`, `pnpm typecheck`, and `pnpm lint` pass
 - [ ] Tests added/updated for changed behavior
 - [ ] Docs updated (README + relevant `docs/`) if behavior changed
-- [ ] New owned source files carry the SPDX header (`node scripts/add-spdx-headers.mjs --apply`)

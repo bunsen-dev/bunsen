@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 
 /**
  * Bunsen CLI entry point

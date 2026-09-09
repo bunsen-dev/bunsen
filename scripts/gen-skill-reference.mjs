@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Generate the `reference/*.md` field references bundled inside the Bunsen
  * authoring skills (`packages/cli/assets/skills/<skill>/reference/`).

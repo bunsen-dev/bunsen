@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Tests for the in-memory thread detector + markdown formatter. The streaming
  * pipeline is exercised separately in `trace-stream.test.ts`.

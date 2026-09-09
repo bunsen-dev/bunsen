@@ -30,9 +30,6 @@ your `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` in a local `.env`
 - **Add tests** alongside any change that adds or changes functionality.
 - **Update docs** — README and the relevant files in `docs/` — when behavior changes.
 - **Formatting** is handled by Prettier (`.prettierrc`); run `pnpm lint` before pushing.
-- **Source headers:** owned source files carry an SPDX header
-  (`SPDX-License-Identifier: Apache-2.0`). Run
-  `node scripts/add-spdx-headers.mjs --apply` to tag new files (it's idempotent).
 - **Coordination** happens through focused issues and PRs. Some development checkouts may include private
   planning folders, but contributors should not rely on them.
 

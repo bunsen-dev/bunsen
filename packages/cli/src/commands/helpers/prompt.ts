@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 import * as readline from 'node:readline';
 
 /** Create a readline interface bound to stdin/stdout. */

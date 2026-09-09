@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Generate the Homebrew cask + Scoop manifest for a release, filled with the
  * version and per-asset sha256 from `packages/cli/dist/binaries/SHA256SUMS`

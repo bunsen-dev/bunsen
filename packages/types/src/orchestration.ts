@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Public `OrchestrationResult` shape — the composed agent invocation recorded
  * on the run manifest and in `orchestration/result.json`.

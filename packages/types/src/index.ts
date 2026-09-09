@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * `@bunsen-dev/types` — public type surface for the Bunsen v1 API.
  *

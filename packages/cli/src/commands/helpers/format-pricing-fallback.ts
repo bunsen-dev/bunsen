@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Render the fallback-pricing caveat — `⚠ N call(s) priced with a coarse
  * default — not in the price table: <models>` — for runs that hit models

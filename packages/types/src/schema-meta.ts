@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Shared `$schema` / `version` handling for every Bunsen resource
  * (`bunsen.config.yaml`, `bunsen-suite.yaml`, `experiment.yaml`, `agent.yaml`).

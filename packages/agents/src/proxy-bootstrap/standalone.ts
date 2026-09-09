@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Proxy bootstrap loaded into Node-based agents via `NODE_OPTIONS=--require=...`.
  *

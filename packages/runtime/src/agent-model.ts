@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Building a run's per-model usage breakdown — the `agent.models` list that
  * lands on the manifest and is projected into the run index's

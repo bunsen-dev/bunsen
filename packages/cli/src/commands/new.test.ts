@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect } from 'bun:test';
 import { parseExperimentConfig, parseAgentConfig } from '@bunsen-dev/runtime';
 import { getExperimentTemplate, getAgentTemplate } from './new.js';

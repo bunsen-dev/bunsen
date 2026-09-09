@@ -37,7 +37,7 @@ immutable commit) travel **inside the image** under `/opt/battlesnake/licenses/`
 
 ## For tooling (SPDX / SCA)
 
-- Bunsen's own source headers use the standard `SPDX-License-Identifier: Apache-2.0`.
+- Bunsen's own code is covered by the repository-level `LICENSE` and `NOTICE`; per-file headers are not required.
 - Public package metadata uses `"license": "Apache-2.0"`.
 - Third-party files retain their own headers and SPDX identifiers (`MIT`, `Apache-2.0`, `BSD-3-Clause`).
 

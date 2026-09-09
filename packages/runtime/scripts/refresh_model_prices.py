@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-# SPDX-License-Identifier: Apache-2.0
 """
 Refresh the vendored model-pricing snapshot used by the proxy cost estimator.
 

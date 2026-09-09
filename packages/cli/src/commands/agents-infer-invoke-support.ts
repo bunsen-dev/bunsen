@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Pure support helpers for `bn agents infer-invoke` (see `agents-infer-invoke.ts`).
  *

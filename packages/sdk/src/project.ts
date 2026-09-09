@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: Apache-2.0
 /**
  * Public SDK entry point. Implementation is scaffolded here; individual
  * methods will be wired to `@bunsen-dev/runtime` internals by future SDK work.
