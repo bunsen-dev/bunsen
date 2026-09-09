@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Tests for the v1 agent.yaml loader (parser, variant merge, install.source
  * override semantics, sha256 warning, legacy-field errors).

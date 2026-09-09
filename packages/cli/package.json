@@ -1,9 +1,9 @@
 {
   "name": "@bunsen-dev/cli",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "CLI for Bunsen — a general-purpose experiment runner for agentic systems",
   "author": "Matthew Job Granmoe",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
   "type": "module",
   "//": "private: the CLI is distributed as a standalone `bun build --compile` binary via GitHub Releases + install.sh / brew / scoop — NOT npm. Only @bunsen-dev/{sdk,types} publish to npm.",
   "private": true,

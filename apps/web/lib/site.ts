@@ -14,6 +14,7 @@ export const WAITLIST_ANCHOR = "/#waitlist";
 
 export const site = {
   name: "Bunsen",
+  licenseLine: "Open source under Apache-2.0",
   descriptor: "An autonomous research lab for agentic systems",
   year: 2026,
   author: "Matthew Job Granmoe",

@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Tests for `cancelRun()` — covers the manifest-side behavior that doesn't
  * require a real Docker daemon (status transitions, no-op short-circuits,

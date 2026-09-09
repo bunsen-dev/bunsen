@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // Type surface for gen-skill-reference.mjs (consumed by the CLI test that
 // asserts the generated skill references stay in sync with the schemas).
 

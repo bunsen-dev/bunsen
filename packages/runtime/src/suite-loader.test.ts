@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Tests for `bunsen-suite.yaml` v1 parser, identity derivation, and
  * project-suite loading.

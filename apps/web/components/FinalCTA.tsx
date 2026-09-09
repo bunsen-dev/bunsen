@@ -1,6 +1,6 @@
 import { GitHubIcon } from "@/components/icons";
 import { WaitlistForm } from "@/components/WaitlistForm";
-import { links } from "@/lib/site";
+import { links, site } from "@/lib/site";
 
 export function FinalCTA({ waitlistStatus }: { waitlistStatus?: string }) {
   return (
@@ -11,7 +11,7 @@ export function FinalCTA({ waitlistStatus }: { waitlistStatus?: string }) {
           <em>and</em> the evidence.
         </h2>
         <p>
-          The CLI is source-available today — <code>curl -fsSL https://bunsen.dev/install.sh | sh</code>. Join the list for
+          Bunsen is open-source — <code>curl -fsSL https://bunsen.dev/install.sh | sh</code>. Join the list for
           release notes and new findings as they ship.
         </p>
         <div className="cta-row">
@@ -27,7 +27,7 @@ export function FinalCTA({ waitlistStatus }: { waitlistStatus?: string }) {
         <WaitlistForm status={waitlistStatus} />
 
         <div className="fine">
-          Source-available under PolyForm Shield 1.0.0 · Node 22+, Docker ·
+          {site.licenseLine} · Node 22+, Docker ·
           built solo by Matt Granmoe
         </div>
       </div>

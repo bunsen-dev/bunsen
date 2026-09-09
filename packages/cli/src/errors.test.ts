@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 import { describe, it, expect, vi } from 'bun:test';
 import { BunsenCliError, toCliError, reportError } from './errors.js';
 import { EXIT_CODES } from './exit-codes.js';

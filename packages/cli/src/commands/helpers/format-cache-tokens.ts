@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Render cache-token counts as `<read> read · <created> created`, or `null`
  * when there's no cache activity (so callers omit the line). The single source

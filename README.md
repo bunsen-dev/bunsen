@@ -222,25 +222,13 @@ bounded by `run.timeout`, not by a dollar or token budget, so a looping or fast 
 provider bill. You are solely responsible for all charges you incur with model and tool providers, and for
 ensuring your use — and anything an agent does over the open network — complies with those providers' terms
 and with applicable law. Use scoped, low-limit keys and provider-side budgets to bound spend. See
-[Cost Accounting](./docs/COST.md) and the Additional Terms in [`LICENSE`](./LICENSE).
+[Cost Accounting](./docs/COST.md) and the [Trust Model](./docs/TRUST_MODEL.md).
 
 ## License
 
-Bunsen is **source-available** under the [PolyForm Shield License 1.0.0](./LICENSE) — it is **not** an OSI
-"open source" license. In plain English:
-
-- **Yes, you can use it at work.** Internal commercial use is allowed.
-- **Yes, you can run it anywhere** — your laptop, your servers, your cloud — for your own use.
-- **Yes, you can read, modify, fork, and redistribute** the source.
-- **Yes, you can build, test, and evaluate your own products** with it.
-- **No, you cannot offer a competing Bunsen-like product or service** without a separate commercial
-  license. That applies whether the competing product is hosted, local, embedded, forked, or free.
-
-Bunsen has been source-available since day one; there was no prior OSI open-source release.
-
-See [LICENSING.md](./LICENSING.md) for the full terms, the licenses of bundled third-party components, and
-the rationale. Want to do something the license doesn't allow (e.g. offer a competing or hosted commercial
-service)? A commercial license is available — contact `licensing@bunsen.dev`.
+Bunsen is **open source** under the [Apache License, Version 2.0](./LICENSE).
+See [NOTICE](./NOTICE) for attribution and [LICENSING.md](./LICENSING.md) for the license map.
+Bundled third-party components retain their own licenses; see [THIRD_PARTY.md](./THIRD_PARTY.md).
 
 ## Contact
 

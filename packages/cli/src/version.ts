@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Single source of truth for the CLI version string.
  *
@@ -7,4 +5,4 @@
  * `bn --version` flag and to stamp `bn skills install` so `bn skills list` can
  * warn when bundled skills were installed by an older CLI.
  */
-export const CLI_VERSION = '0.3.1';
+export const CLI_VERSION = '0.4.0';

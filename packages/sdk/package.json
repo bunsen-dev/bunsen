@@ -1,9 +1,9 @@
 {
   "name": "@bunsen-dev/sdk",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Public TypeScript SDK for Bunsen",
   "author": "Matthew Job Granmoe",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "Apache-2.0",
   "type": "module",
   "repository": {
     "type": "git",
@@ -28,12 +28,13 @@
     "dist",
     "!dist/**/*.test.*",
     "LICENSE",
+    "NOTICE",
     "LICENSING.md",
     "THIRD_PARTY.md"
   ],
   "scripts": {
     "build": "tsc",
-    "prepack": "cp ../../LICENSE ../../LICENSING.md ../../THIRD_PARTY.md .",
+    "prepack": "cp ../../LICENSE ../../NOTICE ../../LICENSING.md ../../THIRD_PARTY.md .",
     "clean": "rm -rf dist *.tsbuildinfo",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",

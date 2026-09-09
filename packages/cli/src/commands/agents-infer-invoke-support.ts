@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Pure support helpers for `bn agents infer-invoke` (see `agents-infer-invoke.ts`).
  *

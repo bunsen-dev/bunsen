@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Generate the Homebrew cask + Scoop manifest for a release, filled with the
  * version and per-asset sha256 from `packages/cli/dist/binaries/SHA256SUMS`
@@ -81,6 +79,8 @@ const cask = `cask "bunsen" do
   homepage "${HOMEPAGE}"
 
   caveats <<~EOS
+    Bunsen is open source under Apache-2.0.
+
     Bunsen runs experiments in Docker containers — start a Docker daemon, then:
       bn doctor
 
@@ -104,7 +104,7 @@ if (sums['bn-windows-x64.exe']) {
     version,
     description: DESC,
     homepage: HOMEPAGE,
-    license: 'LicenseRef-PolyForm-Shield-1.0.0',
+    license: 'Apache-2.0',
     architecture: {
       '64bit': {
         url: url('bn-windows-x64.exe'),

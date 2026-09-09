@@ -1,5 +1,3 @@
-// SPDX-FileCopyrightText: 2026 Matthew Job Granmoe
-// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Tests for the runtime contract surface — stable paths and reserved
  * `BUNSEN_*` env vars the agent may rely on.

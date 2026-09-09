@@ -43,7 +43,7 @@ automatically (slug = lowercased filename, title = first `# H1`).
 
 The final CTA captures emails for release notes + new findings (one
 Buttondown list, no segmentation at v1). It is **not** a gate on the CLI — the
-tool is free and source-available.
+tool is free and open-source.
 
 - `components/WaitlistForm.tsx` is a plain `<form>` posting to the `subscribe`
   Server Action in `app/actions.ts`.
