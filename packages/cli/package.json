@@ -1,6 +1,6 @@
 {
   "name": "@bunsen-dev/cli",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "CLI for Bunsen — a general-purpose experiment runner for agentic systems",
   "author": "Matthew Job Granmoe",
   "license": "Apache-2.0",

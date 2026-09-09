@@ -14,6 +14,8 @@ version and date and a fresh `[Unreleased]` is started.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-08
+
 ### Changed
 
 - Bunsen is now open source under Apache-2.0 (was source-available under PolyForm Shield

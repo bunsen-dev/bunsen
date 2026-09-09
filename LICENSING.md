@@ -45,4 +45,4 @@ immutable commit) travel **inside the image** under `/opt/battlesnake/licenses/`
 `LICENSE`, `NOTICE`, `LICENSING.md`, and `THIRD_PARTY.md` in their tarballs. The CLI is
 distributed as a standalone binary rather than an npm package.
 
-License history: v0.1.0–v0.3.1 were distributed under PolyForm Shield 1.0.0; from v0.4.0 Bunsen is Apache-2.0.
+License history: v0.1.0–v0.3.1 were distributed under PolyForm Shield 1.0.0; from v0.4.0 (2026-09-08) Bunsen is Apache-2.0.
