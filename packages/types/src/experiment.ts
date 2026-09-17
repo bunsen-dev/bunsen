@@ -201,9 +201,50 @@ export interface JudgeCriterion extends CriterionBase {
 
 export type JudgeEvidence = 'diff' | 'logs' | 'traces';
 
-export interface JudgeScorerConfig {
+/**
+ * Exploration tools an `agent` scorer can be restricted to via `scorer.tools`.
+ * The verdict tool (`submit_score`) is always present and cannot be listed.
+ */
+export type AgentScorerToolName = 'run_command' | 'read_file' | 'list_threads' | 'read_thread_turns';
+
+/** `browser-agent` scorers add the Playwright pair to the agent tool set. */
+export type BrowserAgentScorerToolName = AgentScorerToolName | 'screenshot' | 'run_playwright_script';
+
+/** Every tool name a `scorer.tools` allowlist may contain, across both agentic types. */
+export type ScorerToolName = BrowserAgentScorerToolName;
+
+export const AGENT_SCORER_TOOLS: readonly AgentScorerToolName[] = [
+  'run_command',
+  'read_file',
+  'list_threads',
+  'read_thread_turns',
+];
+
+export const BROWSER_AGENT_SCORER_TOOLS: readonly BrowserAgentScorerToolName[] = [
+  ...AGENT_SCORER_TOOLS,
+  'screenshot',
+  'run_playwright_script',
+];
+
+/** Fields shared by every LLM-backed scorer block. */
+interface LLMScorerConfigBase {
+  /**
+   * Model to score with, in `<provider>/<model>` form — `anthropic/claude-sonnet-4-6`,
+   * `openai/gpt-5.5`, `google/gemini-2.5-pro`. Bare ids are rejected. Default:
+   * `anthropic/claude-sonnet-4-6`. The provider's API key must be available on
+   * the host (see docs/SCORERS.md, "Models and providers").
+   */
   model?: string;
+  /**
+   * Replaces the default system prompt wholesale — nothing is appended. The
+   * criterion, its instructions, the allowed scores, the evidence, and the
+   * verdict tool all travel in the user turn and the tool definitions, so
+   * they survive any override.
+   */
+  systemPrompt?: string;
 }
+
+export interface JudgeScorerConfig extends LLMScorerConfigBase {}
 
 /** Full agentic scorer with tools. */
 export interface AgentCriterion extends CriterionBase {
@@ -212,16 +253,24 @@ export interface AgentCriterion extends CriterionBase {
   scorer?: AgentScorerConfig;
 }
 
-export interface AgentScorerConfig {
-  model?: string;
-  tools?: string[];
+export interface AgentScorerConfig extends LLMScorerConfigBase {
+  /**
+   * Allowlist of exploration tools the scorer may use. Omit for all of them.
+   * `submit_score` is always available. Unknown names fail validation.
+   */
+  tools?: AgentScorerToolName[];
 }
 
 /** Agentic scorer with browser / Playwright tooling. */
 export interface BrowserAgentCriterion extends CriterionBase {
   type: 'browser-agent';
   instructions: string;
-  scorer?: AgentScorerConfig;
+  scorer?: BrowserAgentScorerConfig;
+}
+
+export interface BrowserAgentScorerConfig extends LLMScorerConfigBase {
+  /** As {@link AgentScorerConfig.tools}, plus `screenshot` and `run_playwright_script`. */
+  tools?: BrowserAgentScorerToolName[];
 }
 
 /** Deterministic math over other criteria, no LLM. */
@@ -248,13 +297,16 @@ export type AggregateFunction = 'weighted_average' | 'all' | 'any' | 'min' | 'ma
 // ---------------------------------------------------------------------------
 
 export interface ReportConfig {
+  /** As {@link JudgeScorerConfig.model}: `<provider>/<model>`; default `anthropic/claude-sonnet-4-6`. */
   model?: string;
-  /** Evidence categories to include in the report prompt. */
+  /** Evidence categories inlined into the report prompt. Default: `['diff']`. */
   evidence?: JudgeEvidence[];
   instructions: string;
   /** Dependencies by id, or `'all'`. */
   needs?: string[] | 'all';
   timeout?: string;
+  /** Replaces the default report system prompt wholesale (see {@link JudgeScorerConfig.systemPrompt}). */
+  systemPrompt?: string;
 }
 
 // ---------------------------------------------------------------------------

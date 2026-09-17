@@ -79,7 +79,8 @@ Keep the evaluation block minimal here and hand scorer depth to **bunsen-author-
 
 7. **Add a starter evaluation.** `evaluation.criteria` is required. Begin with one cheap,
    deterministic `script` criterion that mechanically checks the deliverable; add a
-   `gate.ifBelow` so a broken solution scores 0 and skips the rest. Then hand off to
+   `gate.ifBelow` so a broken solution scores 0 on that criterion and the criteria after it
+   are skipped (`status: skipped`, `score: null` — never 0). Then hand off to
    **bunsen-author-scorer** for judges, weights, aggregates, and the report.
 
 8. **Validate until green — the oracle.** `bn experiments validate` runs the full
@@ -103,8 +104,8 @@ Keep the evaluation block minimal here and hand scorer depth to **bunsen-author-
   `packages.cargo` is parsed but not installed.
 - **Workspace files aren't auto-included** — an undeclared `./workspace` only warns. Declare
   `workspace.sources: [{ path: ./workspace }]`.
-- **Criteria need a kebab-case `id`** (`^[a-z0-9][a-z0-9-]*$`). `--fix` can derive them from
-  titles; the runtime hard-errors on a missing id.
+- **Criteria need a kebab-case `id`** (`^[a-z0-9][a-z0-9-]*$`) **and a `title`**. `--fix` can
+  derive a missing id from the title (never the reverse); the runtime hard-errors on a missing id.
 - **Variants merge by replacing arrays wholesale**, except `evaluation.criteria`, which
   merges by `id`. Select one with `bn run <exp>:<variant> <agent>`.
 

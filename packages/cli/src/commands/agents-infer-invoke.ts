@@ -14,6 +14,11 @@
  * It is a **suggestion tool** — the committed template is the contract, not the
  * model. The suggestion is a pure function of the agent (`command`, `examples`,
  * `--help`, `description`); it sees no experiment, task, or rubric.
+ *
+ * `--model` names the model as `<provider>/<model>` (the same form as
+ * `scorer.model`), and the platform key for that provider is resolved from the
+ * host environment by `resolvePlatformKeys` — so inference can run on any
+ * supported provider, not just Anthropic.
  */
 
 import * as fs from 'node:fs';
@@ -24,8 +29,16 @@ import {
   loadProject,
   loadAgent,
   parseAgentConfig,
+  resolvePlatformKeys,
+  platformKeyHint,
+  PROVIDER_LABELS,
 } from '@bunsen-dev/runtime';
-import type { AgentConfig } from '@bunsen-dev/types';
+import {
+  parseScorerModelRef,
+  ScorerModelRefError,
+  type AgentConfig,
+  type ScorerProvider,
+} from '@bunsen-dev/types';
 import { scaffoldInvokeTemplate, DEFAULT_SCAFFOLD_MODEL } from '@bunsen-dev/agents';
 import { BunsenCliError } from '../errors.js';
 import { isMachineFormat, renderMachine, resolveFormat } from '../format.js';
@@ -106,23 +119,32 @@ export async function agentsInferInvokeCommand(
     );
   }
 
-  // 4. API key (host-side, authoring time).
-  const apiKey = process.env.BUNSEN_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+  // 4. Model + the platform key for its provider (host-side, authoring time).
+  const model = options.model || DEFAULT_SCAFFOLD_MODEL;
+  let provider: ScorerProvider;
+  try {
+    provider = parseScorerModelRef(model).provider;
+  } catch (err) {
+    if (!(err instanceof ScorerModelRefError)) throw err;
+    throw new BunsenCliError('infer_invoke_model_invalid', `--model ${err.message}`, {
+      details: { hint: `Use <provider>/<model>, e.g. ${DEFAULT_SCAFFOLD_MODEL}.` },
+    });
+  }
+  const apiKey = resolvePlatformKeys(process.env)[provider]?.value;
   if (!apiKey) {
     throw new BunsenCliError(
       'infer_invoke_api_key_missing',
-      'An Anthropic API key is required to infer the invoke template.',
+      `${PROVIDER_LABELS[provider]} API key is required to infer the invoke template with ${model}.`,
       {
-        details: { hint: 'Set ANTHROPIC_API_KEY (or BUNSEN_ANTHROPIC_API_KEY) in your environment or .env.' },
+        details: { hint: `${platformKeyHint(provider)} in your environment or .env.` },
       },
     );
   }
 
-  // 4. Acquire --help text (best-effort), per the resolved strategy.
+  // 5. Acquire --help text (best-effort), per the resolved strategy.
   const { helpText, helpSource } = acquireHelpText(config, resolved.path, options, say);
 
-  // 5. Infer the template (single forced tool call).
-  const model = options.model || DEFAULT_SCAFFOLD_MODEL;
+  // 6. Infer the template (single forced tool call).
   say(chalk.dim(`Inferring entrypoint.invoke for ${chalk.cyan(config.name)} with ${model}…`));
   const suggestion = await scaffoldInvokeTemplate({ agent: config, helpText, apiKey, model });
 
@@ -131,7 +153,7 @@ export async function agentsInferInvokeCommand(
   const rel = path.relative(process.cwd(), agentYamlPath) || agentYamlPath;
   const byHandHint = `Add it by hand:  invoke: ${formatInvokeFlow(suggestion.invoke)}`;
 
-  // 6. Write (or, with --dry-run, don't).
+  // 7. Write (or, with --dry-run, don't).
   const written = !options.dryRun;
   if (written) {
     let text: string;
@@ -166,7 +188,7 @@ export async function agentsInferInvokeCommand(
     }
   }
 
-  // 7. Report.
+  // 8. Report.
   if (machine) {
     process.stdout.write(
       renderMachine(

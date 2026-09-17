@@ -19,7 +19,7 @@ The build script (`packages/agents/scripts/build-bundles.mjs`) performs:
 
 ```
 packages/agents/dist/
-  scorer.cjs            (~1.3MB)
+  scorer.cjs            (~2.1MB — the AI SDK plus its Anthropic, OpenAI, and Google providers)
   supervisor.cjs        (~1.1MB)
   proxy-bootstrap.cjs   (~1.0MB)
   gitignore-filter.cjs  (~20KB)

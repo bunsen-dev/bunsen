@@ -43,8 +43,10 @@ humans and AI can build on.
 
 ## Quick Start
 
-**Prerequisites:** a running **Docker** daemon. An `ANTHROPIC_API_KEY` is needed
-for Claude-based evaluation and for Claude-powered agents; the no-AI `echo-agent`
+**Prerequisites:** a running **Docker** daemon, plus an API key for whichever provider
+your scorers and agent use — `ANTHROPIC_API_KEY` covers the default scorer model and
+Claude-powered agents, while rubrics naming `openai/…` or `google/…` scorer models want
+`OPENAI_API_KEY` / `GEMINI_API_KEY`; the no-AI `echo-agent`
 with script-only scoring runs fully offline (agent invocation is composed
 deterministically — no model in the path). No Node toolchain required — the `bn`
 binary embeds its own runtime.

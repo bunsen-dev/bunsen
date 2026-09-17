@@ -171,6 +171,20 @@ _Extends `criterionBase`._
 - `run`: string **(required)** — minLength 1
 - _no other fields allowed_
 
+## scorerModel
+
+string — pattern `^(anthropic|openai|google)/.+$`.
+
+## scorerSystemPrompt
+
+string — minLength 1.
+
+## judgeScorer
+
+- `model`: `scorerModel`
+- `systemPrompt`: `scorerSystemPrompt`
+- _no other fields allowed_
+
 ## judgeCriterion
 
 _Extends `criterionBase`._
@@ -185,15 +199,21 @@ _Extends `criterionBase`._
 - `gate`: `criterionGate`
 - `instructions`: string **(required)** — minLength 1
 - `evidence`: array of `"diff"` | `"logs"` | `"traces"`
-- `scorer`: object
-  - `model`: string
-  - _no other fields allowed_
+- `scorer`: `judgeScorer`
 - _no other fields allowed_
 
 ## agentScorer
 
-- `model`: string
-- `tools`: array of string
+- `model`: `scorerModel`
+- `systemPrompt`: `scorerSystemPrompt`
+- `tools`: array of `"run_command"` | `"read_file"` | `"list_threads"` | `"read_thread_turns"` — minItems 1
+- _no other fields allowed_
+
+## browserAgentScorer
+
+- `model`: `scorerModel`
+- `systemPrompt`: `scorerSystemPrompt`
+- `tools`: array of `"run_command"` | `"read_file"` | `"list_threads"` | `"read_thread_turns"` | `"screenshot"` | `"run_playwright_script"` — minItems 1
 - _no other fields allowed_
 
 ## agentCriterion
@@ -225,7 +245,7 @@ _Extends `criterionBase`._
 - `needs`: `criterionNeeds`
 - `gate`: `criterionGate`
 - `instructions`: string **(required)** — minLength 1
-- `scorer`: `agentScorer`
+- `scorer`: `browserAgentScorer`
 - _no other fields allowed_
 
 ## aggregateCriterion
@@ -257,11 +277,12 @@ One of:
 
 ## report
 
-- `model`: string
+- `model`: `scorerModel`
 - `evidence`: array of `"diff"` | `"logs"` | `"traces"`
 - `instructions`: string **(required)** — minLength 1
 - `needs`: `criterionNeeds`
 - `timeout`: `duration`
+- `systemPrompt`: `scorerSystemPrompt`
 - _no other fields allowed_
 
 ## evaluation

@@ -13,7 +13,20 @@ const coreMocks = {
   resolveExperiment: vi.fn(),
   resolveAgent: vi.fn(),
   describeSearchedLocations: vi.fn(),
+  // Pulled in by `dry-run.ts` and `errors.ts`, which `run.ts` imports. They are
+  // not exercised here, but the mocked barrel has to carry every name the
+  // module graph binds or the import fails.
+  loadProject: vi.fn(),
+  mergeRunEnvironment: vi.fn(),
+  resolveRunPlatform: vi.fn(),
+  generateRunId: vi.fn(),
+  isDockerAvailable: vi.fn(),
+  getDockerInfo: vi.fn(),
+  archToRunPlatform: vi.fn(),
   AgentConfigError: class AgentConfigError extends Error {},
+  ProjectConfigError: class ProjectConfigError extends Error {},
+  ExperimentConfigError: class ExperimentConfigError extends Error {},
+  RunCanceledError: class RunCanceledError extends Error {},
 };
 
 const oraMocks = {
@@ -37,7 +50,29 @@ vi.mock('ora', () => ({
   }),
 }));
 
-import { runCommand } from './run.js';
+// Imported dynamically, AFTER the mocks above: bun hoists static imports, so a
+// plain `import … from './run.js'` would pull in the real `@bunsen-dev/runtime`
+// barrel (Docker, dockerode, the executor) before the mock is registered.
+const { runCommand, evaluationFailedOutright } = await import('./run.js');
+import type { RunManifestV1, RunManifestCriterion } from '@bunsen-dev/types';
+
+/** Minimal manifest shaped just enough for the exit-code-5 predicate. */
+function manifest(
+  status: RunManifestV1['status'],
+  criteria?: RunManifestCriterion[],
+): RunManifestV1 {
+  return {
+    status,
+    ...(criteria ? { evaluation: { weighted_score: 0, criteria } } : {}),
+  } as RunManifestV1;
+}
+
+const criterion = (
+  id: string,
+  scorer_type: RunManifestCriterion['scorer_type'],
+  status: RunManifestCriterion['status'],
+  score: number | null = null,
+): RunManifestCriterion => ({ id, weight: 1, score, summary: '', status, scorer_type });
 
 describe('runCommand', () => {
   const originalArgv = process.argv;
@@ -143,6 +178,30 @@ describe('runCommand', () => {
     stdoutSpy.mockRestore();
   });
 
+  it('exits 5 when every LLM-backed criterion errored', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    coreMocks.executeRun.mockResolvedValue({
+      run_id: 'abc123',
+      status: 'failed',
+      duration_ms: 1000,
+      evaluation: {
+        weighted_score: 0,
+        criteria: [criterion('rubric', 'judge', 'error')],
+      },
+    });
+    coreMocks.loadEvaluationResult.mockReturnValue(undefined);
+
+    await runCommand('fix-the-bug', 'claude-code', {}, { args: [] });
+
+    const consoleOutput = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(consoleOutput).toContain('Evaluation failed: every LLM-backed criterion errored');
+    expect(exitSpy).toHaveBeenCalledWith(5);
+
+    logSpy.mockRestore();
+  });
+
   it('surfaces progress as plain logs after streaming output begins', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -194,5 +253,63 @@ describe('runCommand', () => {
     stdoutWriteSpy.mockRestore();
     stderrWriteSpy.mockRestore();
     logSpy.mockRestore();
+  });
+});
+
+describe('evaluationFailedOutright', () => {
+  it('is true when the run failed and every LLM-backed criterion errored', () => {
+    expect(
+      evaluationFailedOutright(
+        manifest('failed', [
+          criterion('rubric', 'judge', 'error'),
+          criterion('cheat-check', 'agent', 'error'),
+          // Script criteria don't count either way.
+          criterion('tests-pass', 'script', 'completed', 1),
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when at least one LLM-backed criterion produced a verdict', () => {
+    expect(
+      evaluationFailedOutright(
+        manifest('failed', [
+          criterion('rubric', 'judge', 'error'),
+          criterion('design', 'browser-agent', 'completed', 0.5),
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('is false when a gate skipped the surviving LLM criterion (skipped is not errored)', () => {
+    expect(
+      evaluationFailedOutright(
+        manifest('failed', [
+          criterion('rubric', 'judge', 'error'),
+          criterion('deep-review', 'judge', 'skipped'),
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('is false when the rubric has no LLM-backed criteria at all', () => {
+    expect(
+      evaluationFailedOutright(
+        manifest('failed', [
+          criterion('tests-pass', 'script', 'error'),
+          criterion('total', 'aggregate', 'completed', 0),
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it('is false when the run did not fail, even if every LLM criterion errored', () => {
+    expect(
+      evaluationFailedOutright(manifest('succeeded', [criterion('rubric', 'judge', 'error')])),
+    ).toBe(false);
+  });
+
+  it('is false when there is no evaluation block', () => {
+    expect(evaluationFailedOutright(manifest('failed'))).toBe(false);
   });
 });

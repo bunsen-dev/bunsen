@@ -126,6 +126,7 @@ async function setupCompleteRun(): Promise<{ runId: string }> {
         summary: 'Layout off',
         status: 'completed',
         scorerType: 'browser-agent',
+        model: 'anthropic/claude-sonnet-4-6',
         screenshots: ['artifacts/screenshots/screenshot_1.png'],
       },
     ],
@@ -296,6 +297,11 @@ describe('storage writers project onto manifest fields', () => {
     const visual = manifest.evaluation!.criteria.find((c) => c.id === 'visual')!;
     expect(visual.scorer_type).toBe('browser-agent');
     expect(visual.screenshots).toEqual(['artifacts/screenshots/screenshot_1.png']);
+    // Provenance: the resolved scorer model rides along on LLM-backed criteria
+    // and stays absent on script ones.
+    expect(visual.model).toBe('anthropic/claude-sonnet-4-6');
+    expect(tests.model).toBeUndefined();
+    expect(manifest.evaluation!.report_error).toBeUndefined();
 
     expect(manifest.provenance).toEqual({ verification_tier: 'self_reported', replayable: false });
 
@@ -327,6 +333,49 @@ describe('storage writers project onto manifest fields', () => {
 
   it('refresh is a no-op for the artifacts walk on a missing run', () => {
     expect(refreshRunManifest('does-not-exist', tempDir)).toBeNull();
+  });
+
+  it('projects an errored criterion and a failed report onto the manifest', async () => {
+    const { runId } = await setupCompleteRun();
+    const failed: EvaluationResult = {
+      weightedScore: 0,
+      criteria: [
+        {
+          id: 'quality',
+          weight: 1,
+          score: null,
+          summary: 'Scorer produced no verdict.',
+          status: 'error',
+          scorerType: 'judge',
+          model: 'openai/gpt-5.5',
+          error: 'no verdict after forced submit',
+          logPath: 'evaluation/criteria/quality.log',
+        },
+      ],
+      reportError: 'report scorer timed out',
+    };
+    saveEvaluationResult(runId, failed, tempDir);
+
+    const manifest = loadRunManifest(runId, tempDir);
+    expect(manifest?.evaluation).toEqual({
+      weighted_score: 0,
+      criteria: [
+        {
+          id: 'quality',
+          weight: 1,
+          score: null,
+          summary: 'Scorer produced no verdict.',
+          status: 'error',
+          scorer_type: 'judge',
+          model: 'openai/gpt-5.5',
+          error: 'no verdict after forced submit',
+          log_path: 'evaluation/criteria/quality.log',
+        },
+      ],
+      report_error: 'report scorer timed out',
+    });
+    // A failed report leaves no narrative behind.
+    expect(manifest?.evaluation?.report).toBeUndefined();
   });
 
   it('omits human_scoring when no human.json exists', async () => {

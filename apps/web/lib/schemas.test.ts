@@ -4,8 +4,9 @@ import { describe, it, expect } from "vitest";
 
 // The schemas published at schemas.bunsen.dev are served straight from
 // packages/types/schemas (see scripts/sync-schemas.mjs). Their $ids are frozen —
-// a schema change becomes v2, never an in-place edit — so this guards the same
-// invariant the CI `check:schemas` job enforces.
+// the URL never changes; pre-1.0 the v1 schema may still be tightened in place
+// (called out in CHANGELOG), and a change needing a new $id becomes v2 — so this
+// guards the same invariant the CI `check:schemas` job enforces.
 const NAMES = ["project", "suite", "experiment", "agent"];
 
 function canonical(name: string): { $id?: string } {

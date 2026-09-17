@@ -13,6 +13,8 @@ import {
   cleanupInternalRunFiles,
   createMounts,
   handleSignal,
+  missingScorerProviders,
+  runReportStep,
   setActiveRunForTest,
   detectDepConflicts,
   detectCrossBoundaryShadows,
@@ -22,7 +24,19 @@ import {
   type PreparedAgentDep,
   type ShadowedSubstrateSource,
 } from './executor.js';
-import type { AgentDepSpec } from '@bunsen-dev/types';
+import type {
+  AgentDepSpec,
+  Criterion,
+  ReportConfig,
+  ScorerConfig,
+} from '@bunsen-dev/types';
+import {
+  DEFAULT_SCORER_MODEL,
+  requiredScorerProviders,
+  type ScorerPaths,
+} from './evaluation-coordinator.js';
+import { buildMissingScorerKeysError, resolvePlatformKeys } from './platform-keys.js';
+import type { LLMScorerRun } from './scorer-container.js';
 import {
   createRun,
   getRunDir,
@@ -810,5 +824,141 @@ describe('timed-out agent reaping (onTimeout: score)', () => {
     expect(cmd).not.toMatch(/kill -KILL "?\$PGID/);
     // No recorded group => no-op (don't kill anything blindly).
     expect(cmd).toContain('no agent process group recorded; skipping');
+  });
+});
+
+describe('scorer key preflight (missingScorerProviders)', () => {
+  const openaiJudge: Criterion = {
+    id: 'cheat-check',
+    title: 'No cheating',
+    type: 'agent',
+    instructions: 'Did the agent hard-code the answer?',
+    weight: 0,
+    scorer: { model: 'openai/gpt-5.5' },
+  };
+
+  it('passes a script/aggregate-only rubric with no keys at all', () => {
+    const required = requiredScorerProviders({
+      criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
+    });
+    expect(required.size).toBe(0);
+    expect(missingScorerProviders(required, {}).size).toBe(0);
+  });
+
+  it('names the criterion and the OpenAI variables when only ANTHROPIC_API_KEY is set', () => {
+    const required = requiredScorerProviders({ criteria: [openaiJudge] });
+    const keys = resolvePlatformKeys({ ANTHROPIC_API_KEY: 'a' });
+    const missing = missingScorerProviders(required, keys);
+
+    expect([...missing.keys()]).toEqual(['openai']);
+    expect(buildMissingScorerKeysError(missing).message).toBe(
+      [
+        'Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY):',
+        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.5)",
+      ].join('\n'),
+    );
+  });
+
+  it('is satisfied by either the plain or the BUNSEN_ form of the key', () => {
+    const required = requiredScorerProviders({ criteria: [openaiJudge] });
+    expect(missingScorerProviders(required, resolvePlatformKeys({ OPENAI_API_KEY: 'o' })).size).toBe(0);
+    expect(
+      missingScorerProviders(required, resolvePlatformKeys({ BUNSEN_OPENAI_API_KEY: 'o' })).size,
+    ).toBe(0);
+  });
+
+  it('includes the report step provider', () => {
+    const required = requiredScorerProviders({
+      criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
+      report: { instructions: 'Summarize.', model: 'google/gemini-2.5-pro' },
+    });
+    const missing = missingScorerProviders(required, resolvePlatformKeys({ ANTHROPIC_API_KEY: 'a' }));
+    expect(buildMissingScorerKeysError(missing).message).toContain('  report (model: google/gemini-2.5-pro)');
+  });
+});
+
+describe('runReportStep', () => {
+  const reportConfig: ReportConfig = { instructions: 'Summarize the run.' };
+  const paths: ScorerPaths = { contextDir: '/bunsen/run', workspacePath: '/workspace' };
+  const criteria: Criterion[] = [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }];
+  const dependencyScores = { tests: { score: 1, summary: 'Passed' } };
+
+  const call = (
+    runScorer: (config: ScorerConfig, timeoutMs: number) => Promise<LLMScorerRun>,
+    config: ReportConfig = reportConfig,
+  ) => {
+    const logs: string[] = [];
+    return runReportStep({
+      reportConfig: config,
+      criteria,
+      dependencyScores,
+      paths,
+      runScorer,
+      log: (m) => logs.push(m),
+      progress: () => {},
+    }).then((outcome) => ({ outcome, logs }));
+  };
+
+  it('returns the report text and the resolved config it was produced from', async () => {
+    let seen: ScorerConfig | undefined;
+    const { outcome } = await call(async (config) => {
+      seen = config;
+      return { ok: true, output: { score: null, summary: 'Wrote it.', report: '# Report' } };
+    });
+    expect(outcome).toEqual({ report: '# Report' });
+    expect(seen?.id).toBe('summary-report');
+    expect(seen?.title).toBe('Evaluation report');
+    expect(seen?.instructions).toBe('Summarize the run.');
+    expect(seen?.model).toBe(DEFAULT_SCORER_MODEL);
+    expect(seen?.dependencyScores).toEqual(dependencyScores);
+  });
+
+  it('falls back to the summary when the scorer returned no report body', async () => {
+    const { outcome } = await call(async () => ({
+      ok: true,
+      output: { score: null, summary: 'Short summary.' },
+    }));
+    expect(outcome).toEqual({ report: 'Short summary.' });
+  });
+
+  it('records a scorer failure instead of throwing', async () => {
+    const { outcome, logs } = await call(async () => ({
+      ok: false,
+      timedOut: true,
+      error: 'Scorer timed out after 600s',
+    }));
+    expect(outcome).toEqual({ error: 'Scorer timed out after 600s' });
+    expect(logs).toContain('Report generation failed: Scorer timed out after 600s');
+  });
+
+  it('records an infrastructure throw instead of propagating it', async () => {
+    const { outcome } = await call(async () => {
+      throw new Error('container is gone');
+    });
+    expect(outcome).toEqual({ error: 'container is gone' });
+  });
+
+  it('honors the report model override', async () => {
+    let seen: ScorerConfig | undefined;
+    await call(
+      async (config) => {
+        seen = config;
+        return { ok: true, output: { score: null, summary: 'ok' } };
+      },
+      { instructions: 'Summarize.', model: 'openai/gpt-5.5' },
+    );
+    expect(seen?.model).toBe('openai/gpt-5.5');
+  });
+
+  it('passes the criterion timeout through to the scorer', async () => {
+    let seenTimeout = 0;
+    await call(
+      async (_config, timeoutMs) => {
+        seenTimeout = timeoutMs;
+        return { ok: true, output: { score: null, summary: 'ok' } };
+      },
+      { instructions: 'Summarize.', timeout: '90s' },
+    );
+    expect(seenTimeout).toBe(90_000);
   });
 });

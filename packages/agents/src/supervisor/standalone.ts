@@ -41,7 +41,7 @@
 import * as fs from 'node:fs';
 import * as childProcess from 'node:child_process';
 import Anthropic from '@anthropic-ai/sdk';
-import { createAnthropicClient } from '../common/anthropic-client.js';
+import { createAnthropicClient } from './anthropic-client.js';
 import type {
   SupervisorInteraction,
   SupervisorLog,

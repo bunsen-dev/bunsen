@@ -46,7 +46,9 @@ export type { RunFilter, RunSummary };
  * automatically at open time ({@link ensureRunIndexFresh}) and on demand via
  * `bn index rebuild` ({@link rebuildIndex}).
  */
-export const RUN_INDEX_SCHEMA_VERSION = 4;
+// v5: `run_criteria` gained `model` (the `<provider>/<model>` an LLM-backed
+// criterion scored with) and `error` (why an errored criterion has no score).
+export const RUN_INDEX_SCHEMA_VERSION = 5;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -117,6 +119,8 @@ CREATE TABLE IF NOT EXISTS run_criteria (
   summary TEXT NOT NULL,
   status TEXT,
   scorer_type TEXT,
+  model TEXT,
+  error TEXT,
   allowed_scores_json TEXT,
   screenshots_json TEXT,
   log_path TEXT,
@@ -426,10 +430,10 @@ export function upsertManifest(db: DatabaseType, manifest: RunManifestV1): void 
       const insertCriterion = db.prepare(
         `INSERT INTO run_criteria (
            run_id, criterion, weight, score, summary, status,
-           scorer_type, allowed_scores_json, screenshots_json, log_path
+           scorer_type, model, error, allowed_scores_json, screenshots_json, log_path
          ) VALUES (
            @run_id, @criterion, @weight, @score, @summary, @status,
-           @scorer_type, @allowed_scores_json, @screenshots_json, @log_path
+           @scorer_type, @model, @error, @allowed_scores_json, @screenshots_json, @log_path
          )`
       );
       for (const c of m.evaluation.criteria) {
@@ -441,6 +445,8 @@ export function upsertManifest(db: DatabaseType, manifest: RunManifestV1): void 
           summary: c.summary,
           status: c.status ?? null,
           scorer_type: c.scorer_type ?? null,
+          model: c.model ?? null,
+          error: c.error ?? null,
           allowed_scores_json: c.allowed_scores ? JSON.stringify(c.allowed_scores) : null,
           screenshots_json: c.screenshots ? JSON.stringify(c.screenshots) : null,
           log_path: c.log_path ?? null,
@@ -663,6 +669,10 @@ export interface CriterionRow {
   summary: string;
   status: string | null;
   scorerType: string | null;
+  /** The `<provider>/<model>` an LLM-backed criterion scored with. */
+  model: string | null;
+  /** Why an errored criterion produced no score. */
+  error: string | null;
   allowedScores: AllowedScores | null;
   logPath: string | null;
 }
@@ -671,10 +681,11 @@ export function listRunCriteria(db: DatabaseType, runId: string): CriterionRow[]
   const rows = db.prepare<{
     run_id: string; criterion: string; weight: number; score: number | null;
     summary: string; status: string | null; scorer_type: string | null;
+    model: string | null; error: string | null;
     allowed_scores_json: string | null; log_path: string | null;
   }, [string]>(
     `SELECT run_id, criterion, weight, score, summary, status, scorer_type,
-            allowed_scores_json, log_path
+            model, error, allowed_scores_json, log_path
        FROM run_criteria WHERE run_id = ?
        ORDER BY criterion`
   ).all(runId);
@@ -686,6 +697,8 @@ export function listRunCriteria(db: DatabaseType, runId: string): CriterionRow[]
     summary: r.summary,
     status: r.status,
     scorerType: r.scorer_type,
+    model: r.model,
+    error: r.error,
     allowedScores: r.allowed_scores_json ? JSON.parse(r.allowed_scores_json) as AllowedScores : null,
     logPath: r.log_path,
   }));

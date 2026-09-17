@@ -16,7 +16,7 @@
  */
 
 import type { RunPlatform, AllowedScores } from './common.js';
-import type { AggregateSettings, JudgeEvidence } from './experiment.js';
+import type { JudgeEvidence, ScorerToolName } from './experiment.js';
 import type { ScriptResultArtifact } from './evaluation.js';
 import type { RunManifestScorerType } from './manifest.js';
 
@@ -182,17 +182,16 @@ export interface ContainerMount {
 // ============================================================================
 
 /**
- * Internal scorer-dispatch vocabulary. This is the contract the runtime sends
- * to the bundled scorer agent (`ScorerConfig.type`), which switches on these
- * values to pick a scoring strategy. Distinct from the public
- * {@link RunManifestScorerType} (`judge`/`script`/`browser-agent`/…): this set
- * is the engine's own vocabulary and additionally carries `report`, the
- * dedicated `evaluation.report` narrative step, which has no manifest scorer
- * type.
+ * The four shapes the bundled scorer runs. `judge`, `agent`, and
+ * `browser-agent` are the LLM-backed criterion types (the public
+ * {@link RunManifestScorerType} vocabulary); `report` is the dedicated
+ * `evaluation.report` narrative step, which has no manifest scorer type.
+ * `script` and `aggregate` criteria never reach the bundle — the runtime
+ * dispatches them itself.
  *
  * @internal
  */
-export type ScorerType = 'llm' | 'agent' | 'visual' | 'report' | 'aggregate' | 'code';
+export type ScorerRunType = 'judge' | 'agent' | 'browser-agent' | 'report';
 
 /** @internal */
 export interface DependencyScore {
@@ -200,20 +199,40 @@ export interface DependencyScore {
   summary: string;
 }
 
-/** @internal */
+/**
+ * What the runtime hands the bundled scorer (`scorer.cjs --config`). Every
+ * field is resolved on the host: `model` is always the full
+ * `<provider>/<model>` string (the default is applied before the config is
+ * written), and paths are container paths.
+ *
+ * @internal
+ */
 export interface ScorerConfig {
-  criterion: string;
-  instructions?: string;
-  type: ScorerType;
-  model?: string;
-  tools?: string[];
+  type: ScorerRunType;
+  /** Criterion id (`summary-report` for the report step). */
+  id: string;
+  /** Human-readable criterion title, shown in the user turn. */
+  title: string;
+  /** The criterion's `instructions` (or `report.instructions`). */
+  instructions: string;
+  /** Resolved `<provider>/<model>`; never absent. */
+  model: string;
+  /** User-supplied replacement for the default system prompt. */
+  systemPrompt?: string;
+  /** Exploration-tool allowlist (agent / browser-agent). Verdict tools are implicit. */
+  tools?: ScorerToolName[];
+  /** Allowed discrete scores; enforced by the `submit_score` schema. */
   scores?: AllowedScores;
-  prompt?: string;
+  /** Evidence inlined into the user turn (judge and report). */
+  evidence?: JudgeEvidence[];
+  /** Run context dir inside the container (`/bunsen/run`). */
   contextDir: string;
+  /** The agent's final workspace inside the container (`/workspace`). */
   workspacePath: string;
+  /** The pre-run workspace snapshot, when mounted (`/workspace-source`, dedicated mode only). */
+  workspaceSourcePath?: string;
+  /** Results of the criteria this one `needs` (always set for the report). */
   dependencyScores?: Record<string, DependencyScore>;
-  aggregate?: AggregateSettings;
-  context?: JudgeEvidence[];
 }
 
 /** @internal */

@@ -16,7 +16,7 @@ export const EXIT_CODES = {
   VALIDATION: 3,
   /** Runtime failure during a run (agent crashed, container died, infra error). */
   RUNTIME: 4,
-  /** Evaluation failure (scorer crashed; distinct from a low score). */
+  /** Evaluation failure: every LLM-backed criterion errored (no verdict, crash, or timeout — distinct from a low score). */
   EVALUATION: 5,
 } as const;
 

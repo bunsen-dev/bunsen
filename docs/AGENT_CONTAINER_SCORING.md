@@ -6,7 +6,9 @@ By default (`evaluation.container: dedicated`), Bunsen evaluates experiment resu
 
 `evaluation.container: agent` opts into running scorers **inside the agent's container** after the agent finishes. The agent's filesystem state is fully preserved: packages, system files, configuration changes.
 
-Important caveat: any experiment that declares a `verifiers/` directory has it mounted (read-only) into the agent container before the agent runs — Docker cannot add mounts to a running container, so the mount must exist up front. This is **not** specific to agent-container scoring: in either evaluation mode the agent can read `/bunsen/verifiers` during the run, so don't put scoring secrets there.
+Important caveat: this mode is what makes an experiment's `verifiers/` directory visible to the agent. Because Docker cannot add mounts to a running container, the mount must exist up front — so in `evaluation.container: agent` mode `/bunsen/verifiers` is mounted (read-only) into the agent container before the agent runs, and the agent can read it during the run. **Don't put held-out fixtures or answer keys in `verifiers/` for an agent-mode experiment.** In the default `dedicated` mode only the scorer container mounts `verifiers/`, so those assets stay hidden from the agent.
+
+Key flow: LLM-backed criteria (`judge`, `agent`, `browser-agent`) get their provider's key delivered to each scorer `exec` as a single `BUNSEN_<PROVIDER>_API_KEY`, not via the container's base environment — so even in this mode the agent under test never sees the platform's key. See [Trust Model](./TRUST_MODEL.md).
 
 When the agent ran as the non-root `bunsen` user, scorers in the agent container also run as `bunsen` with `HOME=/home/bunsen`. If the agent ran as root (`environment.user: root`), scorers run as root. This matters for user-scoped state like conda environments, virtualenvs, and per-user config directories.
 
@@ -89,7 +91,8 @@ What this means for you:
 - **Same workspace contract** — scorers still see a mutable `/workspace` and `/workspace-source` — an immutable snapshot of the initial seeded inputs.
 - **Same user context** — scorers run as the same user as the agent, so user-scoped environments resolve the same way during scoring.
 - **Same criterion types** — `script`, `judge`, `agent`, and `browser-agent` criteria all work unchanged.
-- **Verifier visibility** — `/bunsen/verifiers` is mounted up front (as for any run that declares a `verifiers/` directory), so the agent can read verifier assets before scoring begins. This is the same in both evaluation modes, so don't put scoring secrets there.
+- **Verifier visibility** — `/bunsen/verifiers` must be mounted up front, so the agent can read verifier assets before scoring begins. This is specific to this mode: in the default `dedicated` mode only the scorer container mounts them. Don't put scoring secrets in `verifiers/` when you opt into agent-container scoring.
+- **Bring your own grader** — because the agent's `defaults.passEnv` keys (e.g. `ANTHROPIC_API_KEY`) are present in this container, a `type: script` criterion that calls a model itself and writes `result.json` works here. In the default `dedicated` mode no provider key reaches script criteria, by design.
 
 ## Trade-offs
 
@@ -99,6 +102,7 @@ What this means for you:
 | Packages                     | Only what's in the image                 | Agent-installed packages available         |
 | System files                 | Only `/workspace`                        | Full filesystem preserved                  |
 | Services                     | Lost                                     | Preserved if the agent daemonized properly |
+| Verifier visibility          | `verifiers/` hidden from the agent       | `/bunsen/verifiers` readable by the agent  |
 | Crash safety                 | Scorer crash doesn't touch agent data    | Same (agent is already finished)           |
 | Performance                  | Container creation + workspace copy      | Slightly faster (no extraction)            |
 

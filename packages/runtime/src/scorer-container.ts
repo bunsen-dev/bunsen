@@ -15,6 +15,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import type {
+  ScorerConfig,
   ScorerOutput,
   ScriptResultArtifact,
   RunPlatform,
@@ -112,6 +113,32 @@ export const SCRIPT_SCORER_ENV: Readonly<Record<string, string>> = Object.freeze
   BUNSEN_WORKSPACE_DIR: '/workspace',
   BUNSEN_WORKSPACE_SOURCE_DIR: '/workspace-source',
 });
+
+/**
+ * The base environment the dedicated scorer container is created with.
+ *
+ * Deliberately key-free: creation-time env is visible to every exec in the
+ * container, including `type: script` criteria and anything they spawn, so a
+ * provider API key placed here would be readable by user-authored verifier
+ * scripts. LLM scorers get their one provider key per exec instead
+ * (`runLLMScorer`), in both container modes.
+ */
+export function buildScorerContainerEnv(options: {
+  /** Reserved `BUNSEN_*` run/suite context, from `buildReservedEnv()`. */
+  reservedEnv?: Record<string, string>;
+  /** The image's own `PATH`, from `inspectImageEnvPath()`. */
+  imageEnvPath?: string;
+}): Record<string, string> {
+  return {
+    ...SCRIPT_SCORER_ENV,
+    ...(options.reservedEnv ?? {}),
+    // Create-time Env wins over the image's Config.Env per key, so setting
+    // PATH here replaces the image's — preserve it via prepend (see
+    // resolveScorerPath). The agent container never overrides PATH; the
+    // scorer must see the same toolchain the agent built with.
+    PATH: resolveScorerPath(options.imageEnvPath),
+  };
+}
 
 export const BUNSEN_SCORE_SCRIPT = `#!/bin/sh
 # bunsen-score: Helper for code-based scorers
@@ -430,8 +457,6 @@ export async function createScorerContainer(options: {
   scorerBundlePath?: string;
   /** Path to Node.js runtime binary (for custom images) */
   nodeRuntimePath?: string;
-  /** API key for platform agents */
-  apiKey?: string;
   /** Path to proxy certs dir (for tracing scorer API calls) */
   proxyCertsDir?: string;
   /**
@@ -449,7 +474,7 @@ export async function createScorerContainer(options: {
 }): Promise<ScorerContainerInfo> {
   const {
     image, workspaceDir, workspaceSourceDir, runDir, verifiersPath, runId, platform,
-    scorerBundlePath, nodeRuntimePath, apiKey, proxyCertsDir,
+    scorerBundlePath, nodeRuntimePath, proxyCertsDir,
     proxyBootstrapBundlePath, reservedEnv,
   } = options;
 
@@ -469,19 +494,10 @@ export async function createScorerContainer(options: {
     proxyBootstrapBundlePath,
   });
 
-  const env: Record<string, string> = {
-    ...SCRIPT_SCORER_ENV,
-    ...(reservedEnv ?? {}),
-    // Create-time Env wins over the image's Config.Env per key, so setting
-    // PATH here replaces the image's — preserve it via prepend (see
-    // resolveScorerPath). The agent container never overrides PATH; the
-    // scorer must see the same toolchain the agent built with.
-    PATH: resolveScorerPath(await inspectImageEnvPath(image)),
-  };
-
-  if (apiKey) {
-    env.BUNSEN_ANTHROPIC_API_KEY = apiKey;
-  }
+  const env = buildScorerContainerEnv({
+    reservedEnv,
+    imageEnvPath: await inspectImageEnvPath(image),
+  });
 
   const container = await createPersistentContainer(
     {
@@ -697,90 +713,283 @@ export function collectScriptResultArtifacts(
   return { attached, warnings };
 }
 
+// =============================================================================
+// LLM scorers (judge / agent / browser-agent / report)
+// =============================================================================
+
 /**
- * Run an LLM-based scorer in the scorer container.
+ * Outcome of one LLM-scorer exec.
  *
- * Writes the scorer config to the writable output dir, then invokes the
- * scorer binary (scorer.cjs) in the container. Parses JSON from stdout.
+ * There is no third state: a scorer that crashed, timed out, or produced no
+ * parseable verdict is `ok: false` and the criterion records `score: null` +
+ * `status: 'error'` (DESIGN.md D6). It is never a `0` — a `0` means the agent
+ * failed the criterion, which is a claim the platform has no evidence for
+ * when its own scorer fell over.
  */
+export type LLMScorerRun =
+  | { ok: true; output: ScorerOutput }
+  | { ok: false; error: string; timedOut: boolean };
+
+/** Tail of a stderr stream to quote in an error message. */
+const SCORER_STDERR_TAIL_CHARS = 500;
+
+function tail(text: string, max: number): string {
+  const trimmed = text.trim();
+  return trimmed.length > max ? `…${trimmed.slice(-max)}` : trimmed;
+}
+
+/**
+ * The human-readable reason a scorer exited non-zero. The bundle's contract is
+ * one `Scoring failed: <message>` line on stderr (followed by a stack only for
+ * unexpected crashes), so that line is the reason; without it, the last
+ * non-empty line stands in. The full stderr still lands in the criterion log.
+ */
+export function scorerFailureReason(stderr: string): string {
+  const lines = stderr.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const failed = lines.filter((l) => l.startsWith('Scoring failed:')).pop();
+  const reason = failed ?? lines.filter((l) => !l.startsWith('at ')).pop() ?? '';
+  return reason.length > SCORER_STDERR_TAIL_CHARS ? `${reason.slice(0, SCORER_STDERR_TAIL_CHARS)}…` : reason;
+}
+
+/**
+ * Map a raw scorer exec outcome onto {@link LLMScorerRun}. Pure: the caller
+ * supplies whatever the exec produced (a thrown error, or exit code + streams)
+ * and gets back the verdict or the reason there isn't one.
+ */
+export function interpretScorerExec(outcome: {
+  /** The error `execInContainer` threw, if it threw. */
+  error?: unknown;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+  /** The exec's timeout, for the timed-out message. */
+  timeoutMs: number;
+}): LLMScorerRun {
+  const { error, exitCode, stdout = '', stderr = '', timeoutMs } = outcome;
+
+  if (error !== undefined) {
+    if (error instanceof ExecTimeoutError) {
+      return {
+        ok: false,
+        timedOut: true,
+        error: `Scorer timed out after ${Math.round(timeoutMs / 1000)}s`,
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, timedOut: false, error: message };
+  }
+
+  if (exitCode !== 0) {
+    const detail = scorerFailureReason(stderr);
+    return {
+      ok: false,
+      timedOut: false,
+      error: `Scorer exited ${exitCode}${detail ? `: ${detail}` : ''}`,
+    };
+  }
+
+  const raw = stdout.trim();
+  if (!raw) {
+    return { ok: false, timedOut: false, error: 'Scorer produced no verdict (no output)' };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {
+      ok: false,
+      timedOut: false,
+      error: `Scorer produced no verdict (unparseable output: ${tail(raw, SCORER_STDERR_TAIL_CHARS)})`,
+    };
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      ok: false,
+      timedOut: false,
+      error: `Scorer produced no verdict (expected a JSON object, got ${tail(raw, SCORER_STDERR_TAIL_CHARS)})`,
+    };
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.summary !== 'string') {
+    return {
+      ok: false,
+      timedOut: false,
+      error: 'Scorer produced no verdict (output has no "summary")',
+    };
+  }
+  if (obj.score !== undefined && obj.score !== null && typeof obj.score !== 'number') {
+    return {
+      ok: false,
+      timedOut: false,
+      error: `Scorer produced no verdict (invalid "score": ${JSON.stringify(obj.score)})`,
+    };
+  }
+
+  const output: ScorerOutput = {
+    score: (obj.score ?? null) as number | null,
+    summary: obj.summary,
+  };
+  if (typeof obj.report === 'string') output.report = obj.report;
+  if (Array.isArray(obj.screenshots)) {
+    output.screenshots = obj.screenshots.filter((s): s is string => typeof s === 'string');
+  }
+  if (Array.isArray(obj.artifacts)) {
+    output.artifacts = obj.artifacts as ScriptResultArtifact[];
+  }
+  return { ok: true, output };
+}
+
+/**
+ * Run an LLM-based scorer (judge / agent / browser-agent / report) in the
+ * scorer container.
+ *
+ * Writes the resolved {@link ScorerConfig} to the writable output dir, then
+ * invokes the scorer binary (`scorer.cjs`) with exactly one provider API key
+ * in the exec env — never in the container's base env, so `type: script`
+ * criteria never see it. The scorer's stderr is streamed to `onLog` and always
+ * persisted to `evaluation/criteria/<slug>.log` under `runDir`, so a failed
+ * criterion leaves the same forensic trail a script criterion does.
+ */
+/**
+ * Replace every occurrence of a known secret value with `[redacted]`.
+ *
+ * The scorer's stderr is persisted as the criterion log, and an agentic scorer
+ * can legitimately read files that hold live keys (e.g. the run's
+ * `agent-script.sh` exports the agent's provider keys). The host knows every
+ * secret it handed out — the platform keys and the agent's env — so it scrubs
+ * them from the log before anything is written or echoed. Values shorter than
+ * 8 characters are ignored: they are not keys, and blanking them would mangle
+ * ordinary text.
+ */
+export function redactSecrets(text: string, secrets: readonly string[]): string {
+  let out = text;
+  for (const secret of secrets) {
+    if (!secret || secret.length < 8) continue;
+    out = out.split(secret).join('[redacted]');
+  }
+  return out;
+}
+
 export async function runLLMScorer(
   scorerContainer: ScorerContainerInfo,
   options: {
-    /** Serialized ScorerConfig JSON */
-    configJson: string;
-    /** Criterion name (for logging) */
-    criterion: string;
+    /** Fully resolved scorer config (model already `<provider>/<model>`). */
+    config: ScorerConfig;
+    /** The single provider key var this criterion's model needs. */
+    apiKey: { name: string; value: string };
     /** Node command path ('node' or '/bunsen/runtime/node') */
     nodeCmd: string;
     /** Timeout in milliseconds */
     timeout: number;
     /** Proxy env vars (from getProxyEnv()) for trace capture */
     proxyEnv?: Record<string, string>;
+    /** Run directory (for the criterion log file) */
+    runDir: string;
+    /**
+     * Secret values to scrub from the scorer's stderr before it is echoed or
+     * written to the criterion log (see {@link redactSecrets}). The exec's own
+     * provider key is always included.
+     */
+    redact?: readonly string[];
     /** Log callback */
     onLog?: (msg: string) => void;
   }
-): Promise<ScorerOutput> {
-  const { container, outputDir } = scorerContainer;
-  const { configJson, criterion, nodeCmd, timeout, proxyEnv, onLog } = options;
+): Promise<LLMScorerRun> {
+  const { container } = scorerContainer;
+  const { config, apiKey, nodeCmd, timeout, proxyEnv, runDir, onLog } = options;
+  const secrets = [apiKey.value, ...(options.redact ?? [])];
+  const scrub = (text: string) => redactSecrets(text, secrets);
+  const criterion = config.id;
+  const slug = slugifyCriterion(criterion);
 
-  // Write config to the writable scorer-output dir (accessible inside container)
-  const configHostPath = path.join(outputDir, 'scorer-config.json');
-  fs.writeFileSync(configHostPath, configJson);
+  // Deliver the config through `docker exec` (base64), not by writing to the
+  // bind-mounted output dir from the host: on Docker Desktop the container can
+  // observe a host write before it has fully synced and read a truncated file
+  // (seen live as `Unterminated string in JSON` on a multi-KB report config).
+  const configContainerPath = '/bunsen/scorer-output/scorer-config.json';
+  await writeFileInContainer(container, configContainerPath, JSON.stringify(config, null, 2), {
+    mode: '644',
+  });
 
-  // Build env vars for the scorer process
+  // Exec-scoped env: trace attribution + exactly one provider key + proxy vars.
   const env: Record<string, string> = {
     BUNSEN_TRACE_SOURCE: `scorer:${criterion}`,
+    [apiKey.name]: apiKey.value,
     ...(proxyEnv || {}),
   };
   const execOptions = buildScorerExecOptions(scorerContainer, env);
 
-  // Run scorer binary in container
-  let scorerResult;
+  // Raw chunks are kept and scrubbed once over the assembled text: a secret
+  // split across two chunks would survive a per-chunk scrub. The live echo is
+  // scrubbed per chunk (best effort) because it cannot wait for the end.
+  const stderrChunks: string[] = [];
+  let fullStderr = '';
+  let run: LLMScorerRun;
   try {
-    scorerResult = await execInContainer(
+    const result = await execInContainer(
       container,
-      [nodeCmd, '/bunsen/lib/scorer.cjs', '--config', '/bunsen/scorer-output/scorer-config.json'],
+      [nodeCmd, '/bunsen/lib/scorer.cjs', '--config', configContainerPath],
       {
         env: execOptions.env,
         user: execOptions.user,
         timeout,
         onOutput: (chunk, stream) => {
           if (stream === 'stderr') {
-            onLog?.(`[scorer:${criterion}] ${chunk.trim()}`);
+            stderrChunks.push(chunk);
+            onLog?.(`[scorer:${criterion}] ${scrub(chunk).trim()}`);
           }
         },
       }
     );
+    fullStderr = result.stderr || stderrChunks.join('');
+    run = interpretScorerExec({
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: scrub(fullStderr),
+      timeoutMs: timeout,
+    });
   } catch (error) {
-    // Handle timeout or other execution errors gracefully
-    const message = error instanceof Error ? error.message : String(error);
-    const isTimeout = error instanceof ExecTimeoutError;
-    const timeoutSecs = Math.round(timeout / 1000);
-
-    onLog?.(`[scorer:${criterion}] ${isTimeout ? 'Timed out' : 'Failed'}: ${message}`);
-
-    return {
-      score: 0,
-      summary: isTimeout
-        ? `Scorer timed out after ${timeoutSecs}s. The evaluation could not complete in the allotted time.`
-        : `Scorer error: ${message}`,
+    // ExecTimeoutError.stderr is the same accumulation the chunks hold — use
+    // one or the other, never both.
+    fullStderr = error instanceof ExecTimeoutError && error.stderr ? error.stderr : stderrChunks.join('');
+    run = interpretScorerExec({ error, timeoutMs: timeout });
+  }
+  if (!run.ok) run = { ...run, error: scrub(run.error) };
+  // The verdict text is persisted to evaluation.json and the manifest, and an
+  // agentic scorer can quote a file that holds a key — scrub it too.
+  if (run.ok) {
+    run = {
+      ok: true,
+      output: {
+        ...run.output,
+        summary: scrub(run.output.summary),
+        ...(run.output.report !== undefined ? { report: scrub(run.output.report) } : {}),
+      },
     };
   }
 
-  if (scorerResult.exitCode !== 0) {
-    throw new Error(
-      `Scorer failed for "${criterion}" (exit ${scorerResult.exitCode}): ${scorerResult.stderr}`
+  if (!run.ok) {
+    onLog?.(`[scorer:${criterion}] ${run.timedOut ? 'Timed out' : 'Failed'}: ${run.error}`);
+  }
+
+  // Always leave a criterion log — the reason a scorer produced no verdict is
+  // the only thing a user can act on.
+  const logAbs = path.join(runDir, 'evaluation', 'criteria', `${slug}.log`);
+  try {
+    fs.mkdirSync(path.dirname(logAbs), { recursive: true });
+    const body = scrub(fullStderr);
+    const trailer = run.ok ? '' : `${run.timedOut ? '[TIMEOUT]' : '[ERROR]'} ${run.error}\n`;
+    fs.writeFileSync(logAbs, body.endsWith('\n') || body === '' ? body + trailer : `${body}\n${trailer}`);
+  } catch (err) {
+    onLog?.(
+      `[scorer:${criterion}] Warning: could not write criterion log: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  // Parse JSON output from stdout
-  try {
-    return JSON.parse(scorerResult.stdout);
-  } catch {
-    throw new Error(
-      `Failed to parse scorer output for "${criterion}": ${scorerResult.stdout}`
-    );
-  }
+  return run;
 }
 
 /**

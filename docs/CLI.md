@@ -9,7 +9,7 @@ output.
 ```bash
 bn --help            # top-level command list
 bn <group> --help    # commands within a group
-bn doctor            # diagnose Docker, git, and project config
+bn doctor            # diagnose Docker, git, project config, and API keys
 ```
 
 ## `bn run`
@@ -69,7 +69,7 @@ Create, inspect, validate, and prebuild agents.
 | `bn agents validate [name]`      | Validate `agent.yaml`. `--all` for every agent.                |
 | `bn agents build <agent>`        | Build and cache `install.build` artifacts. `--platform`, `--rebuild`. |
 | `bn agents add [names…]`         | Copy bundled starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into the project's agents dir. No names adds all; `--list` shows them; `--force` overwrites an existing dir. |
-| `bn agents infer-invoke <agent>`     | Infer the agent's `entrypoint.invoke` with a model (once, at authoring time) and write it into `agent.yaml` as a reviewable diff. Reads `examples` + runs `--help` on the host (`--skip-help`, `--help-text <file>`). `--force` overwrites an existing `invoke`; `--dry-run` previews without writing; `--model <id>` picks the model. Needs `ANTHROPIC_API_KEY`. |
+| `bn agents infer-invoke <agent>`     | Infer the agent's `entrypoint.invoke` with a model (once, at authoring time) and write it into `agent.yaml` as a reviewable diff. Reads `examples` + runs `--help` on the host (`--skip-help`, `--help-text <file>`). `--force` overwrites an existing `invoke`; `--dry-run` previews without writing; `--model <provider>/<model>` picks the model (default `anthropic/claude-opus-4-8`). Needs that provider's key: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` (or the `BUNSEN_`-prefixed form). |
 
 ## `bn suites`
 
@@ -116,7 +116,7 @@ Inspect, augment, and calibrate [evaluation](./SCORERS.md) results.
 | Command                          | Description                                                            |
 | -------------------------------- | --------------------------------------------------------------------- |
 | `bn init`                        | Scaffold `bunsen.config.yaml`. `--example` also writes a starter experiment + echo-agent; `--starter-agents` copies the starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into `agents/` (existing agent dirs are skipped unless `--force`); `-f/--force` overwrites. |
-| `bn doctor`                      | Environment diagnostics (Docker, git, project config).              |
+| `bn doctor`                      | Environment diagnostics: Docker, git, project config, storage, and one API-key row per scorer provider (Anthropic, OpenAI, Google) naming the env var that satisfied it. |
 | `bn config show`                 | Print the resolved `bunsen.config.yaml`.                            |
 | `bn config validate`             | Validate `bunsen.config.yaml`.                                      |
 | `bn skills install`              | Install the bundled [authoring skills](./SKILLS.md) for Claude Code / Codex. Also `list`, `uninstall`. |
@@ -136,7 +136,7 @@ outcomes. A low score is **not** a failure — only an error is.
 | `2`  | Usage error: bad flags, missing args, unknown command.           |
 | `3`  | Validation failure: invalid YAML, schema violation, cross-resource error. |
 | `4`  | Runtime failure during a run (agent crashed, container died).    |
-| `5`  | Evaluation failure (a scorer crashed — distinct from a low score). |
+| `5`  | Evaluation failed: every LLM-backed criterion errored (a scorer crash or missing verdict — distinct from a low score). |
 
 ## Machine-readable output
 

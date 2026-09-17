@@ -20,20 +20,24 @@
  *
  * Unlike the platform bundles (scorer/supervisor/…), this is NOT compiled into a
  * container `.cjs` — it is host code, inlined into the `bn` binary via the CLI's
- * esbuild step (which externalizes `@anthropic-ai/sdk`). So it can use the full
- * `common/` agent framework directly.
+ * esbuild step (which externalizes `ai` and the `@ai-sdk/*` providers). It runs
+ * on the same provider-agnostic model layer as the scorer (`common/model.ts`).
  */
 
+import { generateText, stepCountIs, tool, ToolChoiceViolationError } from 'ai';
 import { z } from 'zod';
-import type Anthropic from '@anthropic-ai/sdk';
 import type { AgentConfig } from '@bunsen-dev/types';
-import { createAgent, tool, type ToolWithFunc } from '../common/index.js';
+import { createModel } from '../common/index.js';
 
 /**
- * Model the scaffolder runs on. Opus, deliberately: this runs once per agent and
- * is human-reviewed, so inference quality matters far more than per-call cost.
+ * Model the scaffolder runs on, as `<provider>/<model>`. Opus, deliberately:
+ * this runs once per agent and is human-reviewed, so inference quality matters
+ * far more than per-call cost.
  */
-export const DEFAULT_SCAFFOLD_MODEL = 'claude-opus-4-8';
+export const DEFAULT_SCAFFOLD_MODEL = 'anthropic/claude-opus-4-8';
+
+/** One forced tool call carrying a short argv template — a small budget is plenty. */
+const MAX_SCAFFOLD_OUTPUT_TOKENS = 2048;
 
 /**
  * Placeholders allowed inside an `invoke` token — kept in lockstep with the
@@ -63,9 +67,15 @@ export interface ScaffoldInvokeInput {
    * `examples` + `command` alone.
    */
   helpText?: string;
-  /** Anthropic API key (host-side; the platform key at authoring time). */
+  /**
+   * Platform API key for the provider named in {@link ScaffoldInvokeInput.model}
+   * (host-side; resolved by the CLI at authoring time).
+   */
   apiKey: string;
-  /** Override the model. Defaults to {@link DEFAULT_SCAFFOLD_MODEL}. */
+  /**
+   * Override the model, as `<provider>/<model>` (e.g. `openai/gpt-5.5`).
+   * Defaults to {@link DEFAULT_SCAFFOLD_MODEL}.
+   */
   model?: string;
 }
 
@@ -130,6 +140,8 @@ export function validateInvokeTemplate(tokens: unknown): asserts tokens is strin
 
 interface ScaffolderState {
   result: { invoke: string[]; reasoning: string } | null;
+  /** Why the last submission was rejected, so the caller can say what went wrong. */
+  error: string | null;
 }
 
 const submitInvokeTemplateSchema = z.object({
@@ -152,21 +164,27 @@ const submitInvokeTemplateSchema = z.object({
     ),
 });
 
-function createSubmitInvokeTemplateTool(state: ScaffolderState): ToolWithFunc {
+function createSubmitInvokeTemplateTool(state: ScaffolderState) {
   return tool({
-    name: 'submit_invoke_template',
     description: `Submit the inferred entrypoint.invoke template. Call this exactly once.
 
 Provide:
 - invoke: The argv template through the prompt slot, using {prompt} (or {promptFile}) for the task prompt.
 - reasoning: A short explanation of the prompt placement.`,
-    schema: submitInvokeTemplateSchema,
-    func: (input: z.infer<typeof submitInvokeTemplateSchema>): string => {
-      const parsed = submitInvokeTemplateSchema.parse(input);
+    inputSchema: submitInvokeTemplateSchema,
+    execute: ({ invoke, reasoning }: z.infer<typeof submitInvokeTemplateSchema>): string => {
       // We own correctness: reject a template the runtime loader would reject,
-      // loudly, rather than writing a broken invoke into agent.yaml.
-      validateInvokeTemplate(parsed.invoke);
-      state.result = { invoke: parsed.invoke, reasoning: parsed.reasoning };
+      // loudly, rather than writing a broken invoke into agent.yaml. Throwing
+      // here is recorded by the SDK as a tool error; we keep the reason so the
+      // caller can report *why* nothing was submitted.
+      try {
+        validateInvokeTemplate(invoke);
+      } catch (err) {
+        state.error = err instanceof Error ? err.message : String(err);
+        throw err;
+      }
+      state.result = { invoke, reasoning };
+      state.error = null;
       return 'Invoke template submitted successfully';
     },
   });
@@ -286,42 +304,37 @@ export async function scaffoldInvokeTemplate(
 ): Promise<ScaffoldInvokeResult> {
   const { agent, helpText, apiKey } = input;
   if (!apiKey) {
-    throw new Error('An Anthropic API key is required to run the scaffolder.');
+    throw new Error('An API key is required to run the scaffolder.');
   }
 
-  const state: ScaffolderState = { result: null };
-  const submitTool = createSubmitInvokeTemplateTool(state);
-
-  const scaffolder = createAgent({
-    model: input.model ?? DEFAULT_SCAFFOLD_MODEL,
-    tools: [submitTool],
-    system: buildScaffoldSystemPrompt(),
-    apiKey,
-    // No temperature: claude-opus-4-8 rejects the deprecated parameter, and a
-    // forced single tool call needs no sampling knob anyway.
-  });
+  const state: ScaffolderState = { result: null, error: null };
+  const model = createModel(input.model ?? DEFAULT_SCAFFOLD_MODEL, { apiKey });
 
   // Single forced tool call — the model has no free-text path.
-  const { raw } = await scaffolder.runOnce({
-    toolChoice: { type: 'tool', name: 'submit_invoke_template' },
-    messages: [{ role: 'user', content: buildScaffoldUserPrompt(agent, helpText) }],
+  const result = await generateText({
+    model,
+    instructions: buildScaffoldSystemPrompt(),
+    prompt: buildScaffoldUserPrompt(agent, helpText),
+    tools: { submit_invoke_template: createSubmitInvokeTemplateTool(state) },
+    toolChoice: { type: 'tool', toolName: 'submit_invoke_template' },
+    stopWhen: stepCountIs(1),
+    maxOutputTokens: MAX_SCAFFOLD_OUTPUT_TOKENS,
+    // No temperature: current-generation models reject the deprecated
+    // parameter, and a forced single tool call needs no sampling knob anyway.
+  }).catch((err: unknown): never => {
+    // The model answered with prose despite the forced tool choice.
+    if (ToolChoiceViolationError.isInstance(err)) {
+      throw new Error('The scaffolder model did not return a submit_invoke_template tool call.');
+    }
+    throw err;
   });
 
-  const toolUse = raw.content.find(
-    (block): block is Anthropic.ToolUseBlock =>
-      block.type === 'tool_use' && block.name === 'submit_invoke_template',
-  );
-  if (!toolUse) {
-    throw new Error(
-      'The scaffolder model did not return a submit_invoke_template tool call.',
-    );
-  }
-
-  // Runs validateInvokeTemplate; throws on a template the loader would reject.
-  await submitTool.func(toolUse.input);
-
   if (!state.result) {
-    throw new Error('The scaffolder did not produce an invoke template.');
+    throw new Error(
+      `The scaffolder model did not return a valid submit_invoke_template call: ${
+        state.error ?? toolFailureReason(result) ?? 'no tool call was recorded'
+      }`,
+    );
   }
 
   return {
@@ -329,4 +342,18 @@ export async function scaffoldInvokeTemplate(
     reasoning: state.result.reasoning,
     basis: scaffoldBasis(agent, helpText),
   };
+}
+
+/**
+ * The SDK's own reason a submission never reached `execute` — e.g. the model
+ * called the tool with input that failed the schema (`tool-error` content with
+ * an `InvalidToolInputError`). Undefined when nothing tool-shaped went wrong.
+ */
+function toolFailureReason(result: { content: Array<{ type: string; error?: unknown }> }): string | undefined {
+  for (const part of result.content) {
+    if (part.type === 'tool-error') {
+      return part.error instanceof Error ? part.error.message : String(part.error);
+    }
+  }
+  return undefined;
 }

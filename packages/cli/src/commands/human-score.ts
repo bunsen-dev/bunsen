@@ -126,7 +126,9 @@ export async function humanScoreCommand(
 
     // Filter to LLM-reviewable criteria
     let reviewableCriteria = evaluation.criteria.filter((c) => {
-      if (c.status === 'skipped') return false;
+      // Nothing to calibrate against: a skipped criterion was never attempted,
+      // and an errored one has no LLM verdict to compare a human score to.
+      if (c.status === 'skipped' || c.status === 'error') return false;
       if (SKIP_SCORER_TYPES.has(c.scorerType!)) return false;
       return HUMAN_REVIEWABLE_TYPES.has(c.scorerType);
     });
@@ -138,9 +140,19 @@ export async function humanScoreCommand(
       );
       if (reviewableCriteria.length === 0) {
         const available = evaluation.criteria
-          .filter((c) => !SKIP_SCORER_TYPES.has(c.scorerType!))
+          .filter((c) => !SKIP_SCORER_TYPES.has(c.scorerType!) && c.status !== 'skipped' && c.status !== 'error')
           .map((c) => c.id);
-        console.error(chalk.red(`Criterion "${options.criterion}" not found.`));
+        const named = evaluation.criteria.find(
+          (c) => c.id.toLowerCase() === options.criterion!.toLowerCase(),
+        );
+        if (named?.status === 'error') {
+          console.error(chalk.red(`Criterion "${named.id}" errored (no LLM verdict to calibrate against).`));
+          if (named.error) console.error(chalk.dim(`  ${named.error}`));
+        } else if (named?.status === 'skipped') {
+          console.error(chalk.red(`Criterion "${named.id}" was skipped (never scored).`));
+        } else {
+          console.error(chalk.red(`Criterion "${options.criterion}" not found.`));
+        }
         if (available.length > 0) {
           console.log(chalk.dim(`Available LLM-scored criteria: ${available.join(', ')}`));
         }

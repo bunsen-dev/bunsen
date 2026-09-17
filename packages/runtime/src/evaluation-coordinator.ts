@@ -4,13 +4,16 @@
  * Orchestrates the evaluation of experiment results by:
  * 1. Resolving the `evaluation.criteria` list (sequential order, each criterion
  *    may reference earlier entries via `needs`).
- * 2. Determining the scorer type from the v1 `type` enum.
- * 3. Building scorer-runtime configs.
+ * 2. Resolving each LLM-backed criterion's scorer model (`<provider>/<model>`)
+ *    and the set of providers an evaluation needs keys for.
+ * 3. Building the scorer-runtime config the bundled scorer consumes.
  * 4. Calculating weighted scores.
  * 5. Running aggregate math.
  *
- * Consumes the v1 {@link Criterion} shape directly. Report generation is
- * handled separately via {@link ExperimentConfig.evaluation.report}.
+ * Consumes the v1 {@link Criterion} shape directly. `script` and `aggregate`
+ * criteria are dispatched by the executor and never become a
+ * {@link ScorerConfig}; the report step builds its config via
+ * {@link buildReportScorerConfig}.
  */
 
 import type {
@@ -21,29 +24,43 @@ import type {
   AggregateCriterion,
   ScriptCriterion,
   AggregateSettings,
+  EvaluationConfig,
   JudgeEvidence,
   AllowedScores,
-  ScorerType,
+  ReportConfig,
   ScorerConfig,
   ScorerOutput,
+  ScorerProvider,
+  ScorerToolName,
   CriterionResult,
   EvaluationResult,
   DependencyScore,
 } from '@bunsen-dev/types';
+import { parseScorerModelRef } from '@bunsen-dev/types';
+
+/**
+ * The model every LLM-backed scorer (`judge`, `agent`, `browser-agent`, and
+ * `evaluation.report`) runs on unless the criterion sets `scorer.model` (or
+ * the report sets `report.model`). Defined once, here, on the host: the
+ * bundled scorer never applies a default — it always receives a resolved
+ * `<provider>/<model>`.
+ */
+export const DEFAULT_SCORER_MODEL = 'anthropic/claude-sonnet-4-6';
 
 /**
  * Resolved criterion with computed fields. Extends the v1 {@link Criterion}
- * discriminated union with the derived scorer type + expanded dependencies
- * (`needs: 'all'` expanded to the actual list of prior criterion ids).
+ * discriminated union with expanded dependencies (`needs: 'all'` expanded to
+ * the actual list of prior criterion ids).
  */
 export type ResolvedCriterion = Criterion & {
   /** Resolved weight (default 1). */
   resolvedWeight: number;
-  /** Resolved scorer type (maps v1 `type` to the internal scorer enum). */
-  scorerType: ScorerType;
   /** Dependency ids, with `needs: 'all'` expanded. */
   resolvedDependencies: string[];
 };
+
+/** The criterion types the bundled (LLM-backed) scorer runs. */
+export type LLMCriterion = JudgeCriterion | AgentCriterion | BrowserAgentCriterion;
 
 /**
  * Build dependency graph and resolve the `all` keyword.
@@ -176,22 +193,6 @@ export function topologicalSort(graph: Map<string, string[]>): string[] {
   return result;
 }
 
-/** Map v1 criterion `type` to the internal scorer-type enum. */
-export function determineScorerType(criterion: Criterion): ScorerType {
-  switch (criterion.type) {
-    case 'script':
-      return 'code';
-    case 'judge':
-      return 'llm';
-    case 'agent':
-      return 'agent';
-    case 'browser-agent':
-      return 'visual';
-    case 'aggregate':
-      return 'aggregate';
-  }
-}
-
 /** Resolve all criteria with computed fields. */
 export function resolveCriteria(criteria: Criterion[]): ResolvedCriterion[] {
   const depGraph = resolveDependencies(criteria);
@@ -199,7 +200,6 @@ export function resolveCriteria(criteria: Criterion[]): ResolvedCriterion[] {
   return criteria.map((criterion) => ({
     ...criterion,
     resolvedWeight: criterion.weight ?? 1,
-    scorerType: determineScorerType(criterion),
     resolvedDependencies: depGraph.get(criterion.id) || [],
   }));
 }
@@ -226,6 +226,10 @@ export function isBrowserAgentCriterion(c: Criterion): c is BrowserAgentCriterio
 export function isAggregateCriterion(c: Criterion): c is AggregateCriterion {
   return c.type === 'aggregate';
 }
+/** `judge`, `agent`, or `browser-agent` — the criteria the bundled scorer runs. */
+export function isLLMCriterion(c: Criterion): c is LLMCriterion {
+  return c.type === 'judge' || c.type === 'agent' || c.type === 'browser-agent';
+}
 
 /** Read `instructions` if the criterion type carries one. */
 export function criterionInstructions(c: Criterion): string | undefined {
@@ -244,23 +248,73 @@ export function criterionEvidence(c: Criterion): JudgeEvidence[] | undefined {
   return c.type === 'judge' ? c.evidence : undefined;
 }
 
-/** Read a user-facing scorer model override, if any. */
+/** Read a user-facing scorer model override, if any (unresolved; see {@link criterionScorerModel}). */
 export function criterionModel(c: Criterion): string | undefined {
-  switch (c.type) {
-    case 'judge':
-      return c.scorer?.model;
-    case 'agent':
-    case 'browser-agent':
-      return c.scorer?.model;
-    default:
-      return undefined;
-  }
+  return isLLMCriterion(c) ? c.scorer?.model : undefined;
 }
 
-/** Read extra scorer tools (agent/browser-agent only). */
-export function criterionTools(c: Criterion): string[] | undefined {
+/**
+ * The `<provider>/<model>` an LLM-backed criterion will score with —
+ * `scorer.model` or {@link DEFAULT_SCORER_MODEL}. `undefined` for `script`
+ * and `aggregate`, which run no model.
+ */
+export function criterionScorerModel(c: Criterion): string | undefined {
+  if (!isLLMCriterion(c)) return undefined;
+  return c.scorer?.model ?? DEFAULT_SCORER_MODEL;
+}
+
+/** The `<provider>/<model>` the report step will run on. */
+export function reportScorerModel(report: ReportConfig): string {
+  return report.model ?? DEFAULT_SCORER_MODEL;
+}
+
+/** Read the user-facing system-prompt replacement, if any. */
+export function criterionSystemPrompt(c: Criterion): string | undefined {
+  return isLLMCriterion(c) ? c.scorer?.systemPrompt : undefined;
+}
+
+/** Read the exploration-tool allowlist (agent/browser-agent only). */
+export function criterionTools(c: Criterion): ScorerToolName[] | undefined {
   if (c.type === 'agent' || c.type === 'browser-agent') return c.scorer?.tools;
   return undefined;
+}
+
+/** One LLM-backed criterion (or the report) that needs a given provider's key. */
+export interface ScorerProviderRequirement {
+  /** Criterion id, or `report` for the `evaluation.report` step. */
+  id: string;
+  type: 'judge' | 'agent' | 'browser-agent' | 'report';
+  weight: number;
+  /** The resolved `<provider>/<model>`. */
+  model: string;
+}
+
+/**
+ * The providers an evaluation needs API keys for, with the criteria behind
+ * each — derived from every LLM-backed criterion's resolved model plus the
+ * report. Script/aggregate-only rubrics yield an empty map (no key needed).
+ * Throws on a malformed model reference (the loader rejects those first for
+ * YAML-sourced configs).
+ */
+export function requiredScorerProviders(
+  evaluation: Pick<EvaluationConfig, 'criteria' | 'report'>,
+): Map<ScorerProvider, ScorerProviderRequirement[]> {
+  const out = new Map<ScorerProvider, ScorerProviderRequirement[]>();
+  const add = (req: ScorerProviderRequirement) => {
+    const { provider } = parseScorerModelRef(req.model);
+    const list = out.get(provider) ?? [];
+    list.push(req);
+    out.set(provider, list);
+  };
+  for (const c of evaluation.criteria) {
+    const model = criterionScorerModel(c);
+    if (model === undefined || !isLLMCriterion(c)) continue;
+    add({ id: c.id, type: c.type, weight: c.weight ?? 1, model });
+  }
+  if (evaluation.report) {
+    add({ id: 'report', type: 'report', weight: 0, model: reportScorerModel(evaluation.report) });
+  }
+  return out;
 }
 
 /** Read the aggregate settings for aggregate criteria. */
@@ -293,50 +347,97 @@ export function blockedJudgeEvidence(
   return needed.filter((e) => failedEvidence.has(e));
 }
 
+/** Container-side paths the scorer reads. */
+export interface ScorerPaths {
+  /** Run context inside the scorer container (`/bunsen/run`). */
+  contextDir: string;
+  /** The agent's final workspace (`/workspace`). */
+  workspacePath: string;
+  /** The pre-run snapshot, when mounted (`/workspace-source`; dedicated mode only). */
+  workspaceSourcePath?: string;
+}
+
 /**
- * Build scorer config for a criterion
+ * Build the config the bundled scorer receives for an LLM-backed criterion.
+ * The model is always resolved here (never left for the bundle to default).
+ * Throws for `script` / `aggregate` criteria — the executor dispatches those
+ * itself and must never build a scorer config for them.
  */
 export function buildScorerConfig(
   criterion: ResolvedCriterion,
-  contextDir: string,
-  workspacePath: string,
+  paths: ScorerPaths,
   dependencyScores: Record<string, DependencyScore>,
 ): ScorerConfig {
+  if (!isLLMCriterion(criterion)) {
+    throw new Error(
+      `buildScorerConfig: criterion "${criterion.id}" is type "${criterion.type}", which the bundled scorer does not run`,
+    );
+  }
   const config: ScorerConfig = {
-    criterion: criterion.id,
-    instructions: criterionInstructions(criterion),
-    type: criterion.scorerType,
-    contextDir,
-    workspacePath,
+    type: criterion.type,
+    id: criterion.id,
+    title: criterion.title,
+    instructions: criterion.instructions,
+    model: criterionScorerModel(criterion) ?? DEFAULT_SCORER_MODEL,
+    contextDir: paths.contextDir,
+    workspacePath: paths.workspacePath,
   };
+  if (paths.workspaceSourcePath) config.workspaceSourcePath = paths.workspaceSourcePath;
 
-  if (criterion.scores) {
-    config.scores = criterion.scores as AllowedScores;
-  }
+  const systemPrompt = criterionSystemPrompt(criterion);
+  if (systemPrompt !== undefined) config.systemPrompt = systemPrompt;
 
-  if (criterion.resolvedDependencies.length > 0) {
-    config.dependencyScores = dependencyScores;
-  }
+  const tools = criterionTools(criterion);
+  if (tools) config.tools = [...tools];
 
-  const aggregate = criterionAggregate(criterion);
-  if (aggregate) {
-    config.aggregate = aggregate;
-  }
+  if (criterion.scores) config.scores = criterion.scores as AllowedScores;
 
   const evidence = criterionEvidence(criterion);
-  if (evidence) {
-    config.context = evidence;
+  if (evidence) config.evidence = [...evidence];
+
+  if (criterion.resolvedDependencies.length > 0) {
+    config.dependencyScores = Object.fromEntries(
+      criterion.resolvedDependencies
+        .filter((id) => id in dependencyScores)
+        .map((id) => [id, dependencyScores[id]]),
+    );
   }
 
-  const model = criterionModel(criterion);
-  if (model) {
-    config.model = model;
-  }
-  const tools = criterionTools(criterion);
-  if (tools) {
-    config.tools = tools;
+  return config;
+}
+
+/**
+ * Build the config for the `evaluation.report` step. `needs` (default
+ * `'all'`) selects which criterion results the report sees; `evidence`
+ * defaults to `['diff']` in the bundle when absent.
+ */
+export function buildReportScorerConfig(
+  report: ReportConfig,
+  criteria: Criterion[],
+  paths: ScorerPaths,
+  dependencyScores: Record<string, DependencyScore>,
+): ScorerConfig {
+  const allIds = criteria.map((c) => c.id);
+  const needs: string[] =
+    report.needs === undefined || report.needs === 'all' ? allIds : [...report.needs];
+  const deps: Record<string, DependencyScore> = {};
+  for (const id of needs) {
+    if (dependencyScores[id]) deps[id] = dependencyScores[id];
   }
 
+  const config: ScorerConfig = {
+    type: 'report',
+    id: 'summary-report',
+    title: 'Evaluation report',
+    instructions: report.instructions,
+    model: reportScorerModel(report),
+    contextDir: paths.contextDir,
+    workspacePath: paths.workspacePath,
+    dependencyScores: deps,
+  };
+  if (paths.workspaceSourcePath) config.workspaceSourcePath = paths.workspaceSourcePath;
+  if (report.systemPrompt !== undefined) config.systemPrompt = report.systemPrompt;
+  if (report.evidence) config.evidence = [...report.evidence];
   return config;
 }
 

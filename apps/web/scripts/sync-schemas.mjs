@@ -13,8 +13,8 @@
 //   node scripts/sync-schemas.mjs --check    # CI guard: validate, copy nothing
 //
 // --check fails if any schema is missing, is invalid JSON, or has a $id that
-// doesn't match its frozen URL (a schema change must become v2, never an in-place
-// edit), and — if a served copy exists — that it byte-matches canonical.
+// doesn't match its frozen URL (the $id never changes; a change that needs a new
+// $id becomes v2 — pre-1.0, v1 may still be tightened in place, see CHANGELOG), and — if a served copy exists — that it byte-matches canonical.
 
 import fs from "node:fs";
 import path from "node:path";

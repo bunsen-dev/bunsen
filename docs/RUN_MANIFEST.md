@@ -235,6 +235,7 @@ know":
 | `weighted_score` | `number` | Overall weighted score. |
 | `criteria` | `RunManifestCriterion[]` | Per-criterion results. |
 | `report` | `string?` | Narrative evaluation report, when generated. |
+| `report_error` | `string?` | Why the `evaluation.report` step failed. Present only when the report could not be produced, in which case `report` is absent. |
 
 `RunManifestCriterion`:
 
@@ -245,11 +246,13 @@ know":
 | `weight` | `number` | Criterion weight in the aggregate. |
 | `score` | `number \| null` | Resolved score; `null` when not scored. |
 | `summary` | `string` | Scorer summary. |
-| `status` | `'completed' \| 'skipped' \| 'not_run'` (optional) | Lifecycle status. |
+| `status` | `'completed' \| 'skipped' \| 'error' \| 'not_run'` (optional) | Lifecycle status. `'error'` means the scorer itself failed (crash, timeout, provider error after retries, or no verdict submitted) — `score` is `null`, `error` carries the reason, and the criterion is excluded from the weighted score. |
 | `scorer_type` | `RunManifestScorerType?` | The criterion type that produced the score: `'script' \| 'judge' \| 'agent' \| 'browser-agent' \| 'aggregate'`. See [SCORERS.md](./SCORERS.md). |
+| `model` | `string?` | The resolved `<provider>/<model>` the scorer ran on (e.g. `anthropic/claude-sonnet-4-6`). LLM-backed criteria only. |
+| `error` | `string?` | Why the scorer failed. Present only with `status: 'error'`. |
 | `allowed_scores` | `AllowedScores?` | Allowed score set or range for the criterion (e.g. a discrete set or a min/max range). |
 | `screenshots` | `string[]?` | Artifact keys for screenshots the scorer produced. |
-| `log_path` | `string?` | Artifact key for the scorer's log output. |
+| `log_path` | `string?` | Artifact key for the scorer's log output (`evaluation/criteria/<id>.log` for LLM-backed criteria). |
 
 ### Human scoring
 
@@ -375,7 +378,7 @@ The full set of 19 event variants:
 | `agent.completed` | `{ exitCode: number; durationMs: number }` |
 | `evaluation.started` | `{ criterionCount: number }` |
 | `criterion.started` | `{ id: string }` |
-| `criterion.completed` | `{ id: string; score: number \| null; durationMs: number; status?: 'completed' \| 'skipped' }` |
+| `criterion.completed` | `{ id: string; score: number \| null; durationMs: number; status?: 'completed' \| 'skipped' \| 'error' }` |
 | `evaluation.report.started` | `{}` |
 | `evaluation.report.completed` | `{ durationMs: number }` |
 | `run.completed` | `{ id: string; durationMs: number }` |

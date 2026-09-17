@@ -1,0 +1,56 @@
+{
+  "summary": {
+    "totalCalls": 42,
+    "totalInputTokens": 2400,
+    "totalOutputTokens": 500,
+    "estimatedCostUsd": 0.0242,
+    "durationMs": 60000,
+    "threadCount": 2
+  },
+  "threads": [
+    {
+      "threadId": "thread-1",
+      "context": {
+        "systemPrompt": "You are a coding agent working in /workspace. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. Be careful. ",
+        "toolNames": [
+          "bash",
+          "edit"
+        ],
+        "model": "claude-sonnet-4-6",
+        "provider": "anthropic"
+      },
+      "timeRange": {
+        "start": "2026-09-13T18:00:00.000Z",
+        "end": "2026-09-13T18:19:00.000Z"
+      },
+      "turnCount": 40,
+      "stats": {
+        "totalInputTokens": 2200,
+        "totalOutputTokens": 460,
+        "estimatedCostUsd": 0.0222,
+        "durationMs": 55000
+      }
+    },
+    {
+      "threadId": "thread-2",
+      "context": {
+        "systemPrompt": "",
+        "toolNames": [],
+        "model": "gpt-5.5",
+        "provider": "openai"
+      },
+      "timeRange": {
+        "start": "2026-09-13T18:20:00.000Z",
+        "end": "2026-09-13T18:21:00.000Z"
+      },
+      "turnCount": 2,
+      "stats": {
+        "totalInputTokens": 200,
+        "totalOutputTokens": 40,
+        "estimatedCostUsd": 0.002,
+        "durationMs": 5000
+      }
+    }
+  ],
+  "timeline": []
+}

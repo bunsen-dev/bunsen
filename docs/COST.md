@@ -147,9 +147,28 @@ The full per-source breakdown lives in `usage.by_source`, keyed by source:
 | `supervisor` | The supervisor agent (supervised mode) |
 | `scorer` | A scorer with no per-criterion attribution |
 | `scorer:<criterion>` | A model-using scorer (a `judge`, `agent`, or `browser-agent` [criterion](./SCORERS.md)), attributed to its criterion |
+| `scorer:summary-report` | The [`evaluation.report`](./SCORERS.md) step, which is an LLM call like any other scorer |
 
 Each entry carries `calls`, fresh `input_tokens`, `output_tokens`, the two cache
 buckets, and `cost_usd`.
+
+Scorer cost is attributed **per criterion and per provider/model**. Each
+LLM-backed criterion declares its own `scorer.model` as `<provider>/<model>`
+(`anthropic`, `openai`, or `google`), the trace proxy captures and prices that
+traffic for all three providers, and the resolved id is recorded on the criterion
+result as `model` in the [run manifest](./RUN_MANIFEST.md#evaluation). So a rubric
+that grades with `anthropic/claude-sonnet-4-6` and cross-checks with
+`openai/gpt-5.5` shows each criterion's spend separately, priced at that model's
+own rates.
+
+> **Known limitation — thread reconstruction for OpenAI/Gemini.** OpenAI Responses
+> and Gemini traffic is **priced correctly** (tokens and cost are right), but
+> thread *reconstruction* is empty for it until trace provider normalization
+> lands: `bn runs threads` and the `list_threads` / `read_thread_turns` scorer
+> tools show no turn bodies. This affects a non-Anthropic scorer's own traces and,
+> more importantly, a **non-Anthropic agent under test** (`codex-cli`,
+> `gemini-cli`) — trace-derived evidence is empty for those runs, and a scorer
+> calling `list_threads` gets an explicit "unavailable" notice rather than silence.
 
 ### By model: the per-model breakdown (`agent.models`)
 

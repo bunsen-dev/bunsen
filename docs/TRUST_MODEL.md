@@ -81,10 +81,19 @@ concern, run on a disposable/throwaway host or VM and pass only throwaway API ke
   with no outbound access. See [The Environment Model](./ENVIRONMENT.md) and
   [experiment.yaml Reference](./EXPERIMENT_YAML.md) for where this is configured.
 
-> **Platform agents vs. the agent under test.** The supervisor and scorer (the *platform
-> agents*) make their own model calls using a separate `BUNSEN_ANTHROPIC_API_KEY`, distinct from the
-> provider keys passed to the agent under test via `defaults.passEnv`. Scoping each independently lets you,
-> for example, give the agent under test only a throwaway key while keeping the evaluation key elsewhere.
+> **Platform agents vs. the agent under test.** The supervisor and scorer (the *platform agents*) make
+> their own model calls with keys the platform resolves on the host, per provider: `BUNSEN_ANTHROPIC_API_KEY`
+> or `ANTHROPIC_API_KEY`, `BUNSEN_OPENAI_API_KEY` or `OPENAI_API_KEY`, `BUNSEN_GEMINI_API_KEY` /
+> `GEMINI_API_KEY` / `GOOGLE_API_KEY` (first match wins). The `BUNSEN_`-prefixed form is how you keep the
+> platform's key distinct from the provider keys the agent under test gets via `defaults.passEnv` — give the
+> agent under test only a throwaway key while the evaluation runs on another.
+>
+> A platform key is **never set on a container's base environment**. Each LLM-scorer `exec` receives exactly
+> one `BUNSEN_<PROVIDER>_API_KEY`, for that criterion's provider, in both `evaluation.container` modes, and
+> the scorer strips these variables from every subprocess it spawns. The supervisor is Anthropic-only and
+> likewise receives `BUNSEN_ANTHROPIC_API_KEY` per exec. Consequences: `type: script` criteria never see a
+> platform provider key, and in `evaluation.container: agent` mode the agent under test no longer sees it
+> either (it used to, because the scorer shared its container).
 
 ## Sharing runs safely
 

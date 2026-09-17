@@ -4,7 +4,10 @@ name: Schemas
 # packages/types/schemas — see apps/web/scripts/sync-schemas.mjs). Fails if any
 # of the four schemas is missing, is invalid JSON, or has a $id that no longer
 # matches its frozen https://schemas.bunsen.dev/<name>.v1.json URL. The .v1.json
-# ids are frozen: a schema change becomes v2, never an in-place edit.
+# $ids are frozen: the URL a document points at never changes. While Bunsen is
+# pre-1.0 the v1 schema itself may still be tightened in place (each such change
+# is called out in CHANGELOG under Changed); a change that needs a new $id becomes
+# v2, never an in-place edit of the URL.
 
 on:
   push:

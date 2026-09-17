@@ -150,4 +150,5 @@ evaluation:
         function: all
   report:
     instructions: Produce a short research-quality narrative of the run, citing evidence from diff, logs, and traces.
+    evidence: [diff, logs, traces]
     needs: all

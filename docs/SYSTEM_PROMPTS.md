@@ -2,6 +2,8 @@
 
 Bunsen does **not** have a `systemPrompt` field on `agent.yaml`. System-prompt wiring varies too much per agent — `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `--append-system-prompt`, SDK options — and folding any of it into the platform schema would force Bunsen to learn one contract per agent. Bunsen keeps the platform thin and lets the agent author wire their own prompt, the same way the rest of the agent contract works.
 
+The one exception is the **scorers**, which Bunsen itself owns and invokes: `scorer.systemPrompt` and `evaluation.report.systemPrompt` in `experiment.yaml` replace the platform's default scorer prompt wholesale (the criterion, its instructions, the allowed scores, the evidence, and the verdict contract live outside that prompt and survive the override). There is no contract to learn there because the platform is on both ends of the call — see [System prompt override](./SCORERS.md#system-prompt-override).
+
 This page is the cookbook. Agent authors compose system prompts themselves using two small primitives:
 
 - **`writeFile:` step** — a peer of `run:` inside `install.configure` (and `workspace.setup`). Drops a file at a known path inside the container. Source is either an inline `content:` literal or a `from: <path>` file alongside `agent.yaml`. No heredoc shell-quoting risk; base64 underneath.

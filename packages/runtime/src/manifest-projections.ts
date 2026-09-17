@@ -33,8 +33,13 @@ export function buildCriterionProjection(c: CriterionResult): RunManifestCriteri
     score: c.score,
     summary: c.summary,
   };
+  if (c.title) out.title = c.title;
   if (c.status) out.status = c.status;
   if (c.scorerType) out.scorer_type = c.scorerType;
+  // Provenance: which model produced this score, and (for `status: 'error'`)
+  // why there is no score at all.
+  if (c.model) out.model = c.model;
+  if (c.error) out.error = c.error;
   if (c.allowedScores !== undefined) out.allowed_scores = c.allowedScores;
   if (c.screenshots && c.screenshots.length > 0) out.screenshots = [...c.screenshots];
   if (c.logPath) out.log_path = c.logPath;
@@ -47,6 +52,9 @@ export function buildEvaluationProjection(result: EvaluationResult): RunManifest
     criteria: result.criteria.map(buildCriterionProjection),
   };
   if (result.report) ev.report = result.report;
+  // A configured report that produced no narrative records why, so the run
+  // shows a failed report instead of silently missing one.
+  if (result.reportError) ev.report_error = result.reportError;
   return ev;
 }
 

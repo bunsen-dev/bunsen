@@ -214,7 +214,7 @@ agentsCommand
   .option('--help-text <file>', "Supply the CLI's --help text from a file (use '-' for stdin) instead of running it")
   .option('--skip-help', "Do not run the agent's --help on the host; infer from examples only")
   .option('--dry-run', 'Print the inferred template without modifying agent.yaml')
-  .option('--model <id>', `Model to infer with (default: ${DEFAULT_SCAFFOLD_MODEL})`)
+  .option('--model <provider/model>', `Model to infer with, as <provider>/<model> (default: ${DEFAULT_SCAFFOLD_MODEL})`)
   .option('--format <format>', 'Output format (text|json|yaml)', 'text')
   .action(wrapCommand(agentsInferInvokeCommand));
 

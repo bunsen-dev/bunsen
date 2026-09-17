@@ -1,5 +1,10 @@
 /**
- * Create Anthropic client with proxy support and source tagging.
+ * The supervisor's own Anthropic client — proxy support and source tagging.
+ *
+ * The supervisor is deliberately the last native `@anthropic-ai/sdk` caller in
+ * this package: it is Anthropic-only by design and does not run on the
+ * provider-agnostic scorer model layer (`common/model.ts`). Nothing outside
+ * `src/supervisor/` may import this.
  *
  * When HTTPS_PROXY/HTTP_PROXY env vars are set, configures undici's ProxyAgent
  * so requests route through the mitmproxy sidecar for trace capture.

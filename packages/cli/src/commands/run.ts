@@ -18,6 +18,7 @@ import {
   RunCanceledError,
 } from '@bunsen-dev/runtime';
 import { parseDuration } from '@bunsen-dev/types';
+import type { RunManifestV1, RunManifestScorerType } from '@bunsen-dev/types';
 import { formatEvaluationForTerminal } from './helpers/format-scores-for-terminal.js';
 import { runDryRun } from './dry-run.js';
 import { resolveFormat } from '../format.js';
@@ -45,6 +46,30 @@ interface RunOptions {
   dryRun?: boolean;
   remote?: boolean;
   format?: string;
+}
+
+const LLM_SCORER_TYPES: ReadonlySet<RunManifestScorerType> = new Set([
+  'judge',
+  'agent',
+  'browser-agent',
+]);
+
+/**
+ * Did evaluation fail outright — i.e. is exit code 5 warranted?
+ *
+ * Only when the run was marked failed in the evaluation phase AND every
+ * LLM-backed criterion errored. One errored criterion among several is a
+ * visible-but-survivable result (the siblings still scored), so it exits
+ * normally; a rubric with no LLM criteria at all can never trip this. A low
+ * score is never a failure — only the total absence of a verdict is.
+ */
+export function evaluationFailedOutright(manifest: RunManifestV1): boolean {
+  if (manifest.status !== 'failed') return false;
+  const llmCriteria = (manifest.evaluation?.criteria ?? []).filter(
+    (c) => c.scorer_type !== undefined && LLM_SCORER_TYPES.has(c.scorer_type),
+  );
+  if (llmCriteria.length === 0) return false;
+  return llmCriteria.every((c) => c.status === 'error');
 }
 
 function parseTimeoutMs(value: string | undefined, fallbackMs: number): number {
@@ -391,6 +416,16 @@ export async function runCommand(
 
     console.log();
     console.log(chalk.dim(`View details: bn runs show ${result.run_id}`));
+
+    if (evaluationFailedOutright(result)) {
+      console.log();
+      console.log(
+        chalk.red(
+          `Evaluation failed: every LLM-backed criterion errored (see bn eval show ${result.run_id})`,
+        ),
+      );
+      process.exit(EXIT_CODES.EVALUATION);
+    }
 
     process.exit(EXIT_CODES.SUCCESS);
   } catch (error) {

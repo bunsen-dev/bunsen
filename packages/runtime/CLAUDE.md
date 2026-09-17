@@ -14,6 +14,8 @@ Internal execution engine for Bunsen. Handles configuration loading, Docker cont
 | `executor.ts` | Orchestrates a full experiment run: image prep, container setup, agent execution (direct or tmux mode), artifact capture, evaluation |
 | `scorer-container.ts` | Manages evaluation execution contexts. Runs code-based and LLM-based scorers in the default scorer container or the agent container when agent-container scoring is enabled |
 | `evaluation-coordinator.ts` | Rubric resolution, dependency ordering, scorer config building, weighted score calculation |
+| `evaluate-criteria.ts` | The criterion loop itself: execution order, gate and capture-degraded skips, aggregate/script/LLM dispatch, and the `null` + `status: 'error'` failure policy. Takes the two container-backed scorers as closures, so it is unit-testable without Docker. `allLLMCriteriaErrored()` is the exit-code-5 condition |
+| `platform-keys.ts` | Host-side resolution of the platform's per-provider API keys (Anthropic / OpenAI / Google), the preflight error that names the criteria behind a missing one, and the single-variable env a scorer exec receives |
 | `config.ts` | Loads and validates `experiment.yaml` and `agent.yaml` files |
 | `environment.ts` | Resolves substrate-only environment from the experiment (default + declared runtimes/packages); generates package install commands. The agent does NOT contribute — see `docs/ENVIRONMENT.md#asymmetric-composition` |
 | `storage.ts` | Run lifecycle: create runs, save/load metadata, logs, traces, scores, diffs, artifacts |
@@ -48,7 +50,11 @@ Base64 encoding eliminates all these concerns. The encoded output only contains 
 
 - **Environment variables** are passed to containers at creation time (via `createPersistentContainer`) or per-exec (via the `env` option on exec functions). Env vars set at creation time are available to all exec calls; per-exec env vars are scoped to that execution.
 
-- **Platform API key** (`BUNSEN_ANTHROPIC_API_KEY`) is kept separate from the agent's API key. It's passed directly to platform agent exec calls, not set in the container's base environment (except when `evaluation.container: agent`).
+- **Platform API keys** are kept separate from the agent's own keys, and are resolved **per provider** on the host by `resolvePlatformKeys()` (`platform-keys.ts`): `BUNSEN_ANTHROPIC_API_KEY` → `ANTHROPIC_API_KEY`, `BUNSEN_OPENAI_API_KEY` → `OPENAI_API_KEY`, `BUNSEN_GEMINI_API_KEY` → `GEMINI_API_KEY` → `GOOGLE_API_KEY` (first match wins). Before any Docker work, `executeRun` derives the providers the rubric needs from every LLM criterion's resolved `<provider>/<model>` plus `evaluation.report`, and fails with an error naming the criteria behind each missing provider — script/aggregate-only rubrics need no key.
+
+  A resolved key reaches a scorer **only through that criterion's own exec**, as exactly one `BUNSEN_<PROVIDER>_API_KEY` for that criterion's provider (`runLLMScorer`), in **both** container modes. It is never in a container's base environment: creation-time env is visible to every exec, so a key there would be readable by `type: script` criteria and anything they spawn. `buildScorerContainerEnv()` is the dedicated container's base env and is asserted key-free by test. The supervisor is the one exception in shape, not in principle — it still receives `BUNSEN_ANTHROPIC_API_KEY` per exec (it is Anthropic-only by design and stays on the native SDK; moving it onto the shared model layer is separate work).
+
+- **An un-gradeable criterion is `null`, never `0`.** A scorer that crashed, timed out, or produced no parseable verdict records `score: null`, `status: 'error'`, and the reason (`interpretScorerExec` → `evaluateCriteria`). The weighted score excludes it, the evaluation continues and is saved, its criterion log is still written, and a gate on it is **not** evaluated — a transient API error must not silently skip every criterion after it. Only when a rubric has LLM-backed criteria and *every one* of them errored is the run marked failed (phase `evaluation`, reason `every LLM-backed criterion errored`), which is what makes `bn run` exit 5.
 
 - **Non-root execution**: By default, a `bunsen` user is created and the agent runs as that user. Scripts are written to files (via `writeFileInContainer`) then executed with `su bunsen -c /path/to/script.sh`.
 

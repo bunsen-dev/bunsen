@@ -7,6 +7,7 @@ Bunsen ships as a small set of npm packages. They split into a **public** surfac
 | Package         | Purpose                                                          |
 | --------------- | --------------------------------------------------------------- |
 | `@bunsen-dev/cli`   | The `bn` command-line interface.                                |
+| `@bunsen-dev/sdk`   | Public TypeScript SDK for Bunsen — read and work with experiments, agents, and runs from your own code. |
 | `@bunsen-dev/types` | Shared resource and run types. Zero runtime dependencies.       |
 
 The public contract also includes:

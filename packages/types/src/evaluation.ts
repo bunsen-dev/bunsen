@@ -12,6 +12,12 @@ export interface EvaluationResult {
   weightedScore: number;
   /** Narrative produced by `evaluation.report`, if configured. */
   report?: string;
+  /**
+   * Why `evaluation.report` produced no narrative although it was configured:
+   * the report scorer crashed, timed out, or returned no verdict. Absent when
+   * the report succeeded or was not configured.
+   */
+  reportError?: string;
 }
 
 /** Per-criterion outcome. */
@@ -22,12 +28,25 @@ export interface CriterionResult {
   title?: string;
   /** Resolved weight after variant overrides (default 1). */
   weight: number;
-  /** Score in `[0, 1]`; `null` for skipped criteria or narrative-only scorers. */
+  /** Score in `[0, 1]`; `null` for skipped or errored criteria. */
   score: number | null;
   /** Brief explanation, 1–3 sentences. */
   summary: string;
   status: CriterionStatus;
   scorerType: RunManifestScorerType;
+  /**
+   * The `<provider>/<model>` that scored this criterion. Present on LLM-backed
+   * criteria (`judge`, `agent`, `browser-agent`); absent on `script` and
+   * `aggregate`.
+   */
+  model?: string;
+  /**
+   * Short description of why the scorer could not produce a verdict (crash,
+   * API failure, timeout, no verdict after the forced submit). Present only
+   * when `status` is `'error'`; `score` is `null` and excluded from the
+   * weighted score.
+   */
+  error?: string;
   /** Allowed discrete scores, if the criterion declared them. */
   allowedScores?: AllowedScores;
   /** Artifact keys for screenshots captured by the scorer. */
@@ -73,7 +92,12 @@ export interface ScriptResultArtifact {
  * Criterion execution status.
  *
  * - `completed`: scorer ran and produced a score.
- * - `skipped`: scorer did not run because a `gate.ifBelow` threshold failed.
+ * - `skipped`: scorer did not run because a `gate.ifBelow` threshold failed
+ *   (or its evidence was lost to a failed capture step).
+ * - `error`: the scorer ran but could not produce a verdict — it crashed,
+ *   the model API failed after retries, it timed out, or it never submitted.
+ *   `score` is `null` and excluded from the weighted score; `error` says why.
+ *   A gate on an errored criterion does not pass. Evaluation continues.
  * - `not_run`: the run failed or was canceled before this criterion executed.
  */
-export type CriterionStatus = 'completed' | 'skipped' | 'not_run';
+export type CriterionStatus = 'completed' | 'skipped' | 'error' | 'not_run';

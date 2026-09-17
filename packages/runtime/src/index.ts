@@ -91,18 +91,38 @@ export {
 
 // Evaluation Coordinator
 export {
+  DEFAULT_SCORER_MODEL,
   resolveDependencies,
   topologicalSort,
-  determineScorerType,
   resolveCriteria,
   getExecutionOrder,
+  isLLMCriterion,
+  criterionScorerModel,
+  reportScorerModel,
+  requiredScorerProviders,
   buildScorerConfig,
+  buildReportScorerConfig,
   calculateWeightedScore,
   runAggregate,
   buildEvaluationResult,
   validateRubric,
 } from './evaluation-coordinator.js';
-export type { ResolvedCriterion } from './evaluation-coordinator.js';
+export type {
+  ResolvedCriterion,
+  LLMCriterion,
+  ScorerPaths,
+  ScorerProviderRequirement,
+} from './evaluation-coordinator.js';
+
+// Platform (scorer / supervisor / scaffolder) API keys
+export {
+  PLATFORM_KEY_SOURCES,
+  PROVIDER_LABELS,
+  resolvePlatformKeys,
+  platformKeyHint,
+  scorerExecKeyEnv,
+} from './platform-keys.js';
+export type { PlatformKeys, ResolvedPlatformKey } from './platform-keys.js';
 
 // Calibration
 export { computeCalibration } from './calibration.js';

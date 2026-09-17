@@ -40,7 +40,7 @@ result. The [Glossary](./GLOSSARY.md) defines both, plus "platform agents" (supe
 | Container runtime | Docker | Each run is isolated and reproducible |
 | Base images | Headless (default), Visual, Desktop | Headless for CLI work, Visual for screenshot scoring, Desktop for GUI agents |
 | Network tracing | mitmproxy sidecar | Captures HTTP(S) traffic with full request/response bodies |
-| Platform agents | Claude API | The scorer and supervisor are LLM-powered; the agent invocation is composed deterministically (no model) |
+| Platform agents | Anthropic, OpenAI, or Google models (`<provider>/<model>` per criterion) | The scorer is LLM-powered and picks its model per criterion; the supervisor is Anthropic-only; the agent invocation is composed deterministically (no model) |
 
 You run experiments from the `bn` CLI and inspect results either on disk or in the local web viewer
 (`bn runs open`, served at `localhost:3456`). See [CLI.md](./CLI.md).
@@ -135,7 +135,7 @@ The `invoke` template is an ordered argv list whose per-token `{prompt}` / `{pro
 }
 ```
 
-The invocation is structured argv (not a shell string), so dynamic task text reaches the agent verbatim: each token is POSIX-single-quoted when the command is finally rendered, so nothing has to survive shell re-interpretation. And because no model is consulted, starting an agent needs no `ANTHROPIC_API_KEY` — a no-AI agent with a script- or aggregate-only rubric runs fully offline (a key is still needed for LLM evaluation and for Claude-powered agents under test).
+The invocation is structured argv (not a shell string), so dynamic task text reaches the agent verbatim: each token is POSIX-single-quoted when the command is finally rendered, so nothing has to survive shell re-interpretation. And because no model is consulted, starting an agent needs no API key — a no-AI agent with a script- or aggregate-only rubric runs fully offline. LLM evaluation still needs a key: the one belonging to whichever provider the rubric's `scorer.model`s name (`anthropic` by default, so `ANTHROPIC_API_KEY`; `openai/…` and `google/…` models need `OPENAI_API_KEY` / `GEMINI_API_KEY`). An AI-powered agent under test needs its own provider's key too.
 
 ### Scorer
 

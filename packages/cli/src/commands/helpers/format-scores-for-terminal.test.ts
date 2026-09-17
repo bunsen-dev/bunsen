@@ -83,6 +83,92 @@ describe('formatEvaluationForTerminal', () => {
     expect(output).toContain('Screenshot: screenshots/visual-design-2.png');
   });
 
+  it('renders an errored criterion as ERROR with the scorer error', () => {
+    const result: EvaluationResult = {
+      criteria: [
+        {
+          id: 'design-quality',
+          weight: 1,
+          score: null,
+          summary: 'Scorer error: the scorer produced no verdict',
+          status: 'error',
+          scorerType: 'agent',
+          error: 'no verdict: the forced submit_score call was not made',
+        },
+        { id: 'tests-pass', weight: 1, score: 1, summary: 'All 42 tests pass', status: 'completed', scorerType: 'script' },
+      ],
+      weightedScore: 1,
+    };
+
+    const output = formatEvaluationForTerminal(result);
+
+    expect(output).toContain('design-quality: ERROR');
+    expect(output).not.toContain('design-quality: N/A');
+    expect(output).toContain('Scorer error: the scorer produced no verdict');
+    expect(output).toContain('Error: no verdict: the forced submit_score call was not made');
+    // The siblings still render normally.
+    expect(output).toContain('tests-pass: 1.00');
+  });
+
+  it('renders a gate-skipped criterion as SKIPPED', () => {
+    const result: EvaluationResult = {
+      criteria: [
+        {
+          id: 'deep-review',
+          weight: 2,
+          score: null,
+          summary: 'Skipped: gate `tests-pass` did not pass',
+          status: 'skipped',
+          scorerType: 'judge',
+        },
+      ],
+      weightedScore: 0,
+    };
+
+    const output = formatEvaluationForTerminal(result);
+
+    expect(output).toContain('deep-review: SKIPPED');
+    expect(output).toContain('Skipped: gate `tests-pass` did not pass');
+  });
+
+  it('shows the scoring model for LLM-backed criteria', () => {
+    const result: EvaluationResult = {
+      criteria: [
+        {
+          id: 'rubric',
+          weight: 1,
+          score: 0.5,
+          summary: 'Partly met',
+          status: 'completed',
+          scorerType: 'judge',
+          model: 'openai/gpt-5.5',
+        },
+        { id: 'tests-pass', weight: 1, score: 1, summary: 'Green', status: 'completed', scorerType: 'script' },
+      ],
+      weightedScore: 0.75,
+    };
+
+    const output = formatEvaluationForTerminal(result);
+
+    expect(output).toContain('Model: openai/gpt-5.5');
+    // Script criteria carry no model, so no empty row is printed.
+    expect(output.match(/Model:/g)).toHaveLength(1);
+  });
+
+  it('reports a failed report instead of omitting the section', () => {
+    const result: EvaluationResult = {
+      criteria: [
+        { id: 'tests-pass', weight: 1, score: 1, summary: 'Green', status: 'completed', scorerType: 'script' },
+      ],
+      weightedScore: 1,
+      reportError: 'report scorer exited 1',
+    };
+
+    const output = formatEvaluationForTerminal(result);
+
+    expect(output).toContain('Report: not generated — report scorer exited 1');
+  });
+
   it('shows full path when runDir is provided', () => {
     const result: EvaluationResult = {
       criteria: [
