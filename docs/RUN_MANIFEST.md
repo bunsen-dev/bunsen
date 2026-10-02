@@ -248,7 +248,7 @@ know":
 | `summary` | `string` | Scorer summary. |
 | `status` | `'completed' \| 'skipped' \| 'error' \| 'not_run'` (optional) | Lifecycle status. `'error'` means the scorer itself failed (crash, timeout, provider error after retries, or no verdict submitted) — `score` is `null`, `error` carries the reason, and the criterion is excluded from the weighted score. |
 | `scorer_type` | `RunManifestScorerType?` | The criterion type that produced the score: `'script' \| 'judge' \| 'agent' \| 'browser-agent' \| 'aggregate'`. See [SCORERS.md](./SCORERS.md). |
-| `model` | `string?` | The resolved `<provider>/<model>` the scorer ran on (e.g. `anthropic/claude-sonnet-4-6`). LLM-backed criteria only. |
+| `model` | `string?` | The resolved `<provider>/<model>` the scorer ran on (e.g. `anthropic/claude-sonnet-5-5`). LLM-backed criteria only. |
 | `error` | `string?` | Why the scorer failed. Present only with `status: 'error'`. |
 | `allowed_scores` | `AllowedScores?` | Allowed score set or range for the criterion (e.g. a discrete set or a min/max range). |
 | `screenshots` | `string[]?` | Artifact keys for screenshots the scorer produced. |

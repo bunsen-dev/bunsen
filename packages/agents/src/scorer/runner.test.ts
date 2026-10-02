@@ -89,7 +89,7 @@ function config(overrides: Partial<ScorerConfig> = {}): ScorerConfig {
     id: 'tests-pass',
     title: 'Tests pass',
     instructions: 'Do the tests pass?',
-    model: 'anthropic/claude-sonnet-4-6',
+    model: 'anthropic/claude-sonnet-5-5',
     contextDir,
     workspacePath: workspace,
     ...overrides,

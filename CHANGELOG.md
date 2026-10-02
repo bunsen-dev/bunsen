@@ -18,10 +18,11 @@ version and date and a fresh `[Unreleased]` is started.
 
 - **LLM-backed scorers run on Anthropic, OpenAI, or Google models, chosen per criterion.**
   `scorer.model` (on `judge`, `agent`, and `browser-agent` criteria) and `evaluation.report.model`
-  now take the `<provider>/<model>` form — `anthropic/claude-sonnet-4-6`, `openai/gpt-5.5`,
-  `google/gemini-2.5-pro`. A bare model id (`claude-sonnet-4-6`) is rejected by
-  `bn experiments validate` with a message that shows the fix. The default is unchanged
-  (`anthropic/claude-sonnet-4-6`), so existing rubrics keep scoring on the same model. Keys are
+  now take the `<provider>/<model>` form — `anthropic/claude-sonnet-5-5`, `openai/gpt-5.6`,
+  `google/gemini-3.1-pro-preview`. A bare model id (`claude-sonnet-5-5`) is rejected by
+  `bn experiments validate` with a message that shows the fix. The default moves to
+  `anthropic/claude-opus-5-5` (was `claude-sonnet-4-6`) for every LLM-backed scorer and the
+  report, so existing rubrics that omit `model` re-score on a different model. Keys are
   resolved on the host per provider — `BUNSEN_ANTHROPIC_API_KEY` / `ANTHROPIC_API_KEY`,
   `BUNSEN_OPENAI_API_KEY` / `OPENAI_API_KEY`, `BUNSEN_GEMINI_API_KEY` / `GEMINI_API_KEY` /
   `GOOGLE_API_KEY` (first match wins) — and `bn run` now fails **before any container work** when a
@@ -54,7 +55,7 @@ version and date and a fresh `[Unreleased]` is started.
 - `bn doctor` reports platform API keys per provider — check ids `api_key_anthropic`,
   `api_key_openai`, `api_key_google` replace the single `api_keys` row in `--format json` output.
 - `bn agents infer-invoke --model` takes the `<provider>/<model>` form (default
-  `anthropic/claude-opus-4-8`) and needs that provider's key.
+  `anthropic/claude-opus-5-5`, was `claude-opus-4-8`) and needs that provider's key.
 - Scorer tool parameters were renamed for consistency (relevant only if your `instructions` name
   them): `run_command` takes `timeout_ms` and `background`; `screenshot` takes `full_page`,
   `wait_for_selector`, `delay_ms`; `run_playwright_script` takes `timeout_ms`. Every duration is
@@ -79,6 +80,9 @@ version and date and a fresh `[Unreleased]` is started.
   like script criteria (the report step writes `summary-report.log`). Every secret the host handed
   out for the run — platform keys and secret-looking agent env vars — is scrubbed from that log
   before it is written, and the scorer masks provider-key shapes in the tool-result previews it prints.
+- The vendored LiteLLM pricing snapshot was refreshed (244 models): the Claude 5.5, GPT-5.6, and
+  Gemini 3.x ids price from data; ids LiteLLM has since pruned (the Claude 3 family, Gemini 2.0)
+  fall back to the coarse per-provider default and are flagged as unpriced.
 - `@bunsen-dev/types` exports `ScorerProvider`, `parseScorerModelRef`, `SCORER_MODEL_PATTERN`, and the
   `AgentScorerToolName` / `BrowserAgentScorerToolName` unions with their constant lists.
 

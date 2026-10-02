@@ -387,7 +387,7 @@ describe('interpretScorerExec', () => {
 
   it("uses the bundle's `Scoring failed:` line as the reason, not the stack that follows it", () => {
     const stderr = [
-      '[scorer] judge "Page quality" (page-quality) on openai/gpt-5.5; tools: none',
+      '[scorer] judge "Page quality" (page-quality) on openai/gpt-5.6; tools: none',
       'Scoring failed: Incorrect API key provided: sk-proj-****. You can find your API key at https://platform.openai.com/account/api-keys.',
       'AI_APICallError: Incorrect API key provided',
       '    at /bunsen/lib/scorer.cjs:16197:14',

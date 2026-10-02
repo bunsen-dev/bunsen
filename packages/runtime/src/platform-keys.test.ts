@@ -129,7 +129,7 @@ describe('buildMissingScorerKeysError', () => {
     id: 'cheat-check',
     type: 'agent',
     weight: 0,
-    model: 'openai/gpt-5.5',
+    model: 'openai/gpt-5.6',
     ...over,
   });
 
@@ -145,8 +145,8 @@ describe('buildMissingScorerKeysError', () => {
     expect(err.message).toBe(
       [
         'Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY):',
-        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.5)",
-        '  report (model: openai/gpt-5.5)',
+        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.6)",
+        '  report (model: openai/gpt-5.6)',
       ].join('\n'),
     );
   });
@@ -157,17 +157,17 @@ describe('buildMissingScorerKeysError', () => {
         ['openai', [req()]],
         [
           'google',
-          [req({ id: 'ui-check', type: 'browser-agent', weight: 2, model: 'google/gemini-2.5-pro' })],
+          [req({ id: 'ui-check', type: 'browser-agent', weight: 2, model: 'google/gemini-3.1-pro-preview' })],
         ],
       ]),
     );
     expect(err.message).toBe(
       [
         'Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY):',
-        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.5)",
+        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.6)",
         '',
         'Evaluation needs a Google (Gemini) API key (set GEMINI_API_KEY or GOOGLE_API_KEY or BUNSEN_GEMINI_API_KEY):',
-        "  criterion 'ui-check' (type: browser-agent, weight: 2, model: google/gemini-2.5-pro)",
+        "  criterion 'ui-check' (type: browser-agent, weight: 2, model: google/gemini-3.1-pro-preview)",
       ].join('\n'),
     );
   });
@@ -175,8 +175,8 @@ describe('buildMissingScorerKeysError', () => {
   it('orders blocks by provider, not by map insertion order', () => {
     const err = buildMissingScorerKeysError(
       new Map<ScorerProvider, ScorerProviderRequirement[]>([
-        ['google', [req({ model: 'google/gemini-2.5-pro' })]],
-        ['anthropic', [req({ model: 'anthropic/claude-sonnet-4-6' })]],
+        ['google', [req({ model: 'google/gemini-3.1-pro-preview' })]],
+        ['anthropic', [req({ model: 'anthropic/claude-sonnet-5-5' })]],
       ]),
     );
     const lines = err.message.split('\n').filter((l) => l.startsWith('Evaluation needs'));
@@ -189,11 +189,11 @@ describe('buildMissingScorerKeysError', () => {
       buildMissingScorerKeysError(
         new Map([[provider, [req({ model })]]]),
       ).message.split('\n')[0];
-    expect(one('anthropic', 'anthropic/claude-sonnet-4-6')).toStartWith(
+    expect(one('anthropic', 'anthropic/claude-sonnet-5-5')).toStartWith(
       'Evaluation needs an Anthropic API key',
     );
-    expect(one('openai', 'openai/gpt-5.5')).toStartWith('Evaluation needs an OpenAI API key');
-    expect(one('google', 'google/gemini-2.5-pro')).toStartWith(
+    expect(one('openai', 'openai/gpt-5.6')).toStartWith('Evaluation needs an OpenAI API key');
+    expect(one('google', 'google/gemini-3.1-pro-preview')).toStartWith(
       'Evaluation needs a Google (Gemini) API key',
     );
   });

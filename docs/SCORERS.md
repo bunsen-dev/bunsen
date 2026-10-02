@@ -80,33 +80,33 @@ evaluation:
       type: judge
       instructions: Only the necessary changes — no unrelated edits.
       scorer:
-        model: anthropic/claude-sonnet-4-6    # the default
+        model: anthropic/claude-opus-5-5    # the default
 
     - id: cheat-check
       title: No test tampering
       type: agent
       instructions: Verify the agent did not weaken or delete tests.
       scorer:
-        model: openai/gpt-5.5                 # a different lab than the agent under test
+        model: openai/gpt-5.6                 # a different lab than the agent under test
 
   report:
     instructions: Synthesize the run as a short, evidence-cited narrative.
     needs: all
-    model: google/gemini-2.5-pro
+    model: google/gemini-3.1-pro-preview
 ```
 
 | Provider    | Prefix      | Example model ref            |
 | ----------- | ----------- | ---------------------------- |
-| Anthropic   | `anthropic` | `anthropic/claude-sonnet-4-6` |
-| OpenAI      | `openai`    | `openai/gpt-5.5`             |
-| Google      | `google`    | `google/gemini-2.5-pro`      |
+| Anthropic   | `anthropic` | `anthropic/claude-sonnet-5-5` |
+| OpenAI      | `openai`    | `openai/gpt-5.6`             |
+| Google      | `google`    | `google/gemini-3.1-pro-preview`      |
 
-**Default:** `anthropic/claude-sonnet-4-6` for every LLM-backed scorer and for the report. Omit `model` and you get it.
+**Default:** `anthropic/claude-opus-5-5` for every LLM-backed scorer and for the report. Omit `model` and you get it.
 
 A bare model id is rejected — the provider is not inferred:
 
 ```
-evaluation.criteria[1].scorer.model must be "<provider>/<model>", e.g. anthropic/claude-sonnet-4-6; got "claude-sonnet-4-6"
+evaluation.criteria[1].scorer.model must be "<provider>/<model>", e.g. anthropic/claude-sonnet-5-5; got "claude-sonnet-5-5"
 ```
 
 ### API keys
@@ -127,7 +127,7 @@ You only need keys for the providers your rubric actually uses. A rubric of `scr
 
 ```
 Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY):
-  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.5)
+  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.6)
 ```
 
 **`bn doctor`** reports readiness per provider — one row each for `api_key_anthropic`, `api_key_openai`, and `api_key_google`, naming the variable that satisfied it. A missing OpenAI or Google key is reported as `ok — not set (only needed for openai/… scorer models)`; a missing Anthropic key is a warning, because it is the default scorer model and is also used by the [supervisor](SUPERVISOR.md) and `bn agents infer-invoke`.
@@ -293,7 +293,7 @@ A single LLM API call without tools. Reviews assembled evidence and produces a s
   instructions: Only the necessary changes — no unrelated edits.
   evidence: [diff]
   scorer:
-    model: anthropic/claude-sonnet-4-6   # Optional; this is the default
+    model: anthropic/claude-opus-5-5   # Optional; this is the default
     systemPrompt: |                      # Optional; replaces the default prompt wholesale
       ...
 ```
@@ -343,7 +343,7 @@ Full agent loop with tools. Can explore the workspace, run commands, and gather 
     Run: curl http://localhost:3000/health
   scores: [0, 1]
   scorer:
-    model: anthropic/claude-sonnet-4-6   # Optional; this is the default
+    model: anthropic/claude-opus-5-5   # Optional; this is the default
     tools: [run_command, read_file]      # Optional; default is every exploration tool
     systemPrompt: |                      # Optional; replaces the default prompt wholesale
       ...
@@ -462,7 +462,7 @@ The report is **not a criterion type** — it lives at `evaluation.report`, runs
 ```yaml
 evaluation:
   report:
-    model: anthropic/claude-haiku-4-5   # Optional; default is anthropic/claude-sonnet-4-6
+    model: anthropic/claude-haiku-4-5   # Optional; default is anthropic/claude-opus-5-5
     evidence: [diff, logs, traces]      # Optional; default is [diff]
     instructions: |
       Produce a short, evidence-cited narrative of the run.
@@ -699,7 +699,7 @@ What follows from that:
 ```
 code-quality: ERROR
   Error: Scorer exited 1: Scoring failed: provider request failed after retries (529 overloaded)
-  Model: anthropic/claude-sonnet-4-6
+  Model: anthropic/claude-opus-5-5
   Log: evaluation/criteria/code-quality.log
 ```
 

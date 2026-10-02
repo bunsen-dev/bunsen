@@ -834,7 +834,7 @@ describe('scorer key preflight (missingScorerProviders)', () => {
     type: 'agent',
     instructions: 'Did the agent hard-code the answer?',
     weight: 0,
-    scorer: { model: 'openai/gpt-5.5' },
+    scorer: { model: 'openai/gpt-5.6' },
   };
 
   it('passes a script/aggregate-only rubric with no keys at all', () => {
@@ -854,7 +854,7 @@ describe('scorer key preflight (missingScorerProviders)', () => {
     expect(buildMissingScorerKeysError(missing).message).toBe(
       [
         'Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY):',
-        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.5)",
+        "  criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.6)",
       ].join('\n'),
     );
   });
@@ -870,10 +870,10 @@ describe('scorer key preflight (missingScorerProviders)', () => {
   it('includes the report step provider', () => {
     const required = requiredScorerProviders({
       criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
-      report: { instructions: 'Summarize.', model: 'google/gemini-2.5-pro' },
+      report: { instructions: 'Summarize.', model: 'google/gemini-3.1-pro-preview' },
     });
     const missing = missingScorerProviders(required, resolvePlatformKeys({ ANTHROPIC_API_KEY: 'a' }));
-    expect(buildMissingScorerKeysError(missing).message).toContain('  report (model: google/gemini-2.5-pro)');
+    expect(buildMissingScorerKeysError(missing).message).toContain('  report (model: google/gemini-3.1-pro-preview)');
   });
 });
 
@@ -945,9 +945,9 @@ describe('runReportStep', () => {
         seen = config;
         return { ok: true, output: { score: null, summary: 'ok' } };
       },
-      { instructions: 'Summarize.', model: 'openai/gpt-5.5' },
+      { instructions: 'Summarize.', model: 'openai/gpt-5.6' },
     );
-    expect(seen?.model).toBe('openai/gpt-5.5');
+    expect(seen?.model).toBe('openai/gpt-5.6');
   });
 
   it('passes the criterion timeout through to the scorer', async () => {

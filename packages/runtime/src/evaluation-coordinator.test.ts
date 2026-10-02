@@ -168,7 +168,7 @@ describe('criterionScorerModel', () => {
   it('applies the default model when the criterion sets none', () => {
     const c: Criterion = { id: 'j', title: 'J', type: 'judge', instructions: 'x' };
     expect(criterionScorerModel(c)).toBe(DEFAULT_SCORER_MODEL);
-    expect(DEFAULT_SCORER_MODEL).toBe('anthropic/claude-sonnet-4-6');
+    expect(DEFAULT_SCORER_MODEL).toBe('anthropic/claude-opus-5-5');
   });
 
   it('honors an explicit scorer.model on every LLM-backed type', () => {
@@ -177,25 +177,25 @@ describe('criterionScorerModel', () => {
       title: 'J',
       type: 'judge',
       instructions: 'x',
-      scorer: { model: 'openai/gpt-5.5' },
+      scorer: { model: 'openai/gpt-5.6' },
     };
     const agent: Criterion = {
       id: 'a',
       title: 'A',
       type: 'agent',
       instructions: 'x',
-      scorer: { model: 'google/gemini-2.5-pro' },
+      scorer: { model: 'google/gemini-3.1-pro-preview' },
     };
     const browser: Criterion = {
       id: 'ba',
       title: 'BA',
       type: 'browser-agent',
       instructions: 'x',
-      scorer: { model: 'anthropic/claude-opus-4-5' },
+      scorer: { model: 'anthropic/claude-opus-5-5' },
     };
-    expect(criterionScorerModel(judge)).toBe('openai/gpt-5.5');
-    expect(criterionScorerModel(agent)).toBe('google/gemini-2.5-pro');
-    expect(criterionScorerModel(browser)).toBe('anthropic/claude-opus-4-5');
+    expect(criterionScorerModel(judge)).toBe('openai/gpt-5.6');
+    expect(criterionScorerModel(agent)).toBe('google/gemini-3.1-pro-preview');
+    expect(criterionScorerModel(browser)).toBe('anthropic/claude-opus-5-5');
   });
 
   it('returns undefined for script and aggregate (no model runs)', () => {
@@ -210,8 +210,8 @@ describe('reportScorerModel', () => {
   });
 
   it('honors report.model', () => {
-    expect(reportScorerModel({ instructions: 'Summarize.', model: 'openai/gpt-5.5' })).toBe(
-      'openai/gpt-5.5',
+    expect(reportScorerModel({ instructions: 'Summarize.', model: 'openai/gpt-5.6' })).toBe(
+      'openai/gpt-5.6',
     );
   });
 });
@@ -227,14 +227,14 @@ describe('requiredScorerProviders', () => {
           title: 'A',
           type: 'agent',
           instructions: 'x',
-          scorer: { model: 'openai/gpt-5.5' },
+          scorer: { model: 'openai/gpt-5.6' },
         },
         {
           id: 'ba',
           title: 'BA',
           type: 'browser-agent',
           instructions: 'x',
-          scorer: { model: 'openai/gpt-5.5-mini' },
+          scorer: { model: 'openai/gpt-5.4-mini' },
           weight: 0,
         },
       ],
@@ -245,18 +245,18 @@ describe('requiredScorerProviders', () => {
       { id: 'j', type: 'judge', weight: 2, model: DEFAULT_SCORER_MODEL },
     ]);
     expect(providers.get('openai')).toEqual([
-      { id: 'a', type: 'agent', weight: 1, model: 'openai/gpt-5.5' },
-      { id: 'ba', type: 'browser-agent', weight: 0, model: 'openai/gpt-5.5-mini' },
+      { id: 'a', type: 'agent', weight: 1, model: 'openai/gpt-5.6' },
+      { id: 'ba', type: 'browser-agent', weight: 0, model: 'openai/gpt-5.4-mini' },
     ]);
   });
 
   it('includes the report step as id "report"', () => {
     const providers = requiredScorerProviders({
       criteria: [SCRIPT],
-      report: { instructions: 'Summarize.', model: 'google/gemini-2.5-pro' },
+      report: { instructions: 'Summarize.', model: 'google/gemini-3.1-pro-preview' },
     });
     expect(providers.get('google')).toEqual([
-      { id: 'report', type: 'report', weight: 0, model: 'google/gemini-2.5-pro' },
+      { id: 'report', type: 'report', weight: 0, model: 'google/gemini-3.1-pro-preview' },
     ]);
   });
 
@@ -274,7 +274,7 @@ describe('requiredScorerProviders', () => {
             title: 'J',
             type: 'judge',
             instructions: 'x',
-            scorer: { model: 'claude-sonnet-4-6' },
+            scorer: { model: 'claude-sonnet-5-5' },
           },
         ],
       }),
@@ -669,7 +669,7 @@ describe('buildScorerConfig', () => {
       instructions: 'Test description',
       scores: { 0: 'no', 1: 'yes' },
       scorer: {
-        model: 'openai/gpt-5.5',
+        model: 'openai/gpt-5.6',
         systemPrompt: 'You are terse.',
         tools: ['run_command', 'read_file'],
       },
@@ -680,7 +680,7 @@ describe('buildScorerConfig', () => {
     const config = buildScorerConfig(criterion, paths, {});
 
     expect(config.type).toBe('agent');
-    expect(config.model).toBe('openai/gpt-5.5');
+    expect(config.model).toBe('openai/gpt-5.6');
     expect(config.systemPrompt).toBe('You are terse.');
     expect(config.tools).toEqual(['run_command', 'read_file']);
     expect(config.scores).toEqual({ 0: 'no', 1: 'yes' });
@@ -833,7 +833,7 @@ describe('buildReportScorerConfig', () => {
     const config = buildReportScorerConfig(
       {
         instructions: 'x',
-        model: 'google/gemini-2.5-pro',
+        model: 'google/gemini-3.1-pro-preview',
         systemPrompt: 'Write like a lab notebook.',
         evidence: ['diff', 'logs'],
       },
@@ -842,7 +842,7 @@ describe('buildReportScorerConfig', () => {
       deps,
     );
 
-    expect(config.model).toBe('google/gemini-2.5-pro');
+    expect(config.model).toBe('google/gemini-3.1-pro-preview');
     expect(config.systemPrompt).toBe('Write like a lab notebook.');
     expect(config.evidence).toEqual(['diff', 'logs']);
     expect(config.workspaceSourcePath).toBe('/workspace-source');

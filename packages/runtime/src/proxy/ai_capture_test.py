@@ -267,11 +267,10 @@ def test_estimate_cost_anthropic_sonnet_cache_pricing() -> None:
 
 
 def test_anthropic_cache_prices_are_data_driven() -> None:
-    """claude-3-haiku-20240307 is the case where LiteLLM's explicit cache prices
-    DIFFER from the legacy 1.25x / 0.1x multipliers, proving cache pricing is
-    data-driven: data cache write $0.30/1M (the multiplier would give
-    0.25*1.25 = $0.3125), data cache read $0.03/1M (multiplier 0.25*0.1 =
-    $0.025)."""
+    """claude-opus-5-5 (the default scorer model) is a case where LiteLLM's
+    explicit cache-read price DIFFERS from the legacy 0.1x multiplier, proving
+    cache pricing is data-driven: input $4/1M, data cache write $5/1M, data
+    cache read $0.20/1M (the multiplier would give 4*0.1 = $0.40)."""
     cap = AICapture()
     usage = {
         "inputTokens": 0,
@@ -279,10 +278,10 @@ def test_anthropic_cache_prices_are_data_driven() -> None:
         "cacheCreationInputTokens": 1_000_000,
         "cacheReadInputTokens": 1_000_000,
     }
-    cost = cap._estimate_cost("anthropic", "claude-3-haiku-20240307", usage)
-    expected = 0.30 + 0.03  # data-driven, NOT 0.3125 + 0.025
+    cost = cap._estimate_cost("anthropic", "claude-opus-5-5", usage)
+    expected = 5.0 + 0.20  # data-driven, NOT 5.0 + 0.40
     assert _almost(cost, round(expected, 6)), (cost, expected)
-    assert not _almost(cost, 0.3125 + 0.025), cost  # would mean multipliers leaked in
+    assert not _almost(cost, 5.0 + 0.40), cost  # would mean multipliers leaked in
 
 
 def test_opus_and_haiku4_pricing_is_data_driven() -> None:
@@ -308,7 +307,7 @@ def test_matcher_tolerates_date_suffixed_ids() -> None:
     assert cap._estimate_cost("anthropic", "claude-haiku-4-5@20251001", usage) == 1.0
     # A model whose canonical id legitimately ends in a date matches first via
     # the raw exact pass, so it is NOT mis-stripped to a wrong base.
-    assert cap._estimate_cost("anthropic", "claude-3-haiku-20240307", usage) == 0.25
+    assert cap._estimate_cost("anthropic", "claude-haiku-4-5-20251001", usage) == 1.0
 
 
 def test_matcher_strips_provider_routing_prefixes() -> None:
@@ -335,7 +334,7 @@ def test_unpriced_model_detection() -> None:
     `bn runs cost` warning."""
     assert _is_model_priced("openai", "gpt-5.5") is True
     assert _is_model_priced("openai", "gpt-4o") is True  # non-example, in snapshot
-    assert _is_model_priced("anthropic", "claude-3-haiku-20240307") is True
+    assert _is_model_priced("anthropic", "claude-opus-5-5") is True
     assert _is_model_priced("google", "gemini-2.5-pro") is True
     # Date-suffixed / provider-prefixed still count as priced (matcher normalizes).
     assert _is_model_priced("anthropic", "claude-sonnet-4-6-20260205") is True
@@ -702,20 +701,23 @@ def test_anthropic_cached_input_billed_once_end_to_end() -> None:
 #   _COMMON_USER_MODELS    — common models NO example agent uses, proving the
 #                            snapshot covers far more than the examples.
 _EXAMPLE_AGENT_MODELS = {
+    # The agents' own declared models plus the platform's scorer defaults and
+    # the ids the docs/skill name as examples (the scorer sweep, 10/01/26).
     "anthropic": [
         "claude-sonnet-4-6",
         "claude-opus-4-6",
         "claude-opus-4-7",
         "claude-haiku-4-5",
-        "claude-3-haiku-20240307",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
     ],
-    "openai": ["gpt-5.5", "gpt-5.4-mini", "gpt-5.3-codex"],
-    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "openai": ["gpt-5.5", "gpt-5.6", "gpt-5.4-mini", "gpt-5.3-codex"],
+    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.1-pro-preview", "gemini-3.8-flash"],
 }
 _COMMON_USER_MODELS = {
-    "anthropic": ["claude-3-opus-20240229", "claude-3-7-sonnet-20250219"],
+    "anthropic": ["claude-opus-4-5", "claude-sonnet-4-5"],
     "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1", "o3", "o3-mini"],
-    "google": ["gemini-2.0-flash", "gemini-2.0-flash-lite"],
+    "google": ["gemini-2.5-flash-lite", "gemini-3-flash-preview"],
 }
 
 # Lower bounds on per-provider entry counts. Actual snapshot is ~21/150/47; these
@@ -988,7 +990,7 @@ def test_gemini_generate_content_non_streaming_end_to_end() -> None:
                 "index": 0,
             }
         ],
-        "modelVersion": "gemini-2.5-flash",
+        "modelVersion": "gemini-3.8-flash",
         "responseId": "resp_gem_nonstream",
         "usageMetadata": {
             "promptTokenCount": 900,
@@ -1000,16 +1002,16 @@ def test_gemini_generate_content_non_streaming_end_to_end() -> None:
     }
     _flow, trace = _capture_trace(
         "generativelanguage.googleapis.com",
-        "/v1beta/models/gemini-2.5-flash:generateContent",
+        "/v1beta/models/gemini-3.8-flash:generateContent",
         request_body,
         response_body,
         headers={"X-Bunsen-Source": "scorer:summary-report"},
     )
 
     assert trace["provider"] == "google", trace
-    assert trace["model"] == "gemini-2.5-flash", trace
+    assert trace["model"] == "gemini-3.8-flash", trace
     assert trace["source"] == "scorer:summary-report", trace
-    assert trace["endpoint"] == "/v1beta/models/gemini-2.5-flash:generateContent", trace
+    assert trace["endpoint"] == "/v1beta/models/gemini-3.8-flash:generateContent", trace
 
     usage = trace["response"]["usage"]
     assert usage["inputTokens"] == 800, usage    # fresh = 900 − 100 cached
@@ -1019,7 +1021,7 @@ def test_gemini_generate_content_non_streaming_end_to_end() -> None:
     assert trace["response"]["content"] == response_body["candidates"][0]["content"], trace
     assert "_raw" not in trace["response"], trace["response"]
 
-    record, exact = _resolve_pricing("google", "gemini-2.5-flash")
+    record, exact = _resolve_pricing("google", "gemini-3.8-flash")
     assert exact, record
     expected = _cost_from_pricing(record, usage)
     assert expected > 0
@@ -1046,12 +1048,12 @@ def test_json_body_not_mistaken_for_sse() -> None:
                 "finishReason": "STOP",
             }
         ],
-        "modelVersion": "gemini-2.5-flash",
+        "modelVersion": "gemini-3.8-flash",
         "usageMetadata": {"promptTokenCount": 50, "candidatesTokenCount": 5},
     }
     _flow, trace = _capture_trace(
         "generativelanguage.googleapis.com",
-        "/v1beta/models/gemini-2.5-flash:generateContent",
+        "/v1beta/models/gemini-3.8-flash:generateContent",
         {"contents": []},
         "\n  " + json.dumps(json_body),
     )

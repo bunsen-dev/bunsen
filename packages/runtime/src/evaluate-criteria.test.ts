@@ -147,11 +147,11 @@ describe('evaluateCriteria — happy path', () => {
   it('records the resolved model on LLM criteria only', async () => {
     const h = await run([
       script(),
-      judge({ scorer: { model: 'openai/gpt-5.5' } }),
+      judge({ scorer: { model: 'openai/gpt-5.6' } }),
       aggregate({ needs: ['tests', 'quality'] }),
     ]);
 
-    expect(byId(h.results, 'quality').model).toBe('openai/gpt-5.5');
+    expect(byId(h.results, 'quality').model).toBe('openai/gpt-5.6');
     expect(byId(h.results, 'tests').model).toBeUndefined();
     expect(byId(h.results, 'overall').model).toBeUndefined();
   });

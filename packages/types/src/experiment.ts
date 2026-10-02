@@ -229,9 +229,9 @@ export const BROWSER_AGENT_SCORER_TOOLS: readonly BrowserAgentScorerToolName[] =
 /** Fields shared by every LLM-backed scorer block. */
 interface LLMScorerConfigBase {
   /**
-   * Model to score with, in `<provider>/<model>` form — `anthropic/claude-sonnet-4-6`,
-   * `openai/gpt-5.5`, `google/gemini-2.5-pro`. Bare ids are rejected. Default:
-   * `anthropic/claude-sonnet-4-6`. The provider's API key must be available on
+   * Model to score with, in `<provider>/<model>` form — `anthropic/claude-sonnet-5-5`,
+   * `openai/gpt-5.6`, `google/gemini-3.1-pro-preview`. Bare ids are rejected. Default:
+   * `anthropic/claude-opus-5-5`. The provider's API key must be available on
    * the host (see docs/SCORERS.md, "Models and providers").
    */
   model?: string;
@@ -297,7 +297,7 @@ export type AggregateFunction = 'weighted_average' | 'all' | 'any' | 'min' | 'ma
 // ---------------------------------------------------------------------------
 
 export interface ReportConfig {
-  /** As {@link JudgeScorerConfig.model}: `<provider>/<model>`; default `anthropic/claude-sonnet-4-6`. */
+  /** As {@link JudgeScorerConfig.model}: `<provider>/<model>`; default `anthropic/claude-opus-5-5`. */
   model?: string;
   /** Evidence categories inlined into the report prompt. Default: `['diff']`. */
   evidence?: JudgeEvidence[];

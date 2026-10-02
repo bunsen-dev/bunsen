@@ -8,7 +8,7 @@ function config(overrides: Partial<ScorerConfig> = {}): ScorerConfig {
     id: 'tests-pass',
     title: 'Tests pass',
     instructions: 'Run the test suite and decide whether every test passes.',
-    model: 'anthropic/claude-sonnet-4-6',
+    model: 'anthropic/claude-sonnet-5-5',
     contextDir: '/bunsen/run',
     workspacePath: '/workspace',
     ...overrides,
@@ -97,7 +97,7 @@ describe('userPrompt', () => {
         taskPrompt: 'Make the failing test pass.',
         diff: '--- a/src/sum.ts\n+++ b/src/sum.ts',
         logs: 'all tests passed',
-        traces: '### Thread thread-1 — anthropic/claude-sonnet-4-6',
+        traces: '### Thread thread-1 — anthropic/claude-sonnet-5-5',
       },
       { tools: [] },
     );

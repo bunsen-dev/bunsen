@@ -623,7 +623,7 @@ export async function executeRun(
   }
 
   // Scorer API keys, resolved per provider from the host env. This preflight
-  // runs before any Docker work: a rubric that names `openai/gpt-5.5` with no
+  // runs before any Docker work: a rubric that names `openai/gpt-5.6` with no
   // OpenAI key must fail in a second, not after a ten-minute image build and a
   // full agent run. Script/aggregate-only rubrics (and `--skip-evaluation`)
   // need no key at all, so they resolve to an empty requirement set and run

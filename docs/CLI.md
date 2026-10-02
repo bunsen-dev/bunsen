@@ -69,7 +69,7 @@ Create, inspect, validate, and prebuild agents.
 | `bn agents validate [name]`      | Validate `agent.yaml`. `--all` for every agent.                |
 | `bn agents build <agent>`        | Build and cache `install.build` artifacts. `--platform`, `--rebuild`. |
 | `bn agents add [names…]`         | Copy bundled starter agents (`claude-code`, `codex-cli`, `gemini-cli`) into the project's agents dir. No names adds all; `--list` shows them; `--force` overwrites an existing dir. |
-| `bn agents infer-invoke <agent>`     | Infer the agent's `entrypoint.invoke` with a model (once, at authoring time) and write it into `agent.yaml` as a reviewable diff. Reads `examples` + runs `--help` on the host (`--skip-help`, `--help-text <file>`). `--force` overwrites an existing `invoke`; `--dry-run` previews without writing; `--model <provider>/<model>` picks the model (default `anthropic/claude-opus-4-8`). Needs that provider's key: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` (or the `BUNSEN_`-prefixed form). |
+| `bn agents infer-invoke <agent>`     | Infer the agent's `entrypoint.invoke` with a model (once, at authoring time) and write it into `agent.yaml` as a reviewable diff. Reads `examples` + runs `--help` on the host (`--skip-help`, `--help-text <file>`). `--force` overwrites an existing `invoke`; `--dry-run` previews without writing; `--model <provider>/<model>` picks the model (default `anthropic/claude-opus-5-5`). Needs that provider's key: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` (or the `BUNSEN_`-prefixed form). |
 
 ## `bn suites`
 

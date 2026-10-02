@@ -76,7 +76,7 @@ short-circuited it), `error` (the scorer could not reach a verdict — `score` i
 
 **Scorer model** — the model an LLM-backed criterion or the report runs on,
 written `<provider>/<model>` with `provider` one of `anthropic`, `openai`, or
-`google` (default: `anthropic/claude-sonnet-4-6`). Set per criterion with
+`google` (default: `anthropic/claude-opus-5-5`). Set per criterion with
 `scorer.model`, or on the report with `report.model`. See
 [Scorers & Evaluation](./SCORERS.md#models-and-providers).
 

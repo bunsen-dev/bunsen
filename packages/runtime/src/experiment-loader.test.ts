@@ -996,7 +996,7 @@ describe('scorer blocks', () => {
       evaluation: {
         criteria: [
           { id: 'tests', title: 'Tests', type: 'script', run: 'pytest' },
-          judge({ model: 'claude-sonnet-4-6' }),
+          judge({ model: 'claude-sonnet-5-5' }),
         ],
       },
     });
@@ -1004,13 +1004,13 @@ describe('scorer blocks', () => {
     expect(err.code).toBe('experiment.criterion.judge.scorer.model.pattern');
     expect(err.message).toBe(
       'evaluation.criteria[1].scorer.model must be "<provider>/<model>", ' +
-        'e.g. anthropic/claude-sonnet-4-6; got "claude-sonnet-4-6"',
+        'e.g. anthropic/claude-sonnet-5-5; got "claude-sonnet-5-5"',
     );
     expect(err.path).toBe('evaluation.criteria[1].scorer.model');
   });
 
   it('rejects an unknown provider prefix', () => {
-    const err = expectConfigError(withCriterion(judge({ model: 'azure/gpt-5.5' })));
+    const err = expectConfigError(withCriterion(judge({ model: 'azure/gpt-5.6' })));
     expect(err.code).toBe('experiment.criterion.judge.scorer.model.pattern');
     expect(err.message).toContain('has unknown provider "azure"');
     expect(err.message).toContain('expected one of anthropic, openai, google');
@@ -1032,14 +1032,14 @@ describe('scorer blocks', () => {
     const bad = baseYaml({
       evaluation: {
         criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
-        report: { instructions: 'Summarize.', model: 'gemini-2.5-pro' },
+        report: { instructions: 'Summarize.', model: 'gemini-3.1-pro-preview' },
       },
     });
     const err = expectConfigError(bad);
     expect(err.code).toBe('experiment.evaluation.report.model.pattern');
     expect(err.message).toBe(
       'evaluation.report.model must be "<provider>/<model>", ' +
-        'e.g. anthropic/claude-sonnet-4-6; got "gemini-2.5-pro"',
+        'e.g. anthropic/claude-sonnet-5-5; got "gemini-3.1-pro-preview"',
     );
   });
 
@@ -1147,7 +1147,7 @@ describe('scorer blocks', () => {
     const config = parseV1(
       withCriterion(
         agent({
-          model: 'openai/gpt-5.5',
+          model: 'openai/gpt-5.6',
           systemPrompt: 'Score strictly.',
           tools: ['read_file'],
         }),
@@ -1156,7 +1156,7 @@ describe('scorer blocks', () => {
     expect(config.evaluation.criteria[0]).toMatchObject({
       type: 'agent',
       scorer: {
-        model: 'openai/gpt-5.5',
+        model: 'openai/gpt-5.6',
         systemPrompt: 'Score strictly.',
         tools: ['read_file'],
       },
@@ -1167,7 +1167,7 @@ describe('scorer blocks', () => {
     const config = parseV1(
       withCriterion(
         browserAgent({
-          model: 'anthropic/claude-sonnet-4-6',
+          model: 'anthropic/claude-sonnet-5-5',
           tools: ['screenshot', 'run_playwright_script', 'run_command'],
         }),
       ),
@@ -1175,7 +1175,7 @@ describe('scorer blocks', () => {
     expect(config.evaluation.criteria[0]).toMatchObject({
       type: 'browser-agent',
       scorer: {
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5-5',
         tools: ['screenshot', 'run_playwright_script', 'run_command'],
       },
     });
@@ -1183,11 +1183,11 @@ describe('scorer blocks', () => {
 
   it('accepts a judge scorer with model and systemPrompt', () => {
     const config = parseV1(
-      withCriterion(judge({ model: 'google/gemini-2.5-pro', systemPrompt: 'Be terse.' })),
+      withCriterion(judge({ model: 'google/gemini-3.1-pro-preview', systemPrompt: 'Be terse.' })),
     );
     expect(config.evaluation.criteria[0]).toMatchObject({
       type: 'judge',
-      scorer: { model: 'google/gemini-2.5-pro', systemPrompt: 'Be terse.' },
+      scorer: { model: 'google/gemini-3.1-pro-preview', systemPrompt: 'Be terse.' },
     });
   });
 
@@ -1198,7 +1198,7 @@ describe('scorer blocks', () => {
           criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
           report: {
             instructions: 'Summarize the run.',
-            model: 'google/gemini-2.5-pro',
+            model: 'google/gemini-3.1-pro-preview',
             systemPrompt: 'Write like a lab notebook.',
           },
         },
@@ -1206,7 +1206,7 @@ describe('scorer blocks', () => {
     );
     expect(config.evaluation.report).toEqual({
       instructions: 'Summarize the run.',
-      model: 'google/gemini-2.5-pro',
+      model: 'google/gemini-3.1-pro-preview',
       systemPrompt: 'Write like a lab notebook.',
     });
   });

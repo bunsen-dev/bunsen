@@ -141,7 +141,7 @@ describe('formatEvaluationForTerminal', () => {
           summary: 'Partly met',
           status: 'completed',
           scorerType: 'judge',
-          model: 'openai/gpt-5.5',
+          model: 'openai/gpt-5.6',
         },
         { id: 'tests-pass', weight: 1, score: 1, summary: 'Green', status: 'completed', scorerType: 'script' },
       ],
@@ -150,7 +150,7 @@ describe('formatEvaluationForTerminal', () => {
 
     const output = formatEvaluationForTerminal(result);
 
-    expect(output).toContain('Model: openai/gpt-5.5');
+    expect(output).toContain('Model: openai/gpt-5.6');
     // Script criteria carry no model, so no empty row is printed.
     expect(output.match(/Model:/g)).toHaveLength(1);
   });

@@ -157,8 +157,8 @@ LLM-backed criterion declares its own `scorer.model` as `<provider>/<model>`
 (`anthropic`, `openai`, or `google`), the trace proxy captures and prices that
 traffic for all three providers, and the resolved id is recorded on the criterion
 result as `model` in the [run manifest](./RUN_MANIFEST.md#evaluation). So a rubric
-that grades with `anthropic/claude-sonnet-4-6` and cross-checks with
-`openai/gpt-5.5` shows each criterion's spend separately, priced at that model's
+that grades with `anthropic/claude-sonnet-5-5` and cross-checks with
+`openai/gpt-5.6` shows each criterion's spend separately, priced at that model's
 own rates.
 
 > **Known limitation — thread reconstruction for OpenAI/Gemini.** OpenAI Responses

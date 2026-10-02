@@ -55,7 +55,7 @@ describe('checkPlatformKeys', () => {
 
     expect(m.api_key_anthropic.status).toBe('warn');
     expect(m.api_key_anthropic.detail).toBe('not set');
-    expect(m.api_key_anthropic.hint).toContain('anthropic/claude-sonnet-4-6');
+    expect(m.api_key_anthropic.hint).toContain('anthropic/claude-opus-5-5');
     expect(m.api_key_anthropic.hint).toContain('bn agents infer-invoke');
     expect(m.api_key_anthropic.hint).toContain(
       'set ANTHROPIC_API_KEY or BUNSEN_ANTHROPIC_API_KEY',

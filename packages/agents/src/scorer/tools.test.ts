@@ -44,7 +44,7 @@ function config(overrides: Partial<ScorerConfig> = {}): ScorerConfig {
     id: 'tests-pass',
     title: 'Tests pass',
     instructions: 'Do the tests pass?',
-    model: 'anthropic/claude-sonnet-4-6',
+    model: 'anthropic/claude-sonnet-5-5',
     contextDir: TRACES_CONTEXT_DIR,
     workspacePath: workspace,
     ...overrides,
@@ -217,7 +217,7 @@ describe('trace tools', () => {
   it('lists the captured threads', async () => {
     const result = await run(createListThreadsTool(context()), {});
     expect(result).toContain('42 calls across 2 thread(s)');
-    expect(result).toContain('- thread-1 — anthropic/claude-sonnet-4-6, 40 turns');
+    expect(result).toContain('- thread-1 — anthropic/claude-sonnet-5-5, 40 turns');
     expect(result).toContain('system: You are a coding agent');
   });
 

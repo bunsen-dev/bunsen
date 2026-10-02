@@ -25,7 +25,7 @@ const valid = {
   id: 'tests-pass',
   title: 'Tests pass',
   instructions: 'Do the tests pass?',
-  model: 'anthropic/claude-sonnet-4-6',
+  model: 'anthropic/claude-sonnet-5-5',
   contextDir: '/bunsen/run',
   workspacePath: '/workspace',
 };
@@ -63,7 +63,7 @@ describe('loadScorerConfig', () => {
   });
 
   it('rejects a bare model id and shows the fix', () => {
-    expect(() => loadScorerConfig(writeConfig({ ...valid, model: 'claude-sonnet-4-6' }))).toThrow(
+    expect(() => loadScorerConfig(writeConfig({ ...valid, model: 'claude-sonnet-5-5' }))).toThrow(
       /"model" must be "<provider>\/<model>"/,
     );
   });

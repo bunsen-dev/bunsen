@@ -98,7 +98,7 @@ all tests passed
 
 ## Agent model conversations
 \`\`\`
-### Thread thread-1 — anthropic/claude-sonnet-4-6
+### Thread thread-1 — anthropic/claude-sonnet-5-5
 \`\`\`
 
 Call submit_score when you are done; the criterion is not evaluated until you do."

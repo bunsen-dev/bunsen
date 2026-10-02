@@ -34,7 +34,7 @@ import { createModel } from '../common/index.js';
  * this runs once per agent and is human-reviewed, so inference quality matters
  * far more than per-call cost.
  */
-export const DEFAULT_SCAFFOLD_MODEL = 'anthropic/claude-opus-4-8';
+export const DEFAULT_SCAFFOLD_MODEL = 'anthropic/claude-opus-5-5';
 
 /** One forced tool call carrying a short argv template — a small budget is plenty. */
 const MAX_SCAFFOLD_OUTPUT_TOKENS = 2048;
@@ -73,7 +73,7 @@ export interface ScaffoldInvokeInput {
    */
   apiKey: string;
   /**
-   * Override the model, as `<provider>/<model>` (e.g. `openai/gpt-5.5`).
+   * Override the model, as `<provider>/<model>` (e.g. `openai/gpt-5.6`).
    * Defaults to {@link DEFAULT_SCAFFOLD_MODEL}.
    */
   model?: string;

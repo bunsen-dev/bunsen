@@ -45,7 +45,7 @@ import { parseScorerModelRef } from '@bunsen-dev/types';
  * bundled scorer never applies a default — it always receives a resolved
  * `<provider>/<model>`.
  */
-export const DEFAULT_SCORER_MODEL = 'anthropic/claude-sonnet-4-6';
+export const DEFAULT_SCORER_MODEL = 'anthropic/claude-opus-5-5';
 
 /**
  * Resolved criterion with computed fields. Extends the v1 {@link Criterion}

@@ -151,7 +151,7 @@ describe('openRunIndex', () => {
             summary: 'Scorer produced no verdict.',
             status: 'error',
             scorer_type: 'judge',
-            model: 'google/gemini-2.5-pro',
+            model: 'google/gemini-3.1-pro-preview',
             error: 'context window exceeded',
           },
         ],
@@ -181,7 +181,7 @@ describe('openRunIndex', () => {
       expect(columns).toContain('error');
 
       const [criterion] = listRunCriteria(db, manifest.run_id);
-      expect(criterion.model).toBe('google/gemini-2.5-pro');
+      expect(criterion.model).toBe('google/gemini-3.1-pro-preview');
       expect(criterion.error).toBe('context window exceeded');
       expect(criterion.score).toBeNull();
       expect(criterion.status).toBe('error');
@@ -327,7 +327,7 @@ describe('upsertManifest', () => {
                 summary: 'Scorer produced no verdict.',
                 status: 'error',
                 scorer_type: 'judge',
-                model: 'openai/gpt-5.5',
+                model: 'openai/gpt-5.6',
                 error: 'no verdict after forced submit',
                 log_path: 'evaluation/criteria/quality.log',
               },
@@ -345,7 +345,7 @@ describe('upsertManifest', () => {
           summary: 'Scorer produced no verdict.',
           status: 'error',
           scorerType: 'judge',
-          model: 'openai/gpt-5.5',
+          model: 'openai/gpt-5.6',
           error: 'no verdict after forced submit',
           allowedScores: null,
           logPath: 'evaluation/criteria/quality.log',

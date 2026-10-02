@@ -124,7 +124,7 @@ describe('prompt design', () => {
 
 describe('model default', () => {
   it('defaults to opus (quality over cost for a once-per-agent, human-reviewed tool)', () => {
-    expect(DEFAULT_SCAFFOLD_MODEL).toBe('anthropic/claude-opus-4-8');
+    expect(DEFAULT_SCAFFOLD_MODEL).toBe('anthropic/claude-opus-5-5');
   });
 
   it('is a parseable <provider>/<model> reference', () => {
@@ -203,9 +203,9 @@ describe('scaffoldInvokeTemplate', () => {
     const model = toolCallModel({ invoke: ['{prompt}'], reasoning: 'Bare positional.' });
     createModelMock.mockReturnValue(model);
 
-    await scaffoldInvokeTemplate({ agent: agent(), apiKey: 'sk-test', model: 'openai/gpt-5.5' });
+    await scaffoldInvokeTemplate({ agent: agent(), apiKey: 'sk-test', model: 'openai/gpt-5.6' });
 
-    expect(createModelMock).toHaveBeenCalledWith('openai/gpt-5.5', { apiKey: 'sk-test' });
+    expect(createModelMock).toHaveBeenCalledWith('openai/gpt-5.6', { apiKey: 'sk-test' });
     expect(model.doGenerateCalls).toHaveLength(1);
     const call = model.doGenerateCalls[0];
     expect(call.toolChoice).toEqual({ type: 'tool', toolName: 'submit_invoke_template' });

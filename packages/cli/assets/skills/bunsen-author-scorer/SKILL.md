@@ -78,18 +78,18 @@ diffs and can return a false `0.0`).
 
 5. **Select the scorer model where it matters.** Every scorer model is a `<provider>/<model>`
    reference — a bare id fails validation. The default, for every LLM-backed criterion and for
-   the report, is `anthropic/claude-sonnet-4-6`.
+   the report, is `anthropic/claude-opus-5-5`.
 
    | Provider | Example model ref | Key on the host (first match wins) |
    |----------|-------------------|------------------------------------|
-   | `anthropic` | `anthropic/claude-sonnet-4-6` | `BUNSEN_ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY` |
-   | `openai` | `openai/gpt-5.5` | `BUNSEN_OPENAI_API_KEY`, `OPENAI_API_KEY` |
-   | `google` | `google/gemini-2.5-pro` | `BUNSEN_GEMINI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` |
+   | `anthropic` | `anthropic/claude-sonnet-5-5` | `BUNSEN_ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY` |
+   | `openai` | `openai/gpt-5.6` | `BUNSEN_OPENAI_API_KEY`, `OPENAI_API_KEY` |
+   | `google` | `google/gemini-3.1-pro-preview` | `BUNSEN_GEMINI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` |
 
    Where it goes: `judge` takes `scorer: { model, systemPrompt }` (no `tools`);
    `agent`/`browser-agent` take `scorer: { model, systemPrompt, tools }`; the report uses a
    **flat** `report.model`. Tier down to a cheap model (`anthropic/claude-haiku-4-5`,
-   `google/gemini-2.5-flash`) for binary or near-mechanical judgments and spend the strong
+   `google/gemini-3.8-flash`) for binary or near-mechanical judgments and spend the strong
    model on the rubric that carries the weight. Scoring on a **different provider** than the
    agent under test reduces self-preference.
 
@@ -98,7 +98,7 @@ diffs and can return a false `0.0`).
    container work** when a provider your rubric needs has no key, naming the criteria:
    ```
    Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY):
-     criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.5)
+     criterion 'cheat-check' (type: agent, weight: 0, model: openai/gpt-5.6)
    ```
    `bn doctor` shows one row per provider (`api_key_anthropic`, `api_key_openai`,
    `api_key_google`) naming the variable that satisfied it. A rubric of only `script` and
@@ -188,7 +188,7 @@ diffs and can return a false `0.0`).
   reject it); `judge.scorer` takes `model` and `systemPrompt` only (no `tools`).
 - A bare model id fails validation — always `<provider>/<model>`:
   `evaluation.criteria[1].scorer.model must be "<provider>/<model>", e.g.
-  anthropic/claude-sonnet-4-6; got "claude-sonnet-4-6"`.
+  anthropic/claude-sonnet-5-5; got "claude-sonnet-5-5"`.
 - A criterion's model is nested at `scorer.model`; the **report's** is the flat `report.model`.
   `model` directly on a criterion fails validation.
 - `aggregate` needs **both** `needs` and `aggregate.function`; give it `weight: 0`.
@@ -235,7 +235,7 @@ evaluation:
       instructions: Review the diff. Is the fix clean, minimal, and free of unrelated edits?
       evidence: [diff]
       scorer:
-        model: anthropic/claude-sonnet-4-6
+        model: anthropic/claude-sonnet-5-5
     - id: overall
       title: Overall
       type: aggregate
@@ -271,17 +271,17 @@ evaluation:
       instructions: Does the diff keep the documented response shape while adding pagination?
       evidence: [diff]
       scorer:
-        model: openai/gpt-5.5      # needs OPENAI_API_KEY (or BUNSEN_OPENAI_API_KEY)
+        model: openai/gpt-5.6      # needs OPENAI_API_KEY (or BUNSEN_OPENAI_API_KEY)
     - id: tests-written
       title: Tests written
       type: agent
       instructions: Run the suite and check that the new pagination paths are covered.
       scorer:
-        model: anthropic/claude-sonnet-4-6
+        model: anthropic/claude-sonnet-5-5
         tools: [run_command, read_file]   # no trace reading — it does not need it
   report:
     instructions: Synthesize the run as a short, evidence-cited narrative.
-    model: google/gemini-2.5-flash  # needs GEMINI_API_KEY / GOOGLE_API_KEY
+    model: google/gemini-3.8-flash  # needs GEMINI_API_KEY / GOOGLE_API_KEY
     evidence: [diff, logs]
     needs: all
 ```

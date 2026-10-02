@@ -22,11 +22,11 @@ export const SCORER_PROVIDERS: readonly ScorerProvider[] = ['anthropic', 'openai
 export const SCORER_MODEL_PATTERN = '^(anthropic|openai|google)/.+$';
 
 /** Shown in every "wrong shape" error so the fix is one copy-paste away. */
-export const SCORER_MODEL_EXAMPLE = 'anthropic/claude-sonnet-4-6';
+export const SCORER_MODEL_EXAMPLE = 'anthropic/claude-sonnet-5-5';
 
 export interface ScorerModelRef {
   provider: ScorerProvider;
-  /** The provider's own model id, e.g. `claude-sonnet-4-6` or `gpt-5.5`. */
+  /** The provider's own model id, e.g. `claude-sonnet-5-5` or `gpt-5.6`. */
   modelId: string;
   /** The full `<provider>/<model>` string as written. */
   ref: string;
@@ -51,7 +51,7 @@ export class ScorerModelRefError extends Error {
  *
  * Throws {@link ScorerModelRefError} with a message that states the required
  * form and shows the fix, e.g. for a bare id:
- * `must be "<provider>/<model>", e.g. anthropic/claude-sonnet-4-6; got "claude-sonnet-4-6"`.
+ * `must be "<provider>/<model>", e.g. anthropic/claude-sonnet-5-5; got "claude-sonnet-5-5"`.
  */
 export function parseScorerModelRef(ref: string): ScorerModelRef {
   const slash = ref.indexOf('/');

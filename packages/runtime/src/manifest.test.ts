@@ -126,7 +126,7 @@ async function setupCompleteRun(): Promise<{ runId: string }> {
         summary: 'Layout off',
         status: 'completed',
         scorerType: 'browser-agent',
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5-5',
         screenshots: ['artifacts/screenshots/screenshot_1.png'],
       },
     ],
@@ -299,7 +299,7 @@ describe('storage writers project onto manifest fields', () => {
     expect(visual.screenshots).toEqual(['artifacts/screenshots/screenshot_1.png']);
     // Provenance: the resolved scorer model rides along on LLM-backed criteria
     // and stays absent on script ones.
-    expect(visual.model).toBe('anthropic/claude-sonnet-4-6');
+    expect(visual.model).toBe('anthropic/claude-sonnet-5-5');
     expect(tests.model).toBeUndefined();
     expect(manifest.evaluation!.report_error).toBeUndefined();
 
@@ -347,7 +347,7 @@ describe('storage writers project onto manifest fields', () => {
           summary: 'Scorer produced no verdict.',
           status: 'error',
           scorerType: 'judge',
-          model: 'openai/gpt-5.5',
+          model: 'openai/gpt-5.6',
           error: 'no verdict after forced submit',
           logPath: 'evaluation/criteria/quality.log',
         },
@@ -367,7 +367,7 @@ describe('storage writers project onto manifest fields', () => {
           summary: 'Scorer produced no verdict.',
           status: 'error',
           scorer_type: 'judge',
-          model: 'openai/gpt-5.5',
+          model: 'openai/gpt-5.6',
           error: 'no verdict after forced submit',
           log_path: 'evaluation/criteria/quality.log',
         },

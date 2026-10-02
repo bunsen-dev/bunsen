@@ -71,11 +71,11 @@ describe('formatThreadsForPrompt', () => {
     const formatted = formatThreadsForPrompt(CONTEXT_DIR) ?? '';
 
     expect(formatted).toContain('42 model calls across 2 thread(s)');
-    expect(formatted).toContain('### Thread thread-1 — anthropic/claude-sonnet-4-6');
+    expect(formatted).toContain('### Thread thread-1 — anthropic/claude-sonnet-5-5');
     expect(formatted).toContain(
       `40 turns; showing ${PROMPT_THREAD_HEAD_TURNS + PROMPT_THREAD_TAIL_TURNS} (head and tail).`,
     );
-    expect(formatted).toContain('### Thread thread-2 — openai/gpt-5.5');
+    expect(formatted).toContain('### Thread thread-2 — openai/gpt-5.6');
     expect(formatted).toContain('2 turns.');
     // The sampled window skips the middle of the long thread.
     expect(formatted).not.toContain('#### Turn 8');
