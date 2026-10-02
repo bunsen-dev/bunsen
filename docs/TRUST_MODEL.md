@@ -88,9 +88,9 @@ concern, run on a disposable/throwaway host or VM and pass only throwaway API ke
 > platform's key distinct from the provider keys the agent under test gets via `defaults.passEnv` — give the
 > agent under test only a throwaway key while the evaluation runs on another.
 >
-> A platform key is **never set on a container's base environment**. Each LLM-scorer `exec` receives exactly
-> one `BUNSEN_<PROVIDER>_API_KEY`, for that criterion's provider, in both `evaluation.container` modes, and
-> the scorer strips these variables from every subprocess it spawns. The supervisor is Anthropic-only and
+> A platform key is **never set on any environment**. Each LLM-scorer `exec` receives exactly one key, for
+> that criterion's provider, in both `evaluation.container` modes, as a **one-time key file**: a mode-600 file owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`, that the scorer reads and deletes before anything else runs (the host deletes it again after the exec). The key is never an environment variable, so `/proc/<pid>/environ`, `run_command` children, and model-authored `run_playwright_script` code cannot read it.
+> The scorer also strips every `*_API_KEY` from the subprocesses it spawns. The supervisor is Anthropic-only and
 > likewise receives `BUNSEN_ANTHROPIC_API_KEY` per exec. Consequences: `type: script` criteria never see a
 > platform provider key, and in `evaluation.container: agent` mode the agent under test no longer sees it
 > either (it used to, because the scorer shared its container).
@@ -103,8 +103,9 @@ before you share one.**
 What's in a run dir and what it can leak:
 
 - **`agent-script.sh` / `launcher.sh`** hold your plaintext API keys as `export KEY="value"` lines. Bunsen
-  scrubs these from the run dir on normal completion **and** synchronously on Ctrl-C / `SIGTERM`, so a
-  cleanly finished or canceled run shouldn't contain them. A hard kill (`SIGKILL`) or power loss can still
+  deletes them the moment the agent phase ends — before capture and before any scorer runs, so no
+  scorer ever sees them — **and** synchronously on Ctrl-C / `SIGTERM`, so a cleanly finished or canceled
+  run shouldn't contain them. A hard kill (`SIGKILL`) or power loss can still
   leave them behind — check before sharing.
 - **`logs.txt`, `artifacts/recording.cast` (raw terminal bytes), and `orchestration/result.json`** capture
   whatever the agent printed and received. If a key was passed on the agent's command line, or the agent

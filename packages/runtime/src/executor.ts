@@ -81,7 +81,7 @@ import {
 } from './evaluate-criteria.js';
 import {
   resolvePlatformKeys,
-  scorerExecKeyEnv,
+  scorerKeyFor,
   buildMissingScorerKeysError,
   type PlatformKeys,
 } from './platform-keys.js';
@@ -128,6 +128,7 @@ import {
   type ExecResult,
 } from './container.js';
 import { resolveContainerNodeRuntime } from './node-runtime.js';
+import { pgidRecordPrefix, reapProcessGroupCommand } from './process-group.js';
 
 /**
  * Thrown out of `executeRun` when the run was canceled mid-flight (either by
@@ -434,35 +435,6 @@ export function buildExecLogs(result: Pick<ExecResult, 'stdout' | 'stderr'>): st
 export const AGENT_PGID_FILE = '/bunsen/run/agent.pgid';
 
 /**
- * Shell prefix prepended to the direct-mode launch so it records its process-group
- * id. Each `docker exec` is its own group leader, so `$$`'s group covers the agent
- * and every descendant. Best-effort and exit-code-transparent (`;`-separated, never
- * changes the launched command's status).
- *
- * Field 5 of `/proc/$$/stat` is the process-group id — read it straight from `/proc`
- * rather than shelling out to `ps`, which isn't reliably present/uniform across every
- * experiment image (a missing `ps` silently left the pgid file empty, so the reap then
- * found nothing to kill). `mkdir -p` guarantees the dir exists before the write.
- */
-export function agentPgidRecordPrefix(pgidFile: string = AGENT_PGID_FILE): string {
-  const dir = pgidFile.replace(/\/[^/]+$/, '');
-  return `mkdir -p ${dir} 2>/dev/null; awk '{print $5}' /proc/$$/stat > ${pgidFile} 2>/dev/null || true; `;
-}
-
-/**
- * Shell command that SIGKILLs exactly the recorded agent process *group* (the
- * `-- -"$PGID"` form), reaping the agent and its descendants while sparing the
- * container's init and `sleep infinity` keepalive (different groups). Echoes a
- * one-line status the caller logs.
- */
-export function reapAgentProcessGroupCommand(pgidFile: string = AGENT_PGID_FILE): string {
-  return `PGID=$(cat ${pgidFile} 2>/dev/null)
-       if [ -z "$PGID" ]; then echo "no agent process group recorded; skipping"; exit 0; fi
-       if kill -KILL -- -"$PGID" 2>/dev/null; then echo "reaped agent process group $PGID"
-       else echo "agent process group $PGID had no live processes"; fi`;
-}
-
-/**
  * Terminate a timed-out agent and everything it spawned, before the workspace is
  * captured for scoring.
  *
@@ -486,7 +458,7 @@ export async function terminateTimedOutAgent(
   report: (msg: string) => void,
 ): Promise<void> {
   try {
-    const result = await execShellInContainer(container, reapAgentProcessGroupCommand(), {
+    const result = await execShellInContainer(container, reapProcessGroupCommand(AGENT_PGID_FILE, 'agent'), {
       timeout: 10000,
     });
     // Durably surfaced (not a transient/verbose-only line): on a scored timeout the
@@ -500,6 +472,21 @@ export async function terminateTimedOutAgent(
         err instanceof Error ? err.message : String(err)
       }`,
     );
+  }
+}
+
+/**
+ * Delete the run-dir files that carry the agent's plaintext provider keys
+ * (`agent-script.sh` / `launcher.sh` export them). Called the moment the agent
+ * phase ends — before capture and before any scorer runs — so the scorer
+ * container (which mounts the run dir read-only) and every criterion in it
+ * never see those keys. Idempotent; `cleanupInternalRunFiles` repeats it in
+ * the final cleanup together with the completion marker.
+ */
+export function scrubAgentKeyFiles(runDir: string): void {
+  for (const file of ['agent-script.sh', 'launcher.sh']) {
+    const filePath = path.join(runDir, file);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 }
 
@@ -1754,8 +1741,8 @@ ${agentScript}
           directScript = `chown bunsen:bunsen /bunsen/run/agent-script.sh && su bunsen -c /bunsen/run/agent-script.sh`;
         }
         // Record this exec's process group so a scored timeout can reap exactly the
-        // agent's tree (and nothing else) — see agentPgidRecordPrefix.
-        directScript = agentPgidRecordPrefix() + directScript;
+        // agent's tree (and nothing else) — see pgidRecordPrefix.
+        directScript = pgidRecordPrefix(AGENT_PGID_FILE) + directScript;
         try {
           result = await execShellInContainer(container, directScript, {
             env: runAsNonRoot ? {} : agentEnv,
@@ -1806,6 +1793,9 @@ ${agentScript}
         data: { exitCode: result.exitCode, durationMs: Date.now() - agentStartTime },
       });
       activeRun.phase = 'capture';
+      // The agent has consumed its launch script; nothing after this point may
+      // read the keys it exported — least of all the scorers.
+      scrubAgentKeyFiles(runDir);
 
       // A failed capture step degrades the run's artifacts; it must never
       // discard the completed run itself. Each step below records a warning
@@ -2225,10 +2215,9 @@ ${agentScript}
           ): Promise<LLMScorerRun> => {
             const info = await ensureScorerContainer();
             const { provider } = parseScorerModelRef(config.model);
-            const [name, value] = Object.entries(scorerExecKeyEnv(provider, platformKeys))[0];
             const run = await runLLMScorer(info, {
               config,
-              apiKey: { name, value },
+              apiKey: scorerKeyFor(provider, platformKeys).value,
               nodeCmd,
               timeout: timeoutMs,
               proxyEnv: proxyInfo ? getProxyEnv(proxyInfo) : undefined,

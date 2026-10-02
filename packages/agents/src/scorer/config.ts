@@ -10,6 +10,7 @@ import {
   parseScorerModelRef,
   AGENT_SCORER_TOOLS,
   BROWSER_AGENT_SCORER_TOOLS,
+  SCORER_KEY_FILE_ENV,
 } from '@bunsen-dev/types';
 import type {
   AllowedScores,
@@ -281,4 +282,39 @@ export function loadScorerConfig(configPath: string): ScorerConfig {
   }
 
   return config;
+}
+
+/**
+ * Read the provider API key the host delivered for this exec.
+ *
+ * The host writes the key as a one-time file (mode 600, owned by the exec
+ * user) and names it in `BUNSEN_SCORER_KEY_FILE`; it is never an environment
+ * variable, so `/proc/<pid>/environ`, `run_command` children, and
+ * model-authored `run_playwright_script` code cannot read it. The file is
+ * deleted here, before any tool runs; the host removes it again after the
+ * exec as a backstop.
+ */
+export function readScorerApiKey(
+  env: Record<string, string | undefined> = process.env,
+  io: { readFileSync: (p: string, enc: 'utf-8') => string; unlinkSync: (p: string) => void } = fs,
+): string {
+  const keyFile = env[SCORER_KEY_FILE_ENV];
+  if (!keyFile) {
+    throw new ScorerConfigError(`${SCORER_KEY_FILE_ENV} is not set; the host must deliver the provider key file.`);
+  }
+  let key: string;
+  try {
+    key = io.readFileSync(keyFile, 'utf-8').trim();
+  } catch (error) {
+    throw new ScorerConfigError(
+      `Could not read the provider key file ${keyFile}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  try {
+    io.unlinkSync(keyFile);
+  } catch {
+    // Best effort: the host deletes it after the exec regardless.
+  }
+  if (!key) throw new ScorerConfigError(`The provider key file ${keyFile} is empty.`);
+  return key;
 }

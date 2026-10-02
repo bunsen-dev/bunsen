@@ -111,3 +111,31 @@ describe('loadScorerConfig', () => {
     );
   });
 });
+
+describe('readScorerApiKey', () => {
+  it('reads the one-time key file named by BUNSEN_SCORER_KEY_FILE and deletes it', async () => {
+    const { readScorerApiKey } = await import('./config.js');
+    const unlinked: string[] = [];
+    const io = {
+      readFileSync: (p: string) => (p === '/tmp/k.key' ? 'sk-test-key\n' : (() => { throw new Error('ENOENT'); })()),
+      unlinkSync: (p: string) => { unlinked.push(p); },
+    };
+    expect(readScorerApiKey({ BUNSEN_SCORER_KEY_FILE: '/tmp/k.key' }, io)).toBe('sk-test-key');
+    expect(unlinked).toEqual(['/tmp/k.key']);
+  });
+
+  it('fails clearly when the host did not deliver a key file', async () => {
+    const { readScorerApiKey } = await import('./config.js');
+    expect(() => readScorerApiKey({}, { readFileSync: () => '', unlinkSync: () => {} })).toThrow(/BUNSEN_SCORER_KEY_FILE is not set/);
+  });
+
+  it('fails clearly when the key file is unreadable or empty', async () => {
+    const { readScorerApiKey } = await import('./config.js');
+    expect(() =>
+      readScorerApiKey({ BUNSEN_SCORER_KEY_FILE: '/tmp/missing.key' }, { readFileSync: () => { throw new Error('ENOENT'); }, unlinkSync: () => {} }),
+    ).toThrow(/Could not read the provider key file/);
+    expect(() =>
+      readScorerApiKey({ BUNSEN_SCORER_KEY_FILE: '/tmp/empty.key' }, { readFileSync: () => '  \n', unlinkSync: () => {} }),
+    ).toThrow(/is empty/);
+  });
+});

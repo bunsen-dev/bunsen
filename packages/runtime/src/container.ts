@@ -951,16 +951,18 @@ export async function writeFileInContainer(
   persistentContainer: PersistentContainer,
   filePath: string,
   content: string,
-  options?: { mode?: string; timeout?: number }
+  options?: { mode?: string; timeout?: number; user?: string }
 ): Promise<ExecResult> {
   const encoded = Buffer.from(content, 'utf-8').toString('base64');
   const mode = options?.mode ?? '644';
   const timeout = options?.timeout ?? 10000;
   const dir = filePath.substring(0, filePath.lastIndexOf('/')) || '/';
+  // `user` makes the written file owned by that user — needed when the file is
+  // mode 600 and must be readable by a non-root exec (the scorer's key file).
   return execShellInContainer(
     persistentContainer,
     `mkdir -p '${dir}' && echo '${encoded}' | base64 -d > '${filePath}' && chmod ${mode} '${filePath}'`,
-    { timeout }
+    { timeout, ...(options?.user ? { user: options.user } : {}) }
   );
 }
 

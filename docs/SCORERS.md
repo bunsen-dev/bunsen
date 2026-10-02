@@ -134,7 +134,7 @@ Evaluation needs an OpenAI API key (set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY)
 
 ### How the key reaches the scorer
 
-Each LLM-scorer exec receives **exactly one** key variable — `BUNSEN_ANTHROPIC_API_KEY`, `BUNSEN_OPENAI_API_KEY`, or `BUNSEN_GEMINI_API_KEY` — for that criterion's provider, in both `evaluation.container` modes. It is never placed in the dedicated scorer container's base environment and never in the agent container's environment, so:
+Each LLM-scorer exec receives **exactly one** key — the one its criterion's provider needs, in both `evaluation.container` modes — as a **one-time key file**: a mode-600 file owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`, that the scorer reads and deletes before anything else runs (the host deletes it again after the exec). The key is never an environment variable, so `/proc/<pid>/environ`, `run_command` children, and model-authored `run_playwright_script` code cannot read it. It is never placed in the dedicated scorer container's base environment and never in the agent container's environment, so:
 
 - `type: script` criteria never see a platform key (in dedicated mode there is no provider key in the container at all — see [Bring your own grader](#bring-your-own-grader)).
 - With `evaluation.container: agent`, the agent under test no longer sees the platform key (it used to).

@@ -5,8 +5,7 @@ import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import {
   AGENT_PGID_FILE,
-  agentPgidRecordPrefix,
-  reapAgentProcessGroupCommand,
+  scrubAgentKeyFiles,
   buildExecLogs,
   buildWorkspaceMaterializationScript,
   buildWorkspaceSourceAssemblyScript,
@@ -24,6 +23,7 @@ import {
   type PreparedAgentDep,
   type ShadowedSubstrateSource,
 } from './executor.js';
+import { pgidRecordPrefix, reapProcessGroupCommand } from './process-group.js';
 import type {
   AgentDepSpec,
   Criterion,
@@ -737,6 +737,23 @@ describe('fs.cpSync verbatimSymlinks (dep cache contract)', () => {
   });
 });
 
+describe('scrubAgentKeyFiles', () => {
+  it('removes only the key-bearing launch scripts, leaving the marker and artifacts', () => {
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bunsen-run-scrub-'));
+    fs.writeFileSync(path.join(runDir, 'agent-script.sh'), 'export ANTHROPIC_API_KEY="sk-ant-secret"');
+    fs.writeFileSync(path.join(runDir, 'launcher.sh'), '#!/bin/bash');
+    fs.writeFileSync(path.join(runDir, 'agent-complete.marker'), '0');
+    fs.writeFileSync(path.join(runDir, 'logs.txt'), 'keep me');
+    scrubAgentKeyFiles(runDir);
+    expect(fs.existsSync(path.join(runDir, 'agent-script.sh'))).toBe(false);
+    expect(fs.existsSync(path.join(runDir, 'launcher.sh'))).toBe(false);
+    expect(fs.existsSync(path.join(runDir, 'agent-complete.marker'))).toBe(true);
+    expect(fs.existsSync(path.join(runDir, 'logs.txt'))).toBe(true);
+    scrubAgentKeyFiles(runDir); // idempotent
+    fs.rmSync(runDir, { recursive: true, force: true });
+  });
+});
+
 describe('cleanupInternalRunFiles', () => {
   it('removes transient helper files and leaves normal artifacts alone', () => {
     const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bunsen-run-cleanup-'));
@@ -804,7 +821,7 @@ describe('handleSignal scrubs live-key files', () => {
 
 describe('timed-out agent reaping (onTimeout: score)', () => {
   it('launch prefix records the exec process group, exit-code-transparently', () => {
-    const prefix = agentPgidRecordPrefix();
+    const prefix = pgidRecordPrefix(AGENT_PGID_FILE);
     // Records $$'s process group id (field 5 of /proc/$$/stat — no `ps` dependency)
     // to the pgid file, after ensuring the dir exists.
     expect(prefix).toContain('/proc/$$/stat');
@@ -816,7 +833,7 @@ describe('timed-out agent reaping (onTimeout: score)', () => {
   });
 
   it('reap command SIGKILLs the recorded process GROUP, not a bare pid', () => {
-    const cmd = reapAgentProcessGroupCommand();
+    const cmd = reapProcessGroupCommand(AGENT_PGID_FILE, 'agent');
     expect(cmd).toContain(`cat ${AGENT_PGID_FILE}`);
     // The `-- -"$PGID"` form targets the whole group (sparing init + keepalive);
     // a bare `kill "$PGID"` would only hit one process. Guard that it stays a group kill.

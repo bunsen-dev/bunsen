@@ -73,6 +73,12 @@ afterEach(() => {
 });
 
 describe('childEnv', () => {
+  it('strips the key-file path and any *_API_KEY the container env carries', async () => {
+    const { childEnv } = await import('./tools.js');
+    const env = childEnv({ PATH: '/bin', BUNSEN_SCORER_KEY_FILE: '/tmp/k.key', ANTHROPIC_API_KEY: 'agent-key', HOME: '/home/bunsen' });
+    expect(env).toEqual({ PATH: '/bin', HOME: '/home/bunsen' });
+  });
+
   it('strips every platform provider key', () => {
     const env = childEnv({
       PATH: '/usr/bin',

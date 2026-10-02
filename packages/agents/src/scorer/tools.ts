@@ -15,6 +15,7 @@
  * - **Durations are `*_ms`** everywhere.
  */
 
+import { SCORER_KEY_FILE_ENV } from '@bunsen-dev/types';
 import { execFile, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -85,14 +86,16 @@ export function createScorerContext(
 // ============================================================================
 
 /**
- * The environment a scorer subprocess inherits: everything except the platform
- * provider keys. A `run_command` the criterion asks for must never be able to
- * read the key that is paying for the scorer itself.
+ * The environment a scorer subprocess inherits. The platform key itself is
+ * never in the environment (it arrives as a one-time file, see
+ * `readScorerApiKey`); this strips the file's path and any `*_API_KEY` the
+ * container's base env carries (in agent-container mode, the agent's own
+ * keys), so a `run_command` the criterion asks for inherits no credential.
  */
 export function childEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const copy: NodeJS.ProcessEnv = { ...env };
   for (const name of Object.keys(copy)) {
-    if (name.startsWith('BUNSEN_') && name.endsWith('_API_KEY')) delete copy[name];
+    if (name === SCORER_KEY_FILE_ENV || name.endsWith('_API_KEY')) delete copy[name];
   }
   return copy;
 }

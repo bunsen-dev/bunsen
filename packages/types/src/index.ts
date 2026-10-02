@@ -104,7 +104,7 @@ export {
   SCORER_PROVIDERS,
   SCORER_MODEL_PATTERN,
   SCORER_MODEL_EXAMPLE,
-  SCORER_PROVIDER_KEY_ENV,
+  SCORER_KEY_FILE_ENV,
   ScorerModelRefError,
   isScorerProvider,
   parseScorerModelRef,

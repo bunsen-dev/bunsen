@@ -74,7 +74,7 @@ Instead, when scorer/supervisor bundle code needs a small pure utility:
 
 ## Architecture
 
-- `src/common/` — `model.ts`, the one provider-agnostic model layer: `createModel('<provider>/<model>', { apiKey, headers })` over the Vercel AI SDK's Anthropic, OpenAI and Google providers, plus `parseModelRef` and `resolveApiKey`. The key is always passed explicitly — never read from a provider SDK's own default env var. Shared by the scorer bundle and the scaffolder.
+- `src/common/` — `model.ts`, the one provider-agnostic model layer: `createModel('<provider>/<model>', { apiKey, headers })` over the Vercel AI SDK's Anthropic, OpenAI and Google providers, plus `parseModelRef`. The key is always passed explicitly — never read from a provider SDK's own default env var; the scorer bundle reads it from the one-time key file the host delivers (`readScorerApiKey` in `scorer/config.ts`), never from an environment variable. Shared by the scorer bundle and the scaffolder.
 - `src/scaffolder/` — host-side `entrypoint.invoke` inference for `bn agents infer-invoke` (exported via `src/index.ts`; not a container bundle)
 - `src/scorer/` — grades one criterion (`judge`, `agent`, `browser-agent`) or writes the run's `report`:
   - `config.ts` — every limit with the reason it has that value, the container paths, and `loadScorerConfig()` (the bundle's own guard over the config the runtime wrote; it never applies a default model)
@@ -82,7 +82,7 @@ Instead, when scorer/supervisor bundle code needs a small pure utility:
   - `traces.ts` — readers for the captured agent conversations (`traces/threads/`)
   - `prompts.ts` — `systemPrompt()` (policy only, replaced wholesale by `scorer.systemPrompt`) and `userPrompt()` (the invariant turn: criterion, allowed scores, where the evidence is, the evidence, dependency results, the verdict instruction)
   - `tools.ts` / `browser-tools.ts` — the exploration tools, the two browser tools, and the verdict tools (`submit_score`, `submit_report`), which record into runner state
-  - `runner.ts` — `runScorer()`: one capped loop, a state-based stop condition, one forced submit, then `ScorerError` rather than a synthesized score
+  - `runner.ts` — `runScorer()`: one capped loop, a state-based stop condition, one verdict-only call (the submit tool is the only one offered and the user turn asks for it), then `ScorerError` rather than a synthesized score. Tool choice is never forced: current Claude models reject `tool_choice: tool` / `any`, so narrowing the tool set is the one mechanism that works on every provider
   - `standalone.ts` — the bundle entry: parse `--config`, build the model, run, print one JSON line
   - Unit-tested with vitest and no API key (a `MockLanguageModelV4` stands in for the provider): `npx vitest run src/scorer`
 - `src/supervisor/` — monitors agent execution and can intervene. It keeps its **own** `@anthropic-ai/sdk` client under `src/supervisor/` and does not use `common/model.ts`; moving it onto the shared model layer is deliberately separate work (it is Anthropic-only and never grades anything, so provider choice does not affect scores)

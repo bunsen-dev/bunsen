@@ -160,7 +160,7 @@ function toolCallModel(input: unknown): MockLanguageModelV4 {
   });
 }
 
-/** A model that ignores the forced tool choice and answers with prose. */
+/** A model that answers with prose instead of calling the tool. */
 function textModel(text: string): MockLanguageModelV4 {
   return new MockLanguageModelV4({
     doGenerate: async () => ({
@@ -199,7 +199,7 @@ describe('scaffoldInvokeTemplate', () => {
     expect(createModelMock).toHaveBeenCalledWith(DEFAULT_SCAFFOLD_MODEL, { apiKey: 'sk-test' });
   });
 
-  it('forces the submit tool, caps the step budget, and sends no sampling parameters', async () => {
+  it('offers only the submit tool (never forced), caps the step budget, and sends no sampling parameters', async () => {
     const model = toolCallModel({ invoke: ['{prompt}'], reasoning: 'Bare positional.' });
     createModelMock.mockReturnValue(model);
 
@@ -208,7 +208,8 @@ describe('scaffoldInvokeTemplate', () => {
     expect(createModelMock).toHaveBeenCalledWith('openai/gpt-5.6', { apiKey: 'sk-test' });
     expect(model.doGenerateCalls).toHaveLength(1);
     const call = model.doGenerateCalls[0];
-    expect(call.toolChoice).toEqual({ type: 'tool', toolName: 'submit_invoke_template' });
+    // Never forced: current Claude models reject `tool_choice: tool` / `any`.
+    expect(call.toolChoice).toEqual({ type: 'auto' });
     expect(call.tools?.map((t) => t.name)).toEqual(['submit_invoke_template']);
     expect(call.maxOutputTokens).toBe(2048);
     expect(call.temperature).toBeUndefined();
@@ -225,12 +226,35 @@ describe('scaffoldInvokeTemplate', () => {
     ).rejects.toThrow(/did not return a valid submit_invoke_template call: .*must contain a prompt placeholder/);
   });
 
-  it('fails loudly when the model answers with prose instead of the tool call', async () => {
-    createModelMock.mockReturnValue(textModel('I think you should run `codex exec "<prompt>"`.'));
+  it('asks once more when the model answers in prose, then fails loudly if it still does', async () => {
+    const model = textModel('I think you should run `codex exec "<prompt>"`.');
+    createModelMock.mockReturnValue(model);
 
     await expect(scaffoldInvokeTemplate({ agent: agent(), apiKey: 'sk-test' })).rejects.toThrow(
-      'The scaffolder model did not return a submit_invoke_template tool call.',
+      /did not return a valid submit_invoke_template call: it answered in prose/,
     );
+    expect(model.doGenerateCalls).toHaveLength(2);
+    const retry = JSON.stringify(model.doGenerateCalls[1].prompt);
+    expect(retry).toContain('codex exec');
+    expect(retry).toContain('Call `submit_invoke_template` now');
+  });
+
+  it('recovers when the second ask produces the tool call', async () => {
+    let call = 0;
+    const toolModel = toolCallModel({ invoke: ['exec', '{prompt}'], reasoning: 'From the examples.' });
+    const prose = textModel('Here is my suggestion: codex exec "<prompt>"');
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        call += 1;
+        return call === 1 ? prose.doGenerate(options) : toolModel.doGenerate(options);
+      },
+    });
+    createModelMock.mockReturnValue(model);
+
+    const result = await scaffoldInvokeTemplate({ agent: agent(), apiKey: 'sk-test' });
+
+    expect(result.invoke).toEqual(['exec', '{prompt}']);
+    expect(model.doGenerateCalls).toHaveLength(2);
   });
 
   it('never calls a model without a key', async () => {

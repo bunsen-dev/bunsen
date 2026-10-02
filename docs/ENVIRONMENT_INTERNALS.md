@@ -300,12 +300,11 @@ The platform's own provider keys are kept distinct from the agent's. They're res
 The `BUNSEN_`-prefixed form lets the platform use a different key than the agent under
 test gets via `defaults.passEnv`.
 
-A resolved key is passed **directly to the platform exec**, never set on the container's
-base environment. Each LLM-scorer exec receives exactly one `BUNSEN_<PROVIDER>_API_KEY`
-(`BUNSEN_ANTHROPIC_API_KEY` / `BUNSEN_OPENAI_API_KEY` / `BUNSEN_GEMINI_API_KEY`) — the one
-its criterion's `scorer.model` needs — and that holds in **both** `evaluation.container`
-modes, so the agent-under-test never sees the platform's key and neither do `type: script`
-criteria. The scorer strips these variables from every subprocess it spawns. The supervisor
+A resolved key is passed **to the platform exec alone**, never set on any environment.
+Each LLM-scorer exec receives exactly one key — the one its criterion's `scorer.model`
+needs — as a **one-time key file**: a mode-600 file owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`, that the scorer reads and deletes before anything else runs (the host deletes it again after the exec). The key is never an environment variable, so `/proc/<pid>/environ`, `run_command` children, and model-authored `run_playwright_script` code cannot read it. That holds in **both** `evaluation.container` modes, so the
+agent-under-test never sees the platform's key and neither do `type: script` criteria. The
+scorer also strips every `*_API_KEY` from the subprocesses it spawns. The supervisor
 stays Anthropic-only and receives `BUNSEN_ANTHROPIC_API_KEY` per exec the same way.
 
 ### Precedence (the agent's own env)

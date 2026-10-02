@@ -120,7 +120,7 @@ export {
   PROVIDER_LABELS,
   resolvePlatformKeys,
   platformKeyHint,
-  scorerExecKeyEnv,
+  scorerKeyFor,
 } from './platform-keys.js';
 export type { PlatformKeys, ResolvedPlatformKey } from './platform-keys.js';
 

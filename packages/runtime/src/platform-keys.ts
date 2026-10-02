@@ -6,16 +6,12 @@
  *
  * One function resolves every provider from the host env with a fixed
  * fallback order (first match wins). The resolved key is delivered to a
- * scorer exec under the single `BUNSEN_<PROVIDER>_API_KEY` name the bundle
- * reads (`SCORER_PROVIDER_KEY_ENV`), and only for that criterion's provider —
- * never in a container's base env, so `type: script` criteria never see it.
+ * scorer exec as a one-time key file (`runLLMScorer`), only for that
+ * criterion's provider — never in any environment, so `type: script` criteria,
+ * scorer subprocesses, and `/proc` never see it.
  */
 
-import {
-  SCORER_PROVIDERS,
-  SCORER_PROVIDER_KEY_ENV,
-  type ScorerProvider,
-} from '@bunsen-dev/types';
+import { SCORER_PROVIDERS, type ScorerProvider } from '@bunsen-dev/types';
 import type { ScorerProviderRequirement } from './evaluation-coordinator.js';
 
 /**
@@ -73,18 +69,19 @@ export function platformKeyHint(provider: ScorerProvider): string {
 }
 
 /**
- * The exact env entry a scorer exec receives for `provider`:
- * `{ BUNSEN_<PROVIDER>_API_KEY: <value> }`. Throws if the key is not resolved —
- * the preflight is expected to have caught that before any container work.
+ * The resolved key a scorer exec for `provider` receives. Throws if the key is
+ * not resolved — the preflight is expected to have caught that before any
+ * container work. The value travels as a one-time file, never an env var
+ * (`runLLMScorer`).
  */
-export function scorerExecKeyEnv(provider: ScorerProvider, keys: PlatformKeys): Record<string, string> {
+export function scorerKeyFor(provider: ScorerProvider, keys: PlatformKeys): ResolvedPlatformKey {
   const key = keys[provider];
   if (!key) {
     throw new Error(
       `No ${PROVIDER_LABELS[provider]} API key is available for the scorer (${platformKeyHint(provider)}).`,
     );
   }
-  return { [SCORER_PROVIDER_KEY_ENV[provider]]: key.value };
+  return key;
 }
 
 /** `an Anthropic` / `an OpenAI` / `a Google (Gemini)`. */

@@ -80,15 +80,12 @@ export function parseScorerModelRef(ref: string): ScorerModelRef {
 }
 
 /**
- * The environment variable each provider's API key is delivered to the scorer
- * process under. The host resolves the key from its own env (with fallbacks,
- * see `resolvePlatformKeys` in `@bunsen-dev/runtime`) and sets exactly this
- * variable on the criterion's exec — never in a container's base env.
+ * The environment variable that names the one-time file a scorer exec reads
+ * its provider API key from. The host writes the key as a mode-600 file owned
+ * by the exec user (never into any environment, so `/proc/<pid>/environ`,
+ * subprocesses, and model-authored code cannot see it); the scorer reads and
+ * deletes the file before anything else runs.
  *
  * @internal
  */
-export const SCORER_PROVIDER_KEY_ENV: Readonly<Record<ScorerProvider, string>> = Object.freeze({
-  anthropic: 'BUNSEN_ANTHROPIC_API_KEY',
-  openai: 'BUNSEN_OPENAI_API_KEY',
-  google: 'BUNSEN_GEMINI_API_KEY',
-});
+export const SCORER_KEY_FILE_ENV = 'BUNSEN_SCORER_KEY_FILE';

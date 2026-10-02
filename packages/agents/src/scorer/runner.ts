@@ -1,19 +1,24 @@
 /**
  * One runner, four shapes (DESIGN.md D4).
  *
- * `judge` is a single forced call over inlined evidence; `agent`,
- * `browser-agent` and `report` run a capped tool-calling loop that stops the
- * moment a verdict is **recorded** — not on a raw tool call, so a rejected
- * verdict feeds its error back and the model gets to fix it. If the loop ends
- * with no verdict, one forced call closes it out. If that also produces
- * nothing, the criterion errors: the scorer never synthesizes a score.
+ * `judge` is a single call over inlined evidence with `submit_score` as its
+ * only tool; `agent`, `browser-agent` and `report` run a capped tool-calling
+ * loop that stops the moment a verdict is **recorded** — not on a raw tool
+ * call, so a rejected verdict feeds its error back and the model gets to fix
+ * it. If the loop ends with no verdict, one verdict-only call closes it out:
+ * the submit tool is the only one offered and the user turn asks for it. If
+ * that also produces nothing, the criterion errors: the scorer never
+ * synthesizes a score.
+ *
+ * Tool choice is never forced (`toolChoice: tool` / `required`): current
+ * Claude models reject `tool_choice: tool` and `any` outright, so the one
+ * uniform mechanism is to narrow the tool set and say so in the prompt.
  */
 
 import * as fs from 'node:fs';
 import {
   APICallError,
   RetryError,
-  ToolChoiceViolationError,
   generateText,
   stepCountIs,
   type LanguageModel,
@@ -60,11 +65,11 @@ export interface RunScorerOptions {
   log?: (line: string) => void;
 }
 
-const FORCE_SUBMIT_SCORE =
-  'Submit now from what you have. If you could not get the evidence this criterion needs, do not guess: score it as unmet and say what was missing.';
+const SUBMIT_NOW_SCORE =
+  'Submit now from what you have. If you could not get the evidence this criterion needs, do not guess: score it as unmet and say what was missing. `submit_score` is the only tool available.';
 
-const FORCE_SUBMIT_REPORT =
-  'Submit the report now from what you have. If you could not get the evidence you needed, do not guess: say what was missing.';
+const SUBMIT_NOW_REPORT =
+  'Submit the report now from what you have. If you could not get the evidence you needed, do not guess: say what was missing. `submit_report` is the only tool available.';
 
 /**
  * Shapes of provider credentials a tool result can plausibly contain (a scorer
@@ -86,11 +91,11 @@ export function redactSecretPatterns(text: string): string {
 }
 
 /**
- * Chars of transcript a forced verdict call may resend after the provider
+ * Chars of transcript the verdict-only call may resend after the provider
  * rejected the full one as too long: four tool results' worth. Enough for the
  * model to recall what it last saw; small enough to fit any supported context.
  */
-const FORCED_TRANSCRIPT_BUDGET_CHARS = 4 * MAX_TOOL_RESULT_CHARS;
+const VERDICT_TRANSCRIPT_BUDGET_CHARS = 4 * MAX_TOOL_RESULT_CHARS;
 
 function toolCallIds(message: ModelMessage): string[] {
   if (message.role !== 'assistant' || typeof message.content === 'string') return [];
@@ -100,7 +105,7 @@ function toolCallIds(message: ModelMessage): string[] {
 }
 
 /**
- * The transcript a forced verdict call may safely resend.
+ * The transcript the verdict-only call may safely resend.
  *
  * - A trailing assistant message whose tool calls were never answered is
  *   dropped: the SDK executes tools only when a step ends on `stop` or
@@ -111,7 +116,7 @@ function toolCallIds(message: ModelMessage): string[] {
  *   overflowed, so only its most recent messages (within `budgetChars`) are
  *   kept, cut at an assistant boundary so no tool result is orphaned.
  */
-export function transcriptForForcedCall(
+export function transcriptForVerdictCall(
   transcript: readonly ModelMessage[],
   options: { overflowed: boolean; budgetChars?: number },
 ): { messages: ModelMessage[]; dropped: number } {
@@ -126,7 +131,7 @@ export function transcriptForForcedCall(
   }
   if (!options.overflowed) return { messages, dropped: transcript.length - messages.length };
 
-  const budget = options.budgetChars ?? FORCED_TRANSCRIPT_BUDGET_CHARS;
+  const budget = options.budgetChars ?? VERDICT_TRANSCRIPT_BUDGET_CHARS;
   let chars = 0;
   let start = messages.length;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -161,7 +166,7 @@ function messageOf(error: unknown): string {
 
 /**
  * A provider-side "your prompt is too long" failure. It is not a bug in the
- * criterion, so it goes to the forced submit rather than erroring the run:
+ * criterion, so it goes to the verdict-only call rather than erroring the run:
  * the model can still commit to a verdict from what it already read.
  */
 function isContextWindowError(error: unknown): boolean {
@@ -238,7 +243,7 @@ export async function runScorer(config: ScorerConfig, options: RunScorerOptions)
     },
   ];
 
-  /** Every response message of every step, so the forced call sees the whole transcript. */
+  /** Every response message of every step, so the verdict-only call sees the whole transcript. */
   const transcript: ModelMessage[] = [];
 
   const onStepFinish = (step: StepResult<ToolSet>): void => {
@@ -263,7 +268,7 @@ export async function runScorer(config: ScorerConfig, options: RunScorerOptions)
 
   /** State-based, so a rejected verdict keeps the loop alive for a repair step. */
   const verdictRecorded: StopCondition<ToolSet> = () => state.verdict !== null;
-  /** Set when the provider rejected the full transcript, so the forced call sends less. */
+  /** Set when the provider rejected the full transcript, so the verdict-only call sends less. */
   let overflowed = false;
 
   try {
@@ -275,7 +280,6 @@ export async function runScorer(config: ScorerConfig, options: RunScorerOptions)
               instructions,
               messages: initialMessages,
               tools,
-              toolChoice: { type: 'tool', toolName: verdictTool },
               stopWhen: stepCountIs(1),
               maxOutputTokens,
               onStepFinish,
@@ -299,23 +303,21 @@ export async function runScorer(config: ScorerConfig, options: RunScorerOptions)
               'reduce `evidence` or choose a model with a larger context',
           );
         }
-        log(`[scorer] the context window filled up (${messageOf(error)}); forcing a verdict from a shortened transcript.`);
-      } else if (ToolChoiceViolationError.isInstance(error)) {
-        log(`[scorer] the model did not call ${verdictTool} (${messageOf(error)}); forcing a verdict.`);
+        log(`[scorer] the context window filled up (${messageOf(error)}); asking for a verdict from a shortened transcript.`);
       } else {
         throw error;
       }
     }
 
     if (state.verdict === null) {
-      log(`[scorer] no verdict recorded; forcing ${verdictTool}.`);
-      const resend = transcriptForForcedCall(transcript, { overflowed });
+      log(`[scorer] no verdict recorded; asking again with ${verdictTool} as the only tool.`);
+      const resend = transcriptForVerdictCall(transcript, { overflowed });
       if (resend.dropped > 0) {
         log(`[scorer] resending ${resend.messages.length} of ${transcript.length} transcript messages (${resend.dropped} dropped).`);
       }
-      const forceText = config.type === 'report' ? FORCE_SUBMIT_REPORT : FORCE_SUBMIT_SCORE;
+      const submitNow = config.type === 'report' ? SUBMIT_NOW_REPORT : SUBMIT_NOW_SCORE;
       try {
-        const forced = await generateText({
+        const verdictCall = await generateText({
           model: options.model,
           instructions,
           messages: [
@@ -325,25 +327,26 @@ export async function runScorer(config: ScorerConfig, options: RunScorerOptions)
               role: 'user',
               content:
                 resend.dropped > 0
-                  ? `${forceText} (Earlier exploration — ${resend.dropped} messages — was dropped to fit the context window.)`
-                  : forceText,
+                  ? `${submitNow} (Earlier exploration — ${resend.dropped} messages — was dropped to fit the context window.)`
+                  : submitNow,
             },
           ],
           tools,
-          toolChoice: { type: 'tool', toolName: verdictTool },
+          // Only the verdict tool is offered; exploration is over.
+          activeTools: [verdictTool],
           stopWhen: stepCountIs(1),
           maxOutputTokens,
           onStepFinish,
         });
-        logWarnings(forced.warnings);
+        logWarnings(verdictCall.warnings);
       } catch (error) {
         throw new ScorerError(
-          `no verdict: the forced ${verdictTool} call failed: ${messageOf(error)}`,
+          `no verdict: the ${verdictTool}-only call failed: ${messageOf(error)}`,
         );
       }
       if (state.verdict === null) {
         throw new ScorerError(
-          `no verdict: ${verdictTool} was not called, or its input was rejected, on the forced call`,
+          `no verdict: ${verdictTool} was not called, or its input was rejected, when it was the only tool offered`,
         );
       }
     }

@@ -19,12 +19,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
-import {
-  parseScorerModelRef,
-  SCORER_PROVIDER_KEY_ENV,
-  type ScorerModelRef,
-  type ScorerProvider,
-} from '@bunsen-dev/types';
+import { parseScorerModelRef, type ScorerModelRef, type ScorerProvider } from '@bunsen-dev/types';
 
 export { parseScorerModelRef as parseModelRef, type ScorerModelRef, type ScorerProvider };
 
@@ -55,23 +50,4 @@ export function createModel(ref: string | ScorerModelRef, options: CreateModelOp
     case 'google':
       return createGoogleGenerativeAI({ apiKey, headers })(parsed.modelId);
   }
-}
-
-/**
- * Read the API key for `provider` from the scorer process's environment
- * (`BUNSEN_ANTHROPIC_API_KEY` / `BUNSEN_OPENAI_API_KEY` / `BUNSEN_GEMINI_API_KEY`).
- * The host sets exactly one of these per exec, for the criterion's provider.
- *
- * Throws naming the missing variable.
- */
-export function resolveApiKey(
-  provider: ScorerProvider,
-  env: Record<string, string | undefined> = process.env,
-): string {
-  const name = SCORER_PROVIDER_KEY_ENV[provider];
-  const value = env[name];
-  if (!value) {
-    throw new Error(`${name} is not set; a ${provider} scorer model needs it in the scorer process environment.`);
-  }
-  return value;
 }

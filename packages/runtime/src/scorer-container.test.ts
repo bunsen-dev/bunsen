@@ -835,3 +835,54 @@ describe('redactSecrets', () => {
     expect(redactSecrets('anything', [])).toBe('anything');
   });
 });
+
+// =============================================================================
+// createStreamScrubber — the live echo must not leak a secret split across chunks
+// =============================================================================
+
+import { createStreamScrubber, scorerExecScript, SCORER_PGID_FILE } from './scorer-container.js';
+
+describe('createStreamScrubber', () => {
+  const key = 'sk-ant-api03-SECRETVALUE12345';
+
+  it('redacts a secret that straddles two chunks and never emits a fragment of it', () => {
+    const s = createStreamScrubber([key]);
+    const a = s.push('export KEY="sk-ant-api03-SEC');
+    const b = s.push('RETVALUE12345" done\n');
+    const out = a + b + s.flush();
+    expect(out).toBe('export KEY="[redacted]" done\n');
+    expect(a).not.toContain('sk-ant');
+    expect(a + b).not.toContain('SECRET');
+  });
+
+  it('holds back a chunk tail that could begin a secret, then releases it when it does not', () => {
+    const s = createStreamScrubber([key]);
+    const a = s.push('value is sk-ant');
+    expect(a).toBe('value is ');
+    const b = s.push('-not-the-key actually\n');
+    expect(a + b + s.flush()).toBe('value is sk-ant-not-the-key actually\n');
+  });
+
+  it('passes ordinary text through unchanged, chunk by chunk', () => {
+    const s = createStreamScrubber([key]);
+    expect(s.push('[scorer] step 1: read_file\n') + s.push('[scorer]   read_file → ok\n') + s.flush()).toBe(
+      '[scorer] step 1: read_file\n[scorer]   read_file → ok\n',
+    );
+  });
+
+  it('flush redacts whatever was still pending', () => {
+    const s = createStreamScrubber([key]);
+    const a = s.push(`tail ${key.slice(0, 10)}`);
+    expect(a).toBe('tail ');
+    expect(s.push(key.slice(10)) + s.flush()).toBe('[redacted]');
+  });
+});
+
+describe('scorerExecScript', () => {
+  it('records the process group before exec-ing the bundle', () => {
+    const script = scorerExecScript('/bunsen/runtime/node', '/bunsen/scorer-output/scorer-config.json');
+    expect(script).toContain(`> ${SCORER_PGID_FILE}`);
+    expect(script).toContain("/proc/$$/stat");
+    expect(script).toEndWith("exec '/bunsen/runtime/node' /bunsen/lib/scorer.cjs --config '/bunsen/scorer-output/scorer-config.json'");
+  });
+});

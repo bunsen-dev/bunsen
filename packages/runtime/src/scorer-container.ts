@@ -14,15 +14,16 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import type {
-  ScorerConfig,
-  ScorerOutput,
-  ScriptResultArtifact,
-  RunPlatform,
+import { randomUUID } from 'node:crypto';
+import {
+  SCORER_KEY_FILE_ENV,
+  type ScorerConfig,
+  type ScorerOutput,
+  type ScriptResultArtifact,
+  type RunPlatform,
 } from '@bunsen-dev/types';
 import {
   createPersistentContainer,
-  execInContainer,
   execShellInContainer,
   inspectImageEnvPath,
   writeFileInContainer,
@@ -30,6 +31,7 @@ import {
   ExecTimeoutError,
   type PersistentContainer,
 } from './container.js';
+import { pgidRecordPrefix, reapProcessGroupCommand } from './process-group.js';
 
 // =============================================================================
 // Types
@@ -560,7 +562,7 @@ export async function runCodeScorer(
     const execOptions = buildScorerExecOptions(scorerContainer, SCRIPT_SCORER_ENV);
     const result = await execShellInContainer(
       container,
-      code,
+      `${pgidRecordPrefix(SCORER_PGID_FILE)}${code}`,
       {
         workdir: '/workspace',
         timeout: timeoutMs,
@@ -576,6 +578,9 @@ export async function runCodeScorer(
     // Timeout or other execution error
     const message = error instanceof Error ? error.message : String(error);
     const isTimeout = error instanceof ExecTimeoutError;
+    // A timed-out script keeps running otherwise (Docker only abandons the
+    // exec) — kill its process group before the next criterion.
+    if (isTimeout) await reapTimedOutScorer(scorerContainer, criterion);
 
     const logAbs = path.join(runDir, 'evaluation', 'criteria', `${slug}.log`);
     fs.mkdirSync(path.dirname(logAbs), { recursive: true });
@@ -873,13 +878,82 @@ export function redactSecrets(text: string, secrets: readonly string[]): string 
   return out;
 }
 
+/**
+ * Scrub secrets from a stream whose chunk boundaries are arbitrary. A secret
+ * split across two chunks matches in neither, so `push` holds back any tail
+ * that is a prefix of a secret until the next chunk (or `flush`) decides.
+ */
+export function createStreamScrubber(secrets: readonly string[]): {
+  push(chunk: string): string;
+  flush(): string;
+} {
+  const live = secrets.filter((s) => s.length >= 8);
+  let pending = '';
+  return {
+    push(chunk) {
+      pending += chunk;
+      // Earliest point from which the remaining text could still be the start
+      // of a secret — everything before it is safe to emit once scrubbed.
+      const longest = Math.max(0, ...live.map((s) => s.length));
+      let hold = pending.length;
+      for (let i = Math.max(0, pending.length - longest + 1); i < pending.length; i++) {
+        const tail = pending.slice(i);
+        if (live.some((s) => s.startsWith(tail))) {
+          hold = i;
+          break;
+        }
+      }
+      const out = redactSecrets(pending.slice(0, hold), live);
+      pending = pending.slice(hold);
+      return out;
+    },
+    flush() {
+      const out = redactSecrets(pending, live);
+      pending = '';
+      return out;
+    },
+  };
+}
+
+/** Where a scorer exec records its process group, so a timed-out one can be reaped. */
+export const SCORER_PGID_FILE = '/bunsen/scorer-output/scorer.pgid';
+
+/** The shell line that runs the scorer bundle after recording its process group. */
+export function scorerExecScript(nodeCmd: string, configContainerPath: string): string {
+  return `${pgidRecordPrefix(SCORER_PGID_FILE)}exec '${nodeCmd}' /bunsen/lib/scorer.cjs --config '${configContainerPath}'`;
+}
+
+/**
+ * SIGKILL a timed-out scorer's process group before the next criterion runs —
+ * Docker only abandons the exec, so without this the scorer keeps making paid
+ * requests and writing into the shared workspace and screenshot dir.
+ */
+async function reapTimedOutScorer(
+  scorerContainer: ScorerContainerInfo,
+  label: string,
+  onLog?: (msg: string) => void,
+): Promise<void> {
+  try {
+    const result = await execShellInContainer(
+      scorerContainer.container,
+      reapProcessGroupCommand(SCORER_PGID_FILE, label),
+      { timeout: 10_000, user: scorerContainer.execUser },
+    );
+    onLog?.(`[scorer:${label}] ${result.stdout.trim() || 'reaped timed-out scorer'}`);
+  } catch (err) {
+    onLog?.(
+      `[scorer:${label}] Warning: failed to reap the timed-out scorer: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export async function runLLMScorer(
   scorerContainer: ScorerContainerInfo,
   options: {
     /** Fully resolved scorer config (model already `<provider>/<model>`). */
     config: ScorerConfig;
-    /** The single provider key var this criterion's model needs. */
-    apiKey: { name: string; value: string };
+    /** The provider key this criterion's model needs (delivered as a one-time file). */
+    apiKey: string;
     /** Node command path ('node' or '/bunsen/runtime/node') */
     nodeCmd: string;
     /** Timeout in milliseconds */
@@ -900,7 +974,7 @@ export async function runLLMScorer(
 ): Promise<LLMScorerRun> {
   const { container } = scorerContainer;
   const { config, apiKey, nodeCmd, timeout, proxyEnv, runDir, onLog } = options;
-  const secrets = [apiKey.value, ...(options.redact ?? [])];
+  const secrets = [apiKey, ...(options.redact ?? [])];
   const scrub = (text: string) => redactSecrets(text, secrets);
   const criterion = config.id;
   const slug = slugifyCriterion(criterion);
@@ -914,10 +988,26 @@ export async function runLLMScorer(
     mode: '644',
   });
 
-  // Exec-scoped env: trace attribution + exactly one provider key + proxy vars.
+  // The key goes in as a one-time file owned by the exec user (mode 600),
+  // never an env var: `/proc/<pid>/environ` keeps the initial environment for
+  // the life of the process, where any `read_file` or model-authored
+  // Playwright code could find it. The bundle reads and unlinks the file
+  // before anything else runs; the host removes it after the exec regardless.
+  const keyFile = `/tmp/bunsen-scorer-${randomUUID()}.key`;
+  await writeFileInContainer(container, keyFile, `${apiKey}\n`, {
+    mode: '600',
+    user: scorerContainer.execUser,
+  });
+  const removeKeyFile = () =>
+    execShellInContainer(container, `rm -f '${keyFile}'`, {
+      timeout: 5_000,
+      user: scorerContainer.execUser,
+    }).catch(() => undefined);
+
+  // Exec-scoped env: trace attribution + the key file's path + proxy vars.
   const env: Record<string, string> = {
     BUNSEN_TRACE_SOURCE: `scorer:${criterion}`,
-    [apiKey.name]: apiKey.value,
+    [SCORER_KEY_FILE_ENV]: keyFile,
     ...(proxyEnv || {}),
   };
   const execOptions = buildScorerExecOptions(scorerContainer, env);
@@ -926,12 +1016,19 @@ export async function runLLMScorer(
   // split across two chunks would survive a per-chunk scrub. The live echo is
   // scrubbed per chunk (best effort) because it cannot wait for the end.
   const stderrChunks: string[] = [];
+  // The live echo cannot wait for the end, so it is scrubbed through a
+  // boundary-aware scrubber (a secret split across two chunks is held back).
+  const echo = createStreamScrubber(secrets);
+  const emitEcho = (text: string) => {
+    const line = text.trim();
+    if (line) onLog?.(`[scorer:${criterion}] ${line}`);
+  };
   let fullStderr = '';
   let run: LLMScorerRun;
   try {
-    const result = await execInContainer(
+    const result = await execShellInContainer(
       container,
-      [nodeCmd, '/bunsen/lib/scorer.cjs', '--config', configContainerPath],
+      scorerExecScript(nodeCmd, configContainerPath),
       {
         env: execOptions.env,
         user: execOptions.user,
@@ -939,11 +1036,12 @@ export async function runLLMScorer(
         onOutput: (chunk, stream) => {
           if (stream === 'stderr') {
             stderrChunks.push(chunk);
-            onLog?.(`[scorer:${criterion}] ${scrub(chunk).trim()}`);
+            emitEcho(echo.push(chunk));
           }
         },
       }
     );
+    emitEcho(echo.flush());
     fullStderr = result.stderr || stderrChunks.join('');
     run = interpretScorerExec({
       exitCode: result.exitCode,
@@ -952,10 +1050,14 @@ export async function runLLMScorer(
       timeoutMs: timeout,
     });
   } catch (error) {
+    emitEcho(echo.flush());
     // ExecTimeoutError.stderr is the same accumulation the chunks hold — use
     // one or the other, never both.
     fullStderr = error instanceof ExecTimeoutError && error.stderr ? error.stderr : stderrChunks.join('');
     run = interpretScorerExec({ error, timeoutMs: timeout });
+    if (error instanceof ExecTimeoutError) await reapTimedOutScorer(scorerContainer, criterion, onLog);
+  } finally {
+    await removeKeyFile();
   }
   if (!run.ok) run = { ...run, error: scrub(run.error) };
   // The verdict text is persisted to evaluation.json and the manifest, and an

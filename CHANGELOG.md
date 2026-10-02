@@ -42,11 +42,14 @@ version and date and a fresh `[Unreleased]` is started.
   an error (with the reason in `error` and a log at `evaluation/criteria/<id>.log`), is excluded from
   the weighted score, and does not trip its own gate; the rest of the evaluation continues and is
   saved. Previously a timeout scored 0 and a crash discarded every sibling result.
-- **The platform API key never sits in a container's base environment.** It is delivered to each
-  LLM-scorer exec as exactly one `BUNSEN_<PROVIDER>_API_KEY`, for that criterion's provider, in both
-  `evaluation.container` modes. `type: script` criteria no longer see it, and in
-  `evaluation.container: agent` mode the agent under test no longer sees it either. The scorer also
-  strips these variables from every subprocess it spawns.
+- **The platform API key never sits in any environment.** It is delivered to each LLM-scorer exec
+  as a one-time key file (mode 600, owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`) that
+  the scorer reads and deletes before anything else runs, for that criterion's provider only, in both
+  `evaluation.container` modes. `type: script` criteria no longer see it, in
+  `evaluation.container: agent` mode the agent under test no longer sees it, and because it is never
+  an environment variable, `/proc/<pid>/environ`, scorer subprocesses, and model-authored Playwright
+  code cannot read it either. The agent's own launch scripts (`agent-script.sh`, `launcher.sh`, which
+  export its keys) are deleted the moment the agent phase ends, so no scorer can read them.
 - No sampling parameters are sent to scorer models (was `temperature: 0`, which current Claude
   models reject).
 - `bn run` exits **5** when at least one LLM-backed criterion exists and every one of them errored
@@ -95,8 +98,14 @@ version and date and a fresh `[Unreleased]` is started.
   instantly), and a verdict outside the criterion's `scores` is rejected and re-requested instead
   of being silently snapped.
 - Scorer models that reject `temperature` (current Claude models) work.
+- Scorers and `bn agents infer-invoke` work on current Claude models, which reject forced tool
+  choice (`tool_choice: tool` / `any`). The verdict tool is now the only tool offered on the final
+  call, on every provider, instead of being forced.
 - An aggregate-only rubric with an `evaluation.report` no longer silently skips the report.
 - `bn runs open` shows errored criteria instead of dropping every criterion with a null score.
+- A timed-out scorer (LLM-backed or `script`) is now killed — its whole process group — before the
+  next criterion runs. Previously Docker only abandoned the exec and the scorer kept running, making
+  paid requests and writing into the shared workspace and screenshot directory.
 
 ### Removed
 

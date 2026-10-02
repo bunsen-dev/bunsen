@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScorerModelRefError } from '@bunsen-dev/types';
-import { createModel, parseModelRef, resolveApiKey } from './model.js';
+import { createModel, parseModelRef } from './model.js';
 
 // Each provider factory is mocked so we can assert exactly what `createModel`
 // hands it: the explicit API key (never a provider SDK's own env var) and the
@@ -56,33 +56,6 @@ describe('parseModelRef', () => {
   });
 });
 
-describe('resolveApiKey', () => {
-  it('reads the provider-specific BUNSEN_ variable the host sets on the exec', () => {
-    const env = {
-      BUNSEN_ANTHROPIC_API_KEY: 'sk-ant',
-      BUNSEN_OPENAI_API_KEY: 'sk-oai',
-      BUNSEN_GEMINI_API_KEY: 'sk-gem',
-    };
-    expect(resolveApiKey('anthropic', env)).toBe('sk-ant');
-    expect(resolveApiKey('openai', env)).toBe('sk-oai');
-    expect(resolveApiKey('google', env)).toBe('sk-gem');
-  });
-
-  it('ignores the plain provider vars — only the BUNSEN_ form is delivered to a scorer', () => {
-    expect(() => resolveApiKey('openai', { OPENAI_API_KEY: 'sk-oai' })).toThrow(
-      /BUNSEN_OPENAI_API_KEY is not set/,
-    );
-  });
-
-  it('throws naming the missing variable, per provider', () => {
-    expect(() => resolveApiKey('anthropic', {})).toThrow(/BUNSEN_ANTHROPIC_API_KEY is not set/);
-    expect(() => resolveApiKey('google', {})).toThrow(/BUNSEN_GEMINI_API_KEY is not set/);
-    // An empty value is as missing as an absent one.
-    expect(() => resolveApiKey('google', { BUNSEN_GEMINI_API_KEY: '' })).toThrow(
-      /BUNSEN_GEMINI_API_KEY is not set/,
-    );
-  });
-});
 
 describe('createModel', () => {
   it('builds an Anthropic model with the explicit key', () => {

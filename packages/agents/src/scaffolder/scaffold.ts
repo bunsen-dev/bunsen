@@ -24,7 +24,7 @@
  * on the same provider-agnostic model layer as the scorer (`common/model.ts`).
  */
 
-import { generateText, stepCountIs, tool, ToolChoiceViolationError } from 'ai';
+import { generateText, stepCountIs, tool } from 'ai';
 import { z } from 'zod';
 import type { AgentConfig } from '@bunsen-dev/types';
 import { createModel } from '../common/index.js';
@@ -36,7 +36,7 @@ import { createModel } from '../common/index.js';
  */
 export const DEFAULT_SCAFFOLD_MODEL = 'anthropic/claude-opus-5-5';
 
-/** One forced tool call carrying a short argv template — a small budget is plenty. */
+/** One tool call carrying a short argv template — a small budget is plenty. */
 const MAX_SCAFFOLD_OUTPUT_TOKENS = 2048;
 
 /**
@@ -294,10 +294,14 @@ export function scaffoldBasis(agent: AgentConfig, helpText?: string): ScaffoldBa
 }
 
 /**
- * Infer an `entrypoint.invoke` template for the given agent via a single forced
- * tool call. Pure function of the agent (+ optional captured help) — no
- * experiment context. Throws if the model returns no tool call or an invalid
- * template.
+ * Infer an `entrypoint.invoke` template for the given agent via one tool call
+ * (`submit_invoke_template` is the only tool offered; if the model answers in
+ * prose instead, it is asked once more). Pure function of the agent (+
+ * optional captured help) — no experiment context. Throws if the model still
+ * returns no tool call, or an invalid template.
+ *
+ * Tool choice is not forced: current Claude models reject `tool_choice: tool`
+ * and `any`, so the single uniform mechanism is a one-tool call plus the ask.
  */
 export async function scaffoldInvokeTemplate(
   input: ScaffoldInvokeInput,
@@ -310,29 +314,44 @@ export async function scaffoldInvokeTemplate(
   const state: ScaffolderState = { result: null, error: null };
   const model = createModel(input.model ?? DEFAULT_SCAFFOLD_MODEL, { apiKey });
 
-  // Single forced tool call — the model has no free-text path.
-  const result = await generateText({
+  const instructions = buildScaffoldSystemPrompt();
+  const userPrompt = buildScaffoldUserPrompt(agent, helpText);
+  const tools = { submit_invoke_template: createSubmitInvokeTemplateTool(state) };
+  // No temperature anywhere below: current-generation models reject the
+  // deprecated parameter, and a single tool call needs no sampling knob anyway.
+  let result = await generateText({
     model,
-    instructions: buildScaffoldSystemPrompt(),
-    prompt: buildScaffoldUserPrompt(agent, helpText),
-    tools: { submit_invoke_template: createSubmitInvokeTemplateTool(state) },
-    toolChoice: { type: 'tool', toolName: 'submit_invoke_template' },
+    instructions,
+    prompt: userPrompt,
+    tools,
     stopWhen: stepCountIs(1),
     maxOutputTokens: MAX_SCAFFOLD_OUTPUT_TOKENS,
-    // No temperature: current-generation models reject the deprecated
-    // parameter, and a forced single tool call needs no sampling knob anyway.
-  }).catch((err: unknown): never => {
-    // The model answered with prose despite the forced tool choice.
-    if (ToolChoiceViolationError.isInstance(err)) {
-      throw new Error('The scaffolder model did not return a submit_invoke_template tool call.');
-    }
-    throw err;
   });
+
+  if (!state.result && toolFailureReason(result) === undefined) {
+    // The model answered in prose. Ask once more, with its answer in view.
+    result = await generateText({
+      model,
+      instructions,
+      messages: [
+        { role: 'user', content: userPrompt },
+        ...result.response.messages,
+        {
+          role: 'user',
+          content:
+            'Call `submit_invoke_template` now with the template; it is the only tool available. Do not answer in prose.',
+        },
+      ],
+      tools,
+      stopWhen: stepCountIs(1),
+      maxOutputTokens: MAX_SCAFFOLD_OUTPUT_TOKENS,
+    });
+  }
 
   if (!state.result) {
     throw new Error(
       `The scaffolder model did not return a valid submit_invoke_template call: ${
-        state.error ?? toolFailureReason(result) ?? 'no tool call was recorded'
+        state.error ?? toolFailureReason(result) ?? 'it answered in prose instead of calling the tool'
       }`,
     );
   }

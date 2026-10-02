@@ -15,9 +15,9 @@
  * the host also sets; the runner never hardcodes the header.
  */
 
-import { SCORER_PROVIDER_KEY_ENV, type ScorerOutput } from '@bunsen-dev/types';
-import { createModel, parseModelRef, resolveApiKey } from '../common/index.js';
-import { ScorerConfigError, loadScorerConfig } from './config.js';
+import type { ScorerOutput } from '@bunsen-dev/types';
+import { createModel, parseModelRef } from '../common/index.js';
+import { ScorerConfigError, loadScorerConfig, readScorerApiKey } from './config.js';
 import { ScorerError, runScorer } from './runner.js';
 
 // The runner surfaces `result.warnings` through its own stderr lines; the SDK's
@@ -31,27 +31,16 @@ function parseArgs(argv: string[]): string {
   throw new ScorerConfigError('Usage: scorer --config <path-to-config.json>');
 }
 
-/** A missing provider key is a host misconfiguration, not a crash — one line is the whole story. */
-function apiKeyFor(provider: Parameters<typeof resolveApiKey>[0]): string {
-  try {
-    return resolveApiKey(provider);
-  } catch (error) {
-    throw new ScorerConfigError(error instanceof Error ? error.message : String(error));
-  }
-}
-
 async function main(): Promise<ScorerOutput> {
   const config = loadScorerConfig(parseArgs(process.argv.slice(2)));
   const ref = parseModelRef(config.model);
   const traceSource = process.env.BUNSEN_TRACE_SOURCE;
+  // The key arrives as a one-time file (never an env var — see
+  // readScorerApiKey); from here on only the provider closure holds it.
   const model = createModel(ref, {
-    apiKey: apiKeyFor(ref.provider),
+    apiKey: readScorerApiKey(),
     headers: traceSource ? { 'X-Bunsen-Source': traceSource } : undefined,
   });
-  // The provider closure now holds the key; nothing else in this process may
-  // see it — not model-authored `run_playwright_script` code, not a
-  // `run_command` child, not `/proc/<pid>/environ`.
-  for (const name of Object.values(SCORER_PROVIDER_KEY_ENV)) delete process.env[name];
   return runScorer(config, { model });
 }
 

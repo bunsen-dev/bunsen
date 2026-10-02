@@ -35,7 +35,7 @@ vi.mock('./browser-tools.js', async (importOriginal) => {
   };
 });
 
-const { runScorer, ScorerError, transcriptForForcedCall } = await import('./runner.js');
+const { runScorer, ScorerError, transcriptForVerdictCall } = await import('./runner.js');
 const { MAX_OUTPUT_TOKENS, MAX_REPORT_OUTPUT_TOKENS, MAX_STEPS } = await import('./config.js');
 
 type GenerateResult = Awaited<ReturnType<MockLanguageModelV4['doGenerate']>>;
@@ -120,7 +120,7 @@ afterEach(() => {
 });
 
 describe('the judge', () => {
-  it('makes exactly one forced call, with no exploration tools', async () => {
+  it('makes exactly one call, offering submit_score and nothing else', async () => {
     const mocked = model([
       callsTool('submit_score', { summary: 'The diff adds the missing case.', score: 1 }),
     ]);
@@ -129,7 +129,8 @@ describe('the judge', () => {
 
     expect(output).toEqual({ score: 1, summary: 'The diff adds the missing case.' });
     expect(mocked.doGenerateCalls).toHaveLength(1);
-    expect(mocked.doGenerateCalls[0].toolChoice).toEqual({ type: 'tool', toolName: 'submit_score' });
+    // Never forced: current Claude models reject `tool_choice: tool` / `any`.
+    expect(mocked.doGenerateCalls[0].toolChoice).toEqual({ type: 'auto' });
     expect(mocked.doGenerateCalls[0].tools?.map((t) => t.name)).toEqual(['submit_score']);
   });
 
@@ -156,7 +157,7 @@ describe('the agent loop', () => {
 
     expect(output).toEqual({ score: 1, summary: 'Tests pass.' });
     expect(mocked.doGenerateCalls).toHaveLength(1);
-    // The loop leaves the choice to the model; only the forced call pins it.
+    // The loop leaves the choice to the model, with every tool on offer.
     expect(mocked.doGenerateCalls[0].toolChoice).toEqual({ type: 'auto' });
   });
 
@@ -184,11 +185,11 @@ describe('the agent loop', () => {
     expect(output.score).toBe(0);
     expect(mocked.doGenerateCalls).toHaveLength(2);
     expect(promptText(mocked, 1)).toContain('0.5 is not an allowed score for this criterion');
-    // The repair happened inside the loop, not via the forced call.
+    // The repair happened inside the loop, not via the verdict-only call.
     expect(promptText(mocked, 1)).not.toContain('Submit now from what you have');
   });
 
-  it('forces a verdict when the model stops without one', async () => {
+  it('asks again with submit_score as the only tool when the model stops without a verdict', async () => {
     const mocked = model([
       says('I think this looks fine.'),
       callsTool('submit_score', { summary: 'Looks fine from the diff.', score: 1 }),
@@ -198,19 +199,23 @@ describe('the agent loop', () => {
 
     expect(output.score).toBe(1);
     expect(mocked.doGenerateCalls).toHaveLength(2);
-    expect(mocked.doGenerateCalls[1].toolChoice).toEqual({ type: 'tool', toolName: 'submit_score' });
+    // The loop offered the exploration tools; the verdict-only call withdraws them.
+    expect(mocked.doGenerateCalls[0].tools?.map((t) => t.name)).toContain('read_file');
+    expect(mocked.doGenerateCalls[1].tools?.map((t) => t.name)).toEqual(['submit_score']);
+    expect(mocked.doGenerateCalls[1].toolChoice).toEqual({ type: 'auto' });
     expect(promptText(mocked, 1)).toContain(
       'Submit now from what you have. If you could not get the evidence this criterion needs',
     );
+    expect(promptText(mocked, 1)).toContain('`submit_score` is the only tool available');
   });
 
-  it('errors rather than inventing a score when even the forced call submits nothing', async () => {
+  it('errors rather than inventing a score when even the verdict-only call submits nothing', async () => {
     const mocked = model([says('No comment.'), says('Still no comment.')]);
 
     await expect(run(config({ scores: [0, 1] }), mocked)).rejects.toBeInstanceOf(ScorerError);
   });
 
-  it('stops at the step cap and then forces a verdict', async () => {
+  it('stops at the step cap and then asks for the verdict with submit_score alone', async () => {
     const results: GenerateResult[] = Array.from({ length: MAX_STEPS }, () =>
       callsTool('read_file', { path: 'notes.txt' }),
     );
@@ -221,10 +226,8 @@ describe('the agent loop', () => {
 
     expect(output.score).toBe(1);
     expect(mocked.doGenerateCalls).toHaveLength(MAX_STEPS + 1);
-    expect(mocked.doGenerateCalls[MAX_STEPS].toolChoice).toEqual({
-      type: 'tool',
-      toolName: 'submit_score',
-    });
+    expect(mocked.doGenerateCalls[MAX_STEPS].tools?.map((t) => t.name)).toEqual(['submit_score']);
+    expect(mocked.doGenerateCalls[MAX_STEPS].toolChoice).toEqual({ type: 'auto' });
   });
 
   it('gives up cleanly when the first request already overflows (nothing to trim, no larger retry)', async () => {
@@ -361,7 +364,7 @@ describe('redactSecretPatterns', () => {
 });
 
 
-describe('transcriptForForcedCall', () => {
+describe('transcriptForVerdictCall', () => {
   const assistantCall = (id: string) => ({
     role: 'assistant' as const,
     content: [{ type: 'tool-call' as const, toolCallId: id, toolName: 'read_file', input: { path: 'x' } }],
@@ -374,14 +377,14 @@ describe('transcriptForForcedCall', () => {
 
   it('drops a trailing assistant turn whose tool calls were never answered', () => {
     const transcript = [assistantCall('a'), toolResult('a'), assistantCall('b')];
-    const out = transcriptForForcedCall(transcript, { overflowed: false });
+    const out = transcriptForVerdictCall(transcript, { overflowed: false });
     expect(out.messages).toEqual([assistantCall('a'), toolResult('a')]);
     expect(out.dropped).toBe(1);
   });
 
   it('keeps an answered transcript intact when nothing overflowed', () => {
     const transcript = [assistantCall('a'), toolResult('a'), assistantText('done')];
-    expect(transcriptForForcedCall(transcript, { overflowed: false })).toEqual({ messages: transcript, dropped: 0 });
+    expect(transcriptForVerdictCall(transcript, { overflowed: false })).toEqual({ messages: transcript, dropped: 0 });
   });
 
   it('after an overflow keeps only the most recent messages within budget, cut at an assistant boundary', () => {
@@ -390,7 +393,7 @@ describe('transcriptForForcedCall', () => {
       assistantCall('b'), toolResult('b', 400),
       assistantCall('c'), toolResult('c', 400),
     ];
-    const out = transcriptForForcedCall(transcript, { overflowed: true, budgetChars: 1100 });
+    const out = transcriptForVerdictCall(transcript, { overflowed: true, budgetChars: 1100 });
     expect(out.messages[0]).toEqual(assistantCall('c'));
     expect(out.messages).toHaveLength(2);
     expect(out.dropped).toBe(4);
@@ -400,9 +403,9 @@ describe('transcriptForForcedCall', () => {
 });
 
 describe('runScorer — recovery paths', () => {
-  it('after a context-window overflow the forced call resends a SHORTER transcript and still records the verdict', async () => {
+  it('after a context-window overflow the verdict-only call resends a SHORTER transcript and still records the verdict', async () => {
     // Five big tool results (each near the per-result cap) overflow the
-    // forced-call budget, so the recovery must drop the oldest ones.
+    // verdict-call budget, so the recovery must drop the oldest ones.
     fs.writeFileSync(path.join(workspace, 'big.txt'), 'z'.repeat(40_000));
     let call = 0;
     const mocked = new MockLanguageModelV4({
@@ -445,7 +448,7 @@ describe('runScorer — recovery paths', () => {
     expect(mocked.doGenerateCalls).toHaveLength(1);
   });
 
-  it('a step that ends on `length` with an unexecuted tool call still reaches a forced verdict', async () => {
+  it('a step that ends on `length` with an unexecuted tool call still reaches the verdict-only call', async () => {
     let call = 0;
     const mocked = new MockLanguageModelV4({
       doGenerate: async () => {
@@ -466,7 +469,7 @@ describe('runScorer — recovery paths', () => {
 
     expect(output.score).toBe(0);
     expect(mocked.doGenerateCalls).toHaveLength(2);
-    // The unanswered assistant turn was dropped before the forced call.
+    // The unanswered assistant turn was dropped before the verdict-only call.
     expect(promptText(mocked, 1)).not.toContain('"toolName":"read_file"');
   });
 });

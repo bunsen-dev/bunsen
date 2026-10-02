@@ -8,7 +8,7 @@ By default (`evaluation.container: dedicated`), Bunsen evaluates experiment resu
 
 Important caveat: this mode is what makes an experiment's `verifiers/` directory visible to the agent. Because Docker cannot add mounts to a running container, the mount must exist up front — so in `evaluation.container: agent` mode `/bunsen/verifiers` is mounted (read-only) into the agent container before the agent runs, and the agent can read it during the run. **Don't put held-out fixtures or answer keys in `verifiers/` for an agent-mode experiment.** In the default `dedicated` mode only the scorer container mounts `verifiers/`, so those assets stay hidden from the agent.
 
-Key flow: LLM-backed criteria (`judge`, `agent`, `browser-agent`) get their provider's key delivered to each scorer `exec` as a single `BUNSEN_<PROVIDER>_API_KEY`, not via the container's base environment — so even in this mode the agent under test never sees the platform's key. See [Trust Model](./TRUST_MODEL.md).
+Key flow: LLM-backed criteria (`judge`, `agent`, `browser-agent`) get their provider's key delivered to each scorer `exec` as a one-time key file the scorer reads and deletes (never an environment variable) — so even in this mode the agent under test never sees the platform's key. See [Trust Model](./TRUST_MODEL.md).
 
 When the agent ran as the non-root `bunsen` user, scorers in the agent container also run as `bunsen` with `HOME=/home/bunsen`. If the agent ran as root (`environment.user: root`), scorers run as root. This matters for user-scoped state like conda environments, virtualenvs, and per-user config directories.
 

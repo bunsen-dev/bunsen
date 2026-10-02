@@ -4,7 +4,7 @@ import {
   PROVIDER_LABELS,
   resolvePlatformKeys,
   platformKeyHint,
-  scorerExecKeyEnv,
+  scorerKeyFor,
   buildMissingScorerKeysError,
   type PlatformKeys,
 } from './platform-keys.js';
@@ -94,29 +94,20 @@ describe('platformKeyHint', () => {
   });
 });
 
-describe('scorerExecKeyEnv', () => {
+describe('scorerKeyFor', () => {
   const keys: PlatformKeys = {
     anthropic: { provider: 'anthropic', value: 'a-key', source: 'ANTHROPIC_API_KEY' },
     openai: { provider: 'openai', value: 'o-key', source: 'OPENAI_API_KEY' },
     google: { provider: 'google', value: 'g-key', source: 'GOOGLE_API_KEY' },
   };
 
-  it('returns exactly one variable, under the name the bundle reads', () => {
-    expect(scorerExecKeyEnv('anthropic', keys)).toEqual({ BUNSEN_ANTHROPIC_API_KEY: 'a-key' });
-    expect(scorerExecKeyEnv('openai', keys)).toEqual({ BUNSEN_OPENAI_API_KEY: 'o-key' });
-    // Google's platform var is BUNSEN_GEMINI_API_KEY, not BUNSEN_GOOGLE_API_KEY.
-    expect(scorerExecKeyEnv('google', keys)).toEqual({ BUNSEN_GEMINI_API_KEY: 'g-key' });
-  });
-
-  it('never leaks a sibling provider key into the exec env', () => {
-    const env = scorerExecKeyEnv('openai', keys);
-    expect(Object.keys(env)).toHaveLength(1);
-    expect(Object.values(env)).not.toContain('a-key');
-    expect(Object.values(env)).not.toContain('g-key');
+  it("returns exactly the criterion's provider key, never a sibling's", () => {
+    expect(scorerKeyFor('openai', keys)).toEqual(keys.openai!);
+    expect(scorerKeyFor('google', keys).value).toBe('g-key');
   });
 
   it('throws, naming the provider and the fix, when the key is unresolved', () => {
-    expect(() => scorerExecKeyEnv('openai', { anthropic: keys.anthropic })).toThrow(
+    expect(() => scorerKeyFor('openai', { anthropic: keys.anthropic! })).toThrow(
       /No OpenAI API key is available for the scorer \(set OPENAI_API_KEY or BUNSEN_OPENAI_API_KEY\)/,
     );
   });
