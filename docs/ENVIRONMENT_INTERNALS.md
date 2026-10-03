@@ -46,7 +46,7 @@ the authoritative per-mount table (target, RO/RW, when present) lives in
 /bunsen/runtime/node           platform          RO   the mounted platform Node (custom images only)
 /bunsen/runtime/proxy-bootstrap.cjs  platform    RO   undici proxy shim (when trace capture is on)
 
-/bunsen/run/                   platform          RW   run context (logs, completion markers, agent-script.sh)
+/bunsen/run/                   platform          RW   run context (logs, completion markers; agent-script.sh only until the agent phase ends)
 /bunsen/output/                platform          RW   agent-authored artifacts ($BUNSEN_OUTPUT_DIR)
 /bunsen/verifiers/             substrate         RO   the experiment's verifiers/ (scorer container; agent container only in evaluation.container: agent)
 /bunsen/task/                  platform          RO   the exact task prompt

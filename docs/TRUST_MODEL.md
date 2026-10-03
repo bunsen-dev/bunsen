@@ -110,7 +110,11 @@ What's in a run dir and what it can leak:
 - **`logs.txt`, `artifacts/recording.cast` (raw terminal bytes), and `orchestration/result.json`** capture
   whatever the agent printed and received. If a key was passed on the agent's command line, or the agent
   echoed a secret, it lands here. These are **not** scrubbed.
-- **There is no automatic redaction.** Review and scrub a run dir manually before publishing or attaching it
+- **`evaluation/criteria/<id>.log`** (scorer transcripts) are the one exception: an exploring scorer can
+  print whatever it reads, so every platform key and every secret-looking environment value Bunsen itself
+  passed to the agent is redacted from these — in the saved log and in the live `bn run` output. A secret
+  Bunsen never handled (one the agent minted or fetched) is not.
+- **There is no other automatic redaction.** Review and scrub a run dir manually before publishing or attaching it
   to a bug report.
 
 ### Scrubbing a run directory before sharing

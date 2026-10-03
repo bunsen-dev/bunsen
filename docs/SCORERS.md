@@ -186,7 +186,9 @@ Run a shell command in the scorer container. The simplest and cheapest evaluatio
 When the script exceeds its `timeout`, whatever it already wrote wins — same precedence as a clean
 exit, minus the exit-code fallback (there is no exit code): a valid `$BUNSEN_EVAL_RESULT` is
 honored, else a valid `$BUNSEN_SCORE_FILE`, else the criterion scores 0. The summary always leads
-with `Timed out after {N}s` so a timeout is never silent. This is what makes incremental partial
+with `Timed out after {N}s` so a timeout is never silent. The script and everything it started
+(its whole process group, background servers included) are killed before the next criterion runs,
+so a timed-out criterion cannot keep writing into the workspace. This is what makes incremental partial
 credit work: a long test harness that rewrites `result.json` after each batch keeps the credit it
 earned when the budget runs out. Three caveats:
 
@@ -328,7 +330,10 @@ See [Models and providers](#models-and-providers) for the model form and keys, a
 
 Requested evidence that turns out to be empty is shown as an explicit notice rather than silently omitted — "the agent changed no files", "no model conversations were captured" — so the scorer can tell "nothing happened" from "nothing was collected".
 
-**Default timeout:** 600 seconds (10 minutes).
+**Default timeout:** 600 seconds (10 minutes). A scorer that exceeds it is killed — the scorer
+process and anything it started — before the next criterion runs, and the criterion records
+`status: error` (see [Failure policy](#failure-policy)); it does not keep making model calls in the
+background.
 
 ### Agent criteria (`type: agent`)
 

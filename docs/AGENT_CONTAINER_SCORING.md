@@ -90,7 +90,7 @@ What this means for you:
 - **No separate container** — the workspace is already in place, so scoring saves container-creation overhead and preserves all state.
 - **Same workspace contract** — scorers still see a mutable `/workspace` and `/workspace-source` — an immutable snapshot of the initial seeded inputs.
 - **Same user context** — scorers run as the same user as the agent, so user-scoped environments resolve the same way during scoring.
-- **Same criterion types** — `script`, `judge`, `agent`, and `browser-agent` criteria all work unchanged.
+- **Same criterion types** — `script`, `judge`, `agent`, and `browser-agent` criteria all work unchanged — with one caveat: scorers run as the agent's user, so a `browser-agent` criterion needs Playwright's browsers to be readable by that user. On `bunsen/visual` they are installed under `/root/.cache`, so a non-root run cannot launch them in this mode; keep browser criteria on the default `dedicated` mode for now.
 - **Verifier visibility** — `/bunsen/verifiers` must be mounted up front, so the agent can read verifier assets before scoring begins. This is specific to this mode: in the default `dedicated` mode only the scorer container mounts them. Don't put scoring secrets in `verifiers/` when you opt into agent-container scoring.
 - **Bring your own grader** — because the agent's `defaults.passEnv` keys (e.g. `ANTHROPIC_API_KEY`) are present in this container, a `type: script` criterion that calls a model itself and writes `result.json` works here. In the default `dedicated` mode no provider key reaches script criteria, by design.
 
