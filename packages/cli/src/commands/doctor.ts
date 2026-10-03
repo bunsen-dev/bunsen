@@ -18,7 +18,12 @@ import {
   loadProject,
   ProjectConfigError,
   MITMPROXY_IMAGE,
+  PROVIDER_LABELS,
+  platformKeyHint,
+  resolvePlatformKeys,
+  DEFAULT_SCORER_MODEL,
 } from '@bunsen-dev/runtime';
+import { SCORER_PROVIDERS, type ScorerProvider } from '@bunsen-dev/types';
 import { resolveFormat, isMachineFormat, renderMachine } from '../format.js';
 import { EXIT_CODES } from '../exit-codes.js';
 
@@ -26,9 +31,9 @@ interface DoctorOptions {
   format?: string;
 }
 
-type Severity = 'ok' | 'warn' | 'fail';
+export type Severity = 'ok' | 'warn' | 'fail';
 
-interface CheckResult {
+export interface CheckResult {
   id: string;
   label: string;
   status: Severity;
@@ -47,13 +52,9 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
   checks.push(checkGit());
   checks.push(checkProject());
   checks.push(checkStorage());
-  checks.push(checkApiKeys());
+  checks.push(...checkPlatformKeys(process.env));
 
-  const overallStatus: Severity = checks.some((c) => c.status === 'fail')
-    ? 'fail'
-    : checks.some((c) => c.status === 'warn')
-      ? 'warn'
-      : 'ok';
+  const overallStatus = rollUpStatus(checks);
 
   if (isMachineFormat(format)) {
     process.stdout.write(renderMachine({ status: overallStatus, checks }, format));
@@ -65,6 +66,13 @@ export async function doctorCommand(options: DoctorOptions): Promise<void> {
     process.exit(EXIT_CODES.GENERIC);
   }
   process.exit(EXIT_CODES.SUCCESS);
+}
+
+/** Worst row wins: any `fail` fails the report, otherwise any `warn` warns. */
+export function rollUpStatus(checks: CheckResult[]): Severity {
+  if (checks.some((c) => c.status === 'fail')) return 'fail';
+  if (checks.some((c) => c.status === 'warn')) return 'warn';
+  return 'ok';
 }
 
 async function checkDocker(): Promise<CheckResult> {
@@ -210,28 +218,59 @@ function checkStorage(): CheckResult {
   }
 }
 
-function checkApiKeys(): CheckResult {
-  const keys: string[] = [];
-  if (process.env.ANTHROPIC_API_KEY) keys.push('ANTHROPIC_API_KEY');
-  if (process.env.OPENAI_API_KEY) keys.push('OPENAI_API_KEY');
-  if (process.env.GEMINI_API_KEY) keys.push('GEMINI_API_KEY');
-  if (process.env.BUNSEN_ANTHROPIC_API_KEY) keys.push('BUNSEN_ANTHROPIC_API_KEY');
+/**
+ * One row per scorer provider, from the same host-env resolution the runtime
+ * uses (`resolvePlatformKeys`), so what `bn doctor` reports and what a run
+ * actually accepts can't drift apart.
+ *
+ * Only Anthropic is load-bearing by default: it backs the default scorer
+ * model, the supervisor, and `bn agents infer-invoke`. OpenAI and Google are
+ * opt-in — a rubric only needs them if a criterion names an `openai/…` or
+ * `google/…` model — so a missing one reports `ok` and must not drag the
+ * overall status down to `warn`.
+ *
+ * Pure: takes the env, returns rows, never exits.
+ */
+export function checkPlatformKeys(env: NodeJS.ProcessEnv): CheckResult[] {
+  const resolved = resolvePlatformKeys(env);
 
-  if (keys.length === 0) {
+  return SCORER_PROVIDERS.map((provider: ScorerProvider): CheckResult => {
+    const key = resolved[provider];
+    const label = `${PROVIDER_LABELS[provider]} API key`;
+    const id = `api_key_${provider}`;
+
+    if (key) {
+      return {
+        id,
+        label,
+        status: 'ok',
+        detail: `present via ${key.source}`,
+        data: { provider, source: key.source },
+      };
+    }
+
+    if (provider === 'anthropic') {
+      return {
+        id,
+        label,
+        status: 'warn',
+        detail: 'not set',
+        hint:
+          `Needed for the default scorer model (${DEFAULT_SCORER_MODEL}), the supervisor, ` +
+          `and \`bn agents infer-invoke\` — ${platformKeyHint(provider)}.`,
+        data: { provider, source: null },
+      };
+    }
+
     return {
-      id: 'api_keys',
-      label: 'AI API keys',
-      status: 'warn',
-      detail: 'No ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / BUNSEN_ANTHROPIC_API_KEY set',
-      hint: 'Required for LLM scorers and the starter agents (claude-code, codex-cli, gemini-cli). Add to `.env` or export in your shell.',
+      id,
+      label,
+      status: 'ok',
+      detail: `not set (only needed for ${provider}/… scorer models)`,
+      hint: platformKeyHint(provider),
+      data: { provider, source: null },
     };
-  }
-  return {
-    id: 'api_keys',
-    label: 'AI API keys',
-    status: 'ok',
-    detail: `present: ${keys.join(', ')}`,
-  };
+  });
 }
 
 function which(binary: string): string | null {

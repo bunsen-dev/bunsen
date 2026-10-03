@@ -201,6 +201,8 @@ export interface RunManifestEvaluation {
   weighted_score: number;
   criteria: RunManifestCriterion[];
   report?: string;
+  /** Why a configured `evaluation.report` produced no narrative. See `EvaluationResult.reportError`. */
+  report_error?: string;
 }
 
 export interface RunManifestCriterion {
@@ -212,6 +214,10 @@ export interface RunManifestCriterion {
   summary: string;
   status?: CriterionStatus;
   scorer_type?: RunManifestScorerType;
+  /** The `<provider>/<model>` that scored an LLM-backed criterion. */
+  model?: string;
+  /** Why the scorer produced no verdict; present only with `status: 'error'`. */
+  error?: string;
   allowed_scores?: AllowedScores;
   /** Artifact keys for any screenshots produced by the scorer. */
   screenshots?: string[];

@@ -46,9 +46,9 @@ the authoritative per-mount table (target, RO/RW, when present) lives in
 /bunsen/runtime/node           platform          RO   the mounted platform Node (custom images only)
 /bunsen/runtime/proxy-bootstrap.cjs  platform    RO   undici proxy shim (when trace capture is on)
 
-/bunsen/run/                   platform          RW   run context (logs, completion markers, agent-script.sh)
+/bunsen/run/                   platform          RW   run context (logs, completion markers; agent-script.sh only until the agent phase ends)
 /bunsen/output/                platform          RW   agent-authored artifacts ($BUNSEN_OUTPUT_DIR)
-/bunsen/verifiers/             substrate         RO   the experiment's verifiers/ (when present)
+/bunsen/verifiers/             substrate         RO   the experiment's verifiers/ (scorer container; agent container only in evaluation.container: agent)
 /bunsen/task/                  platform          RO   the exact task prompt
 ```
 
@@ -288,12 +288,24 @@ runtime fetch).
 
 ### The platform API key is separate
 
-`BUNSEN_ANTHROPIC_API_KEY` (platform — supervisor/scorers) is kept
-distinct from the agent's `ANTHROPIC_API_KEY`. It's passed **directly to the platform
-execs**, not set on the container's base environment — so the agent-under-test never
-sees the platform's key (except in `evaluation.container: agent`, where the scorer
-shares the agent container). If `BUNSEN_ANTHROPIC_API_KEY` is unset, the platform
-falls back to `ANTHROPIC_API_KEY`.
+The platform's own provider keys are kept distinct from the agent's. They're resolved
+**on the host**, per provider, first match wins:
+
+| Provider   | Host env vars, in order                                            |
+| ---------- | ------------------------------------------------------------------ |
+| `anthropic` | `BUNSEN_ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY`                   |
+| `openai`    | `BUNSEN_OPENAI_API_KEY`, `OPENAI_API_KEY`                         |
+| `google`    | `BUNSEN_GEMINI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`       |
+
+The `BUNSEN_`-prefixed form lets the platform use a different key than the agent under
+test gets via `defaults.passEnv`.
+
+A resolved key is passed **to the platform exec alone**, never set on any environment.
+Each LLM-scorer exec receives exactly one key — the one its criterion's `scorer.model`
+needs — as a **one-time key file**: a mode-600 file owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`, that the scorer reads and deletes before anything else runs (the host deletes it again after the exec). The key is never an environment variable, so `/proc/<pid>/environ`, `run_command` children, and model-authored `run_playwright_script` code cannot read it. That holds in **both** `evaluation.container` modes, so the
+agent-under-test never sees the platform's key and neither do `type: script` criteria. The
+scorer also strips every `*_API_KEY` from the subprocesses it spawns. The supervisor
+stays Anthropic-only and receives `BUNSEN_ANTHROPIC_API_KEY` per exec the same way.
 
 ### Precedence (the agent's own env)
 

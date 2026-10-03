@@ -20,6 +20,7 @@ from ai_capture import (  # type: ignore
     PRICING,
     _match_model_pricing,
     _resolve_pricing,
+    _cost_from_pricing,
     _load_pricing,
     _is_model_priced,
 )
@@ -266,11 +267,10 @@ def test_estimate_cost_anthropic_sonnet_cache_pricing() -> None:
 
 
 def test_anthropic_cache_prices_are_data_driven() -> None:
-    """claude-3-haiku-20240307 is the case where LiteLLM's explicit cache prices
-    DIFFER from the legacy 1.25x / 0.1x multipliers, proving cache pricing is
-    data-driven: data cache write $0.30/1M (the multiplier would give
-    0.25*1.25 = $0.3125), data cache read $0.03/1M (multiplier 0.25*0.1 =
-    $0.025)."""
+    """claude-opus-5-5 (the default scorer model) is a case where LiteLLM's
+    explicit cache-read price DIFFERS from the legacy 0.1x multiplier, proving
+    cache pricing is data-driven: input $4/1M, data cache write $5/1M, data
+    cache read $0.20/1M (the multiplier would give 4*0.1 = $0.40)."""
     cap = AICapture()
     usage = {
         "inputTokens": 0,
@@ -278,10 +278,10 @@ def test_anthropic_cache_prices_are_data_driven() -> None:
         "cacheCreationInputTokens": 1_000_000,
         "cacheReadInputTokens": 1_000_000,
     }
-    cost = cap._estimate_cost("anthropic", "claude-3-haiku-20240307", usage)
-    expected = 0.30 + 0.03  # data-driven, NOT 0.3125 + 0.025
+    cost = cap._estimate_cost("anthropic", "claude-opus-5-5", usage)
+    expected = 5.0 + 0.20  # data-driven, NOT 5.0 + 0.40
     assert _almost(cost, round(expected, 6)), (cost, expected)
-    assert not _almost(cost, 0.3125 + 0.025), cost  # would mean multipliers leaked in
+    assert not _almost(cost, 5.0 + 0.40), cost  # would mean multipliers leaked in
 
 
 def test_opus_and_haiku4_pricing_is_data_driven() -> None:
@@ -307,7 +307,7 @@ def test_matcher_tolerates_date_suffixed_ids() -> None:
     assert cap._estimate_cost("anthropic", "claude-haiku-4-5@20251001", usage) == 1.0
     # A model whose canonical id legitimately ends in a date matches first via
     # the raw exact pass, so it is NOT mis-stripped to a wrong base.
-    assert cap._estimate_cost("anthropic", "claude-3-haiku-20240307", usage) == 0.25
+    assert cap._estimate_cost("anthropic", "claude-haiku-4-5-20251001", usage) == 1.0
 
 
 def test_matcher_strips_provider_routing_prefixes() -> None:
@@ -334,7 +334,7 @@ def test_unpriced_model_detection() -> None:
     `bn runs cost` warning."""
     assert _is_model_priced("openai", "gpt-5.5") is True
     assert _is_model_priced("openai", "gpt-4o") is True  # non-example, in snapshot
-    assert _is_model_priced("anthropic", "claude-3-haiku-20240307") is True
+    assert _is_model_priced("anthropic", "claude-opus-5-5") is True
     assert _is_model_priced("google", "gemini-2.5-pro") is True
     # Date-suffixed / provider-prefixed still count as priced (matcher normalizes).
     assert _is_model_priced("anthropic", "claude-sonnet-4-6-20260205") is True
@@ -398,12 +398,44 @@ class _StubCtx:
     log = _StubLog()
 
 
+class _FakeHeaders:
+    """Case-insensitive header map, mirroring mitmproxy's `http.Headers`.
+
+    The addon reads/deletes `x-bunsen-source` in lowercase while real clients
+    send `X-Bunsen-Source`; a plain dict would make the strip test pass for the
+    wrong reason.
+    """
+
+    def __init__(self, initial=None):
+        self._d = {}
+        for k, v in (initial or {}).items():
+            self[k] = v
+
+    def __setitem__(self, key, value):
+        self._d[key.lower()] = value
+
+    def __getitem__(self, key):
+        return self._d[key.lower()]
+
+    def __delitem__(self, key):
+        del self._d[key.lower()]
+
+    def __contains__(self, key):
+        return key.lower() in self._d
+
+    def get(self, key, default=None):
+        return self._d.get(key.lower(), default)
+
+    def items(self):
+        return self._d.items()
+
+
 class _FakeReq:
-    def __init__(self, host, path, content):
+    def __init__(self, host, path, content, headers=None):
         self.pretty_host = host
         self.path = path
         self.content = content
-        self.headers = {}
+        self.headers = _FakeHeaders(headers)
 
 
 class _FakeResp:
@@ -415,11 +447,54 @@ class _FakeResp:
 class _FakeFlow:
     _n = 0
 
-    def __init__(self, host, path, req_body, resp_body):
-        self.request = _FakeReq(host, path, req_body)
+    def __init__(self, host, path, req_body, resp_body, headers=None):
+        self.request = _FakeReq(host, path, req_body, headers)
         self.response = _FakeResp(resp_body)
         _FakeFlow._n += 1
         self.id = f"fake-flow-{_FakeFlow._n}"
+
+
+def _capture_trace(host, path, req_body, resp_body, headers=None):
+    """Drive the real `request()` → `response()` path once and return the flow
+    plus the single trace record it wrote.
+
+    Bodies may be dicts (JSON-encoded here) or raw str/bytes (for SSE).
+    """
+    import ai_capture as mod  # type: ignore
+    import tempfile
+
+    def _encode(body):
+        if isinstance(body, (bytes, bytearray)):
+            return bytes(body)
+        if isinstance(body, str):
+            return body.encode()
+        return json.dumps(body).encode()
+
+    cap = AICapture()
+    out = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    out.close()
+    cap.output_file = out.name
+
+    flow = _FakeFlow(host, path, _encode(req_body), _encode(resp_body), headers)
+
+    saved_ctx = mod.ctx
+    mod.ctx = _StubCtx()  # request()/response() log via module ctx
+    devnull = open(os.devnull, "w")
+    saved_err = sys.stderr
+    sys.stderr = devnull
+    try:
+        cap.request(flow)
+        cap.response(flow)
+    finally:
+        mod.ctx = saved_ctx
+        sys.stderr = saved_err
+        devnull.close()
+
+    with open(out.name) as f:
+        traces = [json.loads(line) for line in f if line.strip()]
+    os.unlink(out.name)
+    assert len(traces) == 1, traces
+    return flow, traces[0]
 
 
 def test_response_flags_only_unpriced_calls_in_trace() -> None:
@@ -626,20 +701,23 @@ def test_anthropic_cached_input_billed_once_end_to_end() -> None:
 #   _COMMON_USER_MODELS    — common models NO example agent uses, proving the
 #                            snapshot covers far more than the examples.
 _EXAMPLE_AGENT_MODELS = {
+    # The agents' own declared models plus the platform's scorer defaults and
+    # the ids the docs/skill name as examples (the scorer sweep, 10/01/26).
     "anthropic": [
         "claude-sonnet-4-6",
         "claude-opus-4-6",
         "claude-opus-4-7",
         "claude-haiku-4-5",
-        "claude-3-haiku-20240307",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
     ],
-    "openai": ["gpt-5.5", "gpt-5.4-mini", "gpt-5.3-codex"],
-    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "openai": ["gpt-5.5", "gpt-5.6", "gpt-5.4-mini", "gpt-5.3-codex"],
+    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-3.1-pro-preview", "gemini-3.8-flash"],
 }
 _COMMON_USER_MODELS = {
-    "anthropic": ["claude-3-opus-20240229", "claude-3-7-sonnet-20250219"],
+    "anthropic": ["claude-opus-4-5", "claude-sonnet-4-5"],
     "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1", "o3", "o3-mini"],
-    "google": ["gemini-2.0-flash", "gemini-2.0-flash-lite"],
+    "google": ["gemini-2.5-flash-lite", "gemini-3-flash-preview"],
 }
 
 # Lower bounds on per-provider entry counts. Actual snapshot is ~21/150/47; these
@@ -810,6 +888,213 @@ def test_estimate_cost_gemini_substring_matcher_picks_specific_first() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Non-streaming scorer traffic (the AI SDK's OpenAI + Google providers)
+#
+# The scorer bundle talks to OpenAI through `POST /v1/responses` with NO
+# `stream` key at all, and to Gemini through `POST
+# /v1beta/models/<model>:generateContent` (no `?alt=sse`). Both come back as a
+# plain JSON body, so they take the JSON branch of `response()` — the path that
+# had no end-to-end coverage before, even though every OpenAI/Gemini scorer's
+# cost attribution depends on it.
+# ---------------------------------------------------------------------------
+
+def test_openai_responses_non_streaming_end_to_end() -> None:
+    """A non-streaming Responses body prices and attributes correctly.
+
+    Body shape is what @ai-sdk/openai receives for a tool-calling scorer turn:
+    a `function_call` output item and a Responses-API usage block whose
+    `input_tokens` is cache-INCLUSIVE.
+    """
+    request_body = {
+        "model": "gpt-5.5",
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": "score it"}]}],
+        "tools": [{"type": "function", "name": "submit_score"}],
+    }
+    response_body = {
+        "id": "resp_nonstream_1",
+        "object": "response",
+        "model": "gpt-5.5-2026-04-23",
+        "output": [
+            {
+                "type": "function_call",
+                "name": "submit_score",
+                "arguments": '{"summary":"Meets the criterion.","score":1}',
+                "call_id": "call_abc123",
+            }
+        ],
+        "usage": {
+            "input_tokens": 1200,
+            "input_tokens_details": {"cached_tokens": 200},
+            "output_tokens": 40,
+            "output_tokens_details": {"reasoning_tokens": 0},
+            "total_tokens": 1240,
+        },
+    }
+    _flow, trace = _capture_trace(
+        "api.openai.com", "/v1/responses", request_body, response_body,
+        headers={"X-Bunsen-Source": "scorer:code-quality"},
+    )
+
+    assert trace["provider"] == "openai", trace
+    # `_extract_model` prefers the request body, which carries the alias the
+    # scorer asked for; the response's date-stamped id is normalized by the
+    # matcher anyway, so both price identically.
+    assert trace["model"] == "gpt-5.5", trace
+    assert trace["source"] == "scorer:code-quality", trace
+    assert trace["endpoint"] == "/v1/responses", trace
+    assert trace["statusCode"] == 200, trace
+
+    usage = trace["response"]["usage"]
+    assert usage["inputTokens"] == 1000, usage   # fresh = 1200 total − 200 cached
+    assert usage["cacheReadInputTokens"] == 200, usage
+    assert usage["outputTokens"] == 40, usage
+
+    # The JSON branch must not fall through to the SSE parser or `_raw`.
+    assert trace["response"]["content"] == response_body["output"], trace["response"]
+    assert "_raw" not in trace["response"], trace["response"]
+
+    record, exact = _resolve_pricing("openai", "gpt-5.5")
+    assert exact, record
+    expected = _cost_from_pricing(record, usage)
+    assert expected > 0
+    assert _almost(trace["estimatedCostUsd"], expected), (trace["estimatedCostUsd"], expected)
+    assert "pricingFallback" not in trace, trace
+
+
+def test_gemini_generate_content_non_streaming_end_to_end() -> None:
+    """Non-streaming `generateContent` prices and attributes correctly.
+
+    The model lives in the URL path, not the request body, so model resolution
+    has to come from the response's `modelVersion`; thinking tokens bill at the
+    output rate alongside `candidatesTokenCount`.
+    """
+    request_body = {
+        "contents": [{"role": "user", "parts": [{"text": "write the report"}]}],
+        "tools": [{"functionDeclarations": [{"name": "submit_report"}]}],
+    }
+    response_body = {
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "name": "submit_report",
+                                "args": {"report": "## Findings\n\nAll criteria met."},
+                            }
+                        }
+                    ],
+                },
+                "finishReason": "STOP",
+                "index": 0,
+            }
+        ],
+        "modelVersion": "gemini-3.8-flash",
+        "responseId": "resp_gem_nonstream",
+        "usageMetadata": {
+            "promptTokenCount": 900,
+            "cachedContentTokenCount": 100,
+            "candidatesTokenCount": 30,
+            "thoughtsTokenCount": 50,
+            "totalTokenCount": 980,
+        },
+    }
+    _flow, trace = _capture_trace(
+        "generativelanguage.googleapis.com",
+        "/v1beta/models/gemini-3.8-flash:generateContent",
+        request_body,
+        response_body,
+        headers={"X-Bunsen-Source": "scorer:summary-report"},
+    )
+
+    assert trace["provider"] == "google", trace
+    assert trace["model"] == "gemini-3.8-flash", trace
+    assert trace["source"] == "scorer:summary-report", trace
+    assert trace["endpoint"] == "/v1beta/models/gemini-3.8-flash:generateContent", trace
+
+    usage = trace["response"]["usage"]
+    assert usage["inputTokens"] == 800, usage    # fresh = 900 − 100 cached
+    assert usage["cacheReadInputTokens"] == 100, usage
+    assert usage["outputTokens"] == 80, usage    # 30 candidates + 50 thoughts
+
+    assert trace["response"]["content"] == response_body["candidates"][0]["content"], trace
+    assert "_raw" not in trace["response"], trace["response"]
+
+    record, exact = _resolve_pricing("google", "gemini-3.8-flash")
+    assert exact, record
+    expected = _cost_from_pricing(record, usage)
+    assert expected > 0
+    assert _almost(trace["estimatedCostUsd"], expected), (trace["estimatedCostUsd"], expected)
+    assert "pricingFallback" not in trace, trace
+
+
+def test_json_body_not_mistaken_for_sse() -> None:
+    """The SSE-vs-JSON branch keys off the FIRST non-whitespace characters.
+
+    A JSON body that merely *contains* `data:` inside a string (e.g. a scorer
+    quoting a log line back) must still parse as JSON — routing it to the SSE
+    parser would yield `{}` and silently zero its usage and cost. Conversely a
+    body starting with `event:` must go to the SSE parser.
+    """
+    # JSON body carrying "data:" inside a text part, plus leading whitespace.
+    json_body = {
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": [{"text": 'the log said: data: {"type":"x"} — ignore it'}],
+                },
+                "finishReason": "STOP",
+            }
+        ],
+        "modelVersion": "gemini-3.8-flash",
+        "usageMetadata": {"promptTokenCount": 50, "candidatesTokenCount": 5},
+    }
+    _flow, trace = _capture_trace(
+        "generativelanguage.googleapis.com",
+        "/v1beta/models/gemini-3.8-flash:generateContent",
+        {"contents": []},
+        "\n  " + json.dumps(json_body),
+    )
+    assert trace["response"]["usage"]["inputTokens"] == 50, trace
+    assert trace["response"]["usage"]["outputTokens"] == 5, trace
+    assert "_raw" not in trace["response"], trace["response"]
+    assert trace["estimatedCostUsd"] > 0, trace
+
+    # A body whose first non-whitespace chars are `event:` takes the SSE branch.
+    _flow2, sse_trace = _capture_trace(
+        "api.anthropic.com", "/v1/messages",
+        {"model": "claude-sonnet-4-6"}, _ANTHROPIC_SSE,
+    )
+    assert sse_trace["response"]["usage"]["inputTokens"] == 100, sse_trace
+    assert sse_trace["response"]["usage"]["outputTokens"] == 42, sse_trace
+    assert "_raw" not in sse_trace["response"], sse_trace["response"]
+
+
+def test_source_header_stripped_and_defaults_to_agent() -> None:
+    """`X-Bunsen-Source` is a Bunsen-internal tag: it's recorded on the trace
+    (so `usage.by_source` can attribute per-criterion scorer cost) and stripped
+    before the request is forwarded upstream. A request without it is `agent`."""
+    body = {"model": "claude-sonnet-4-6"}
+    resp = {"model": "claude-sonnet-4-6", "usage": {"input_tokens": 10, "output_tokens": 1}}
+
+    flow, trace = _capture_trace(
+        "api.anthropic.com", "/v1/messages", body, resp,
+        headers={"X-Bunsen-Source": "scorer:rubric", "Authorization": "Bearer k"},
+    )
+    assert trace["source"] == "scorer:rubric", trace
+    assert "x-bunsen-source" not in flow.request.headers  # stripped before forwarding
+    assert "X-Bunsen-Source" not in flow.request.headers  # ...case-insensitively
+    assert flow.request.headers.get("Authorization") == "Bearer k"  # others untouched
+
+    _flow2, default_trace = _capture_trace(
+        "api.anthropic.com", "/v1/messages", body, resp,
+    )
+    assert default_trace["source"] == "agent", default_trace
+
+
+# ---------------------------------------------------------------------------
 
 def main() -> int:
     tests = [
@@ -846,6 +1131,10 @@ def main() -> int:
         test_google_non_streaming_usage_extraction,
         test_estimate_cost_gemini_2_5_pro_pricing,
         test_estimate_cost_gemini_substring_matcher_picks_specific_first,
+        test_openai_responses_non_streaming_end_to_end,
+        test_gemini_generate_content_non_streaming_end_to_end,
+        test_json_body_not_mistaken_for_sse,
+        test_source_header_stripped_and_defaults_to_agent,
     ]
     failures = 0
     for t in tests:

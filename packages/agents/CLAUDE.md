@@ -34,7 +34,7 @@ The esbuild step injects an `import.meta.url` shim (`--define`) because esbuild'
 
 ```
 dist/
-  scorer.cjs            # ~1.3 MB
+  scorer.cjs            # ~2.1 MB (the AI SDK + its Anthropic/OpenAI/Google providers)
   supervisor.cjs        # ~1.1 MB
   gitignore-filter.cjs  # ~20 KB
   proxy-bootstrap.cjs   # ~0.95 MB (mounted at /bunsen/runtime/proxy-bootstrap.cjs when trace capture is enabled)
@@ -63,21 +63,29 @@ Instead, when scorer/supervisor bundle code needs a small pure utility:
   // Also bad: causes packages/agents tsc to compile files under packages/runtime/src
   import { filterLockfilesFromDiff } from '../../../runtime/src/diff-filter.js';
   ```
-- The standalone files already inline several utilities (see `loadDiff()`, `loadLogs()`, etc. in `src/scorer/standalone.ts`) for this reason.
+- The scorer inlines the small readers it needs for this reason (see `loadDiff()` / `loadLogs()` in `src/scorer/evidence.ts` and the thread readers in `src/scorer/traces.ts`).
 - Only import from `@bunsen-dev/types` or similarly small dependency-free shared packages. Do not import `@bunsen-dev/runtime` or cross-package source files into bundle entrypoints.
 - When a type from `@bunsen-dev/types` is the right shape, import it — do **not** duplicate the runtime's adapter/transform inline just to keep the bundle self-contained. This is internal bundle code with no API-stability obligation (see the root [`CLAUDE.md`](../../CLAUDE.md)); the solution to a shape change is to update the bundle's reader, not to maintain a parallel legacy shape inside the bundle.
 
 ### External packages
 
-- **Playwright** is marked `--external` for the scorer bundle (visual scorer needs it at runtime in the container, not bundled)
+- **Playwright** is marked `--external` for the scorer bundle (a `browser-agent` criterion needs it at runtime in the container, not bundled). `src/scorer/browser-tools.ts` therefore resolves it **lazily, inside `execute`** — a judge or agent scorer in an image without Playwright must never touch it.
 - Everything else is inlined by esbuild
 
 ## Architecture
 
-- `src/common/` — shared agent framework (`createAgent`, `tool()`, Anthropic client), used by the container bundles and the scaffolder
+- `src/common/` — `model.ts`, the one provider-agnostic model layer: `createModel('<provider>/<model>', { apiKey, headers })` over the Vercel AI SDK's Anthropic, OpenAI and Google providers, plus `parseModelRef`. The key is always passed explicitly — never read from a provider SDK's own default env var; the scorer bundle reads it from the one-time key file the host delivers (`readScorerApiKey` in `scorer/config.ts`), never from an environment variable. Shared by the scorer bundle and the scaffolder.
 - `src/scaffolder/` — host-side `entrypoint.invoke` inference for `bn agents infer-invoke` (exported via `src/index.ts`; not a container bundle)
-- `src/scorer/` — evaluates agent output (LLM-judge, agentic, visual, code, aggregate, report scorers)
-- `src/supervisor/` — monitors agent execution and can intervene
+- `src/scorer/` — grades one criterion (`judge`, `agent`, `browser-agent`) or writes the run's `report`:
+  - `config.ts` — every limit with the reason it has that value, the container paths, and `loadScorerConfig()` (the bundle's own guard over the config the runtime wrote; it never applies a default model)
+  - `evidence.ts` — the task prompt, the lockfile-filtered diff, the logs, and `truncateHeadTail()`, the one truncation helper
+  - `traces.ts` — readers for the captured agent conversations (`traces/threads/`)
+  - `prompts.ts` — `systemPrompt()` (policy only, replaced wholesale by `scorer.systemPrompt`) and `userPrompt()` (the invariant turn: criterion, allowed scores, where the evidence is, the evidence, dependency results, the verdict instruction)
+  - `tools.ts` / `browser-tools.ts` — the exploration tools, the two browser tools, and the verdict tools (`submit_score`, `submit_report`), which record into runner state
+  - `runner.ts` — `runScorer()`: one capped loop, a state-based stop condition, one verdict-only call (the submit tool is the only one offered and the user turn asks for it), then `ScorerError` rather than a synthesized score. Tool choice is never forced: current Claude models reject `tool_choice: tool` / `any`, so narrowing the tool set is the one mechanism that works on every provider
+  - `standalone.ts` — the bundle entry: parse `--config`, build the model, run, print one JSON line
+  - Unit-tested with vitest and no API key (a `MockLanguageModelV4` stands in for the provider): `npx vitest run src/scorer`
+- `src/supervisor/` — monitors agent execution and can intervene. It keeps its **own** `@anthropic-ai/sdk` client under `src/supervisor/` and does not use `common/model.ts`; moving it onto the shared model layer is deliberately separate work (it is Anthropic-only and never grades anything, so provider choice does not affect scores)
 - `src/gitignore-filter/` — lists non-ignored files for diff generation
 
 ## Scaffolder Policy

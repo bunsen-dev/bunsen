@@ -227,7 +227,7 @@ describe('parseExperimentConfig', () => {
           report: {
             instructions: 'Summarize the run.',
             needs: 'all',
-            model: 'claude-haiku-4-5',
+            model: 'anthropic/claude-haiku-4-5',
           },
         },
       }),
@@ -235,7 +235,7 @@ describe('parseExperimentConfig', () => {
     expect(config.evaluation.report).toEqual({
       instructions: 'Summarize the run.',
       needs: 'all',
-      model: 'claude-haiku-4-5',
+      model: 'anthropic/claude-haiku-4-5',
     });
   });
 
@@ -942,6 +942,273 @@ describe('loadExperiment', () => {
     const resolved = loadV1(dir, 'alt');
     expect(resolved.variant).toBe('alt');
     expect(resolved.description).toBe('alt run');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scorer: blocks (model / systemPrompt / tools) and report scorer fields
+// ---------------------------------------------------------------------------
+
+describe('scorer blocks', () => {
+  /** An evaluation whose only criterion is the one under test. */
+  function withCriterion(criterion: Record<string, unknown>): string {
+    return baseYaml({ evaluation: { criteria: [criterion] } });
+  }
+
+  /** Parse and return the structured loader error for a bad document. */
+  function expectConfigError(yamlText: string): ExperimentConfigError {
+    try {
+      parseV1(yamlText);
+    } catch (err) {
+      expect(err).toBeInstanceOf(ExperimentConfigError);
+      return err as ExperimentConfigError;
+    }
+    throw new Error('expected the loader to reject this document');
+  }
+
+  const judge = (scorer: unknown) => ({
+    id: 'quality',
+    title: 'Quality',
+    type: 'judge',
+    instructions: 'review',
+    scorer,
+  });
+  const agent = (scorer: unknown) => ({
+    id: 'behavior',
+    title: 'Behavior',
+    type: 'agent',
+    instructions: 'run it',
+    scorer,
+  });
+  const browserAgent = (scorer: unknown) => ({
+    id: 'layout',
+    title: 'Layout',
+    type: 'browser-agent',
+    instructions: 'browse it',
+    scorer,
+  });
+
+  // -- model -----------------------------------------------------------------
+
+  it('rejects a bare model id with the provider-prefixed fix in the message', () => {
+    // Two criteria so the reported path matches the documented example.
+    const bad = baseYaml({
+      evaluation: {
+        criteria: [
+          { id: 'tests', title: 'Tests', type: 'script', run: 'pytest' },
+          judge({ model: 'claude-sonnet-5-5' }),
+        ],
+      },
+    });
+    const err = expectConfigError(bad);
+    expect(err.code).toBe('experiment.criterion.judge.scorer.model.pattern');
+    expect(err.message).toBe(
+      'evaluation.criteria[1].scorer.model must be "<provider>/<model>", ' +
+        'e.g. anthropic/claude-sonnet-5-5; got "claude-sonnet-5-5"',
+    );
+    expect(err.path).toBe('evaluation.criteria[1].scorer.model');
+  });
+
+  it('rejects an unknown provider prefix', () => {
+    const err = expectConfigError(withCriterion(judge({ model: 'azure/gpt-5.6' })));
+    expect(err.code).toBe('experiment.criterion.judge.scorer.model.pattern');
+    expect(err.message).toContain('has unknown provider "azure"');
+    expect(err.message).toContain('expected one of anthropic, openai, google');
+  });
+
+  it('rejects a provider with no model id after the slash', () => {
+    const err = expectConfigError(withCriterion(agent({ model: 'openai/' })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.model.pattern');
+    expect(err.message).toContain('is missing the model id after "openai/"');
+  });
+
+  it('rejects a non-string model', () => {
+    const err = expectConfigError(withCriterion(browserAgent({ model: 42 })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.model.pattern');
+    expect(err.message).toContain('evaluation.criteria[0].scorer.model must be a string.');
+  });
+
+  it('rejects a bare model id on evaluation.report', () => {
+    const bad = baseYaml({
+      evaluation: {
+        criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
+        report: { instructions: 'Summarize.', model: 'gemini-3.1-pro-preview' },
+      },
+    });
+    const err = expectConfigError(bad);
+    expect(err.code).toBe('experiment.evaluation.report.model.pattern');
+    expect(err.message).toBe(
+      'evaluation.report.model must be "<provider>/<model>", ' +
+        'e.g. anthropic/claude-sonnet-5-5; got "gemini-3.1-pro-preview"',
+    );
+  });
+
+  // -- systemPrompt ----------------------------------------------------------
+
+  it('rejects a non-string systemPrompt on a judge scorer', () => {
+    const err = expectConfigError(withCriterion(judge({ systemPrompt: ['a'] })));
+    expect(err.code).toBe('experiment.criterion.judge.scorer.systemPrompt.type');
+    expect(err.message).toContain('evaluation.criteria[0].scorer.systemPrompt must be a string.');
+  });
+
+  it('rejects an empty systemPrompt on an agent scorer', () => {
+    const err = expectConfigError(withCriterion(agent({ systemPrompt: '' })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.systemPrompt.type');
+    expect(err.message).toContain(
+      'evaluation.criteria[0].scorer.systemPrompt must be a non-empty string.',
+    );
+  });
+
+  it('rejects an empty systemPrompt on evaluation.report', () => {
+    const bad = baseYaml({
+      evaluation: {
+        criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
+        report: { instructions: 'Summarize.', systemPrompt: '' },
+      },
+    });
+    const err = expectConfigError(bad);
+    expect(err.code).toBe('experiment.evaluation.report.systemPrompt.type');
+    expect(err.message).toContain('evaluation.report.systemPrompt must be a non-empty string.');
+  });
+
+  // -- tools -----------------------------------------------------------------
+
+  it('rejects an unknown tool name on an agent scorer', () => {
+    const err = expectConfigError(withCriterion(agent({ tools: ['ls'] })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.tools.item.enum');
+    expect(err.message).toBe(
+      'evaluation.criteria[0].scorer.tools[0] must be one of: ' +
+        'run_command, read_file, list_threads, read_thread_turns (got "ls").',
+    );
+  });
+
+  it('rejects an unknown tool name on a browser-agent scorer, listing the browser pair', () => {
+    const err = expectConfigError(withCriterion(browserAgent({ tools: ['list_files'] })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.tools.item.enum');
+    expect(err.message).toBe(
+      'evaluation.criteria[0].scorer.tools[0] must be one of: ' +
+        'run_command, read_file, list_threads, read_thread_turns, screenshot, ' +
+        'run_playwright_script (got "list_files").',
+    );
+  });
+
+  it('rejects a browser tool on type: agent with a pointer to browser-agent', () => {
+    for (const tool of ['screenshot', 'run_playwright_script']) {
+      const err = expectConfigError(withCriterion(agent({ tools: [tool] })));
+      expect(err.code).toBe('experiment.criterion.agent.scorer.tools.item.enum');
+      expect(err.message).toBe(
+        `evaluation.criteria[0].scorer.tools[0]: "${tool}" is only available on type: browser-agent.`,
+      );
+    }
+  });
+
+  it('rejects an empty tools list', () => {
+    const err = expectConfigError(withCriterion(agent({ tools: [] })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.tools.empty');
+    expect(err.message).toBe(
+      'evaluation.criteria[0].scorer.tools must list at least one tool; ' +
+        'use type: judge for a scorer with no tools.',
+    );
+  });
+
+  it('rejects duplicate tools', () => {
+    const err = expectConfigError(
+      withCriterion(agent({ tools: ['read_file', 'run_command', 'read_file'] })),
+    );
+    expect(err.code).toBe('experiment.criterion.agent.scorer.tools.duplicate');
+    expect(err.message).toBe('evaluation.criteria[0].scorer.tools[2] lists "read_file" twice.');
+  });
+
+  it('rejects a non-array tools value and non-string entries', () => {
+    const notArray = expectConfigError(withCriterion(agent({ tools: 'read_file' })));
+    expect(notArray.code).toBe('experiment.criterion.agent.scorer.tools.type');
+    expect(notArray.message).toContain('evaluation.criteria[0].scorer.tools must be an array.');
+
+    const notString = expectConfigError(withCriterion(agent({ tools: [7] })));
+    expect(notString.code).toBe('experiment.criterion.agent.scorer.tools.item.type');
+    expect(notString.message).toContain('evaluation.criteria[0].scorer.tools[0] must be a string.');
+  });
+
+  it('rejects tools on a judge scorer (judge takes model and systemPrompt only)', () => {
+    const err = expectConfigError(withCriterion(judge({ tools: ['read_file'] })));
+    expect(err.code).toBe('experiment.criterion.judge.scorer.unknown_field');
+    expect(err.message).toContain("unknown field 'tools'");
+  });
+
+  it('rejects an unknown scorer field', () => {
+    const err = expectConfigError(withCriterion(agent({ temperature: 0 })));
+    expect(err.code).toBe('experiment.criterion.agent.scorer.unknown_field');
+    expect(err.message).toContain("unknown field 'temperature'");
+  });
+
+  // -- acceptance ------------------------------------------------------------
+
+  it('accepts and round-trips an agent scorer with model, systemPrompt, and tools', () => {
+    const config = parseV1(
+      withCriterion(
+        agent({
+          model: 'openai/gpt-5.6',
+          systemPrompt: 'Score strictly.',
+          tools: ['read_file'],
+        }),
+      ),
+    );
+    expect(config.evaluation.criteria[0]).toMatchObject({
+      type: 'agent',
+      scorer: {
+        model: 'openai/gpt-5.6',
+        systemPrompt: 'Score strictly.',
+        tools: ['read_file'],
+      },
+    });
+  });
+
+  it('accepts the browser pair on a browser-agent scorer', () => {
+    const config = parseV1(
+      withCriterion(
+        browserAgent({
+          model: 'anthropic/claude-sonnet-5-5',
+          tools: ['screenshot', 'run_playwright_script', 'run_command'],
+        }),
+      ),
+    );
+    expect(config.evaluation.criteria[0]).toMatchObject({
+      type: 'browser-agent',
+      scorer: {
+        model: 'anthropic/claude-sonnet-5-5',
+        tools: ['screenshot', 'run_playwright_script', 'run_command'],
+      },
+    });
+  });
+
+  it('accepts a judge scorer with model and systemPrompt', () => {
+    const config = parseV1(
+      withCriterion(judge({ model: 'google/gemini-3.1-pro-preview', systemPrompt: 'Be terse.' })),
+    );
+    expect(config.evaluation.criteria[0]).toMatchObject({
+      type: 'judge',
+      scorer: { model: 'google/gemini-3.1-pro-preview', systemPrompt: 'Be terse.' },
+    });
+  });
+
+  it('accepts a report with model and systemPrompt', () => {
+    const config = parseV1(
+      baseYaml({
+        evaluation: {
+          criteria: [{ id: 'tests', title: 'Tests', type: 'script', run: 'pytest' }],
+          report: {
+            instructions: 'Summarize the run.',
+            model: 'google/gemini-3.1-pro-preview',
+            systemPrompt: 'Write like a lab notebook.',
+          },
+        },
+      }),
+    );
+    expect(config.evaluation.report).toEqual({
+      instructions: 'Summarize the run.',
+      model: 'google/gemini-3.1-pro-preview',
+      systemPrompt: 'Write like a lab notebook.',
+    });
   });
 });
 

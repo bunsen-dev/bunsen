@@ -456,6 +456,25 @@ function getViewerHtml(runId: string): string {
       line-height: 1.5;
     }
 
+    /* A criterion whose scorer never produced a verdict: no score to show,
+       and visually distinct so it never reads as a zero the agent earned. */
+    .criterion-item.errored {
+      border-left: 3px solid var(--accent-red);
+    }
+
+    .criterion-item.errored .criterion-score {
+      color: var(--accent-red);
+    }
+
+    .criterion-error {
+      margin-top: 6px;
+      font-size: 12px;
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      color: var(--accent-red);
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+
     .report-content {
       line-height: 1.6;
     }
@@ -909,6 +928,13 @@ function getViewerHtml(runId: string): string {
       return div.innerHTML;
     }
 
+    // textContent/innerHTML leaves quotes alone, so escapeHtml alone is not
+    // safe inside an attribute value. Criterion ids and paths come from the
+    // experiment (possibly a third-party suite), so escape them properly.
+    function escapeAttr(text) {
+      return escapeHtml(String(text)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     async function viewScorerLog(logPath) {
       const match = logPath.match(/evaluation\\/criteria\\/(.+)\\.log$/);
       const slug = match ? match[1] : logPath.replace(/^scorer-/, '').replace(/\\.log$/, '');
@@ -948,20 +974,31 @@ function getViewerHtml(runId: string): string {
           scoreEl.innerHTML = '<span class="score-badge">' + weightedScore.toFixed(2) + '/1</span>';
         }
 
-        // Update criteria scores (filter out N/A scores)
+        // Update criteria scores. Scored criteria render their number; a
+        // criterion whose scorer errored renders as ERROR with the reason —
+        // dropping it would hide a real failure behind a missing row.
+        // Gate-skipped criteria stay hidden (they were never attempted).
         if (evaluation?.criteria?.length) {
-          const scoredCriteria = evaluation.criteria.filter(c => c.score !== null && c.score !== undefined);
-          if (scoredCriteria.length > 0) {
-            document.getElementById('criteria-list').innerHTML = scoredCriteria.map(c => {
-              const typeTag = c.scorerType && c.scorerType !== 'judge' ? \`<span style="font-size:0.75em;opacity:0.6;margin-left:0.5em">[\${c.scorerType}]</span>\` : '';
-              const logLink = c.logPath ? \`<a href="#" onclick="viewScorerLog('\${c.logPath}');return false" style="font-size:0.8em;margin-left:0.5em">View Log</a>\` : '';
+          const shownCriteria = evaluation.criteria.filter(c =>
+            (c.score !== null && c.score !== undefined) || c.status === 'error'
+          );
+          if (shownCriteria.length > 0) {
+            document.getElementById('criteria-list').innerHTML = shownCriteria.map(c => {
+              const errored = c.status === 'error';
+              const tagText = [c.scorerType && c.scorerType !== 'judge' ? c.scorerType : null, c.model]
+                .filter(Boolean).join(' · ');
+              const typeTag = tagText ? \`<span style="font-size:0.75em;opacity:0.6;margin-left:0.5em">[\${escapeHtml(tagText)}]</span>\` : '';
+              const logLink = c.logPath ? \`<a href="#" data-log="\${escapeAttr(c.logPath)}" onclick="viewScorerLog(this.dataset.log);return false" style="font-size:0.8em;margin-left:0.5em">View Log</a>\` : '';
+              const scoreCell = errored ? 'ERROR' : c.score.toFixed(2);
+              const errorRow = errored && c.error ? \`<div class="criterion-error">\${escapeHtml(c.error)}</div>\` : '';
               return \`
-                <div class="criterion-item">
+                <div class="criterion-item\${errored ? ' errored' : ''}">
                   <div class="criterion-header">
                     <span class="criterion-name">\${escapeHtml(c.id)}\${typeTag}</span>
-                    <span class="criterion-score">\${c.score.toFixed(2)}\${logLink}</span>
+                    <span class="criterion-score">\${scoreCell}\${logLink}</span>
                   </div>
                   <div class="criterion-summary">\${escapeHtml(c.summary || '')}</div>
+                  \${errorRow}
                 </div>
               \`;
             }).join('');
@@ -979,6 +1016,11 @@ function getViewerHtml(runId: string): string {
             }
           });
           document.getElementById('report-content').innerHTML = marked.parse(evaluation.report);
+        } else if (evaluation?.reportError) {
+          // A configured report that failed is recorded, not thrown — say so
+          // instead of leaving the section empty.
+          document.getElementById('report-content').innerHTML =
+            \`<div class="criterion-error">Report not generated — \${escapeHtml(evaluation.reportError)}</div>\`;
         }
 
         // Update screenshots

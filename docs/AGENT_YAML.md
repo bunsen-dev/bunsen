@@ -247,8 +247,11 @@ inferred `entrypoint.invoke` into `agent.yaml` as a reviewable diff (with a
 sample composed invocation to eyeball). It **runs once per agent at authoring
 time**, not per run — the committed template is the contract; the model is only
 a drafting aid. It refuses to overwrite an existing `invoke` without `--force`,
-and `--dry-run` prints the suggestion without writing. Requires an Anthropic API
-key (`ANTHROPIC_API_KEY`).
+and `--dry-run` prints the suggestion without writing. It runs on
+`--model <provider>/<model>` (default `anthropic/claude-opus-5-5`) and needs that
+provider's platform key — the same variables `bn doctor` reports
+(`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY`, or their
+`BUNSEN_`-prefixed forms).
 
 ## `interaction`
 

@@ -17,6 +17,10 @@ import { isReservedEnvKey } from './project-loader.js';
 import {
   parseSchemaMeta,
   parseDuration,
+  parseScorerModelRef,
+  ScorerModelRefError,
+  AGENT_SCORER_TOOLS,
+  BROWSER_AGENT_SCORER_TOOLS,
   InvalidDurationError,
   type ExperimentConfig,
   type TaskConfig,
@@ -39,6 +43,10 @@ import {
   type RuntimeName,
   type PackageSpecs,
   type ExecutionUser,
+  type JudgeScorerConfig,
+  type AgentScorerConfig,
+  type BrowserAgentScorerConfig,
+  type BrowserAgentScorerToolName,
 } from '@bunsen-dev/types';
 
 // ---------------------------------------------------------------------------
@@ -1213,19 +1221,61 @@ function parseJudgeEvidence(raw: unknown, ctx: string): JudgeEvidence[] {
   });
 }
 
-function parseJudgeScorer(raw: unknown, ctx: string): { model?: string } {
+/**
+ * Parse a `<provider>/<model>` scorer reference (`scorer.model`,
+ * `evaluation.report.model`). The provider prefix is mandatory — there is no
+ * default provider — and the error message carries the fix so a bare model id
+ * is a one-line repair. See `parseScorerModelRef` in `@bunsen-dev/types` (and
+ * `$defs.scorerModel` in the JSON Schema, which mirrors the same pattern).
+ */
+function parseScorerModel(raw: unknown, ctx: string, code: string): string {
+  const value = requireString(raw, ctx, code, { minLength: 1 });
+  try {
+    parseScorerModelRef(value);
+  } catch (err) {
+    if (err instanceof ScorerModelRefError) {
+      // `ScorerModelRefError.message` is phrased to follow a field name.
+      fail(code, `${ctx} ${err.message}`, ctx);
+    }
+    throw err;
+  }
+  return value;
+}
+
+/**
+ * Parse a `scorer.systemPrompt` / `report.systemPrompt` override. It replaces
+ * the scorer's default system prompt wholesale, so an empty string is a
+ * mistake, not a no-op.
+ */
+function parseScorerSystemPrompt(raw: unknown, ctx: string, code: string): string {
+  return requireString(raw, ctx, code, { minLength: 1 });
+}
+
+function parseJudgeScorer(raw: unknown, ctx: string): JudgeScorerConfig {
   if (!isRecord(raw)) {
     fail('experiment.criterion.judge.scorer.type', `${ctx} must be a mapping.`, ctx);
   }
-  const out: { model?: string } = {};
+  const out: JudgeScorerConfig = {};
   if (raw.model !== undefined) {
-    out.model = requireString(
+    out.model = parseScorerModel(
       raw.model,
       `${ctx}.model`,
-      'experiment.criterion.judge.scorer.model.type',
+      'experiment.criterion.judge.scorer.model.pattern',
     );
   }
-  ensureNoUnknownKeys(raw, new Set(['model']), ctx, 'experiment.criterion.judge.scorer.unknown_field');
+  if (raw.systemPrompt !== undefined) {
+    out.systemPrompt = parseScorerSystemPrompt(
+      raw.systemPrompt,
+      `${ctx}.systemPrompt`,
+      'experiment.criterion.judge.scorer.systemPrompt.type',
+    );
+  }
+  ensureNoUnknownKeys(
+    raw,
+    new Set(['model', 'systemPrompt']),
+    ctx,
+    'experiment.criterion.judge.scorer.unknown_field',
+  );
   return out;
 }
 
@@ -1237,7 +1287,7 @@ function parseAgentCriterion(raw: Raw, common: CriterionBaseCommon, ctx: string)
     { minLength: 1 },
   );
   const scorer =
-    raw.scorer === undefined ? undefined : parseAgentScorer(raw.scorer, `${ctx}.scorer`);
+    raw.scorer === undefined ? undefined : parseAgentScorer(raw.scorer, `${ctx}.scorer`, 'agent');
   const allowed: ReadonlySet<string> = new Set([
     'id',
     'title',
@@ -1271,7 +1321,7 @@ function parseBrowserAgentCriterion(
     { minLength: 1 },
   );
   const scorer =
-    raw.scorer === undefined ? undefined : parseAgentScorer(raw.scorer, `${ctx}.scorer`);
+    raw.scorer === undefined ? undefined : parseAgentScorer(raw.scorer, `${ctx}.scorer`, 'browser-agent');
   const allowed: ReadonlySet<string> = new Set([
     'id',
     'title',
@@ -1293,44 +1343,110 @@ function parseBrowserAgentCriterion(
   };
 }
 
-function parseAgentScorer(raw: unknown, ctx: string): { model?: string; tools?: string[] } {
+/**
+ * Parse the `scorer` block of an `agent` / `browser-agent` criterion. Both
+ * share the error-code namespace (`experiment.criterion.agent.scorer.*`) and
+ * the same fields; only the legal `tools` set differs — the browser pair is
+ * available on `type: browser-agent` alone.
+ */
+function parseAgentScorer(raw: unknown, ctx: string, kind: 'agent'): AgentScorerConfig;
+function parseAgentScorer(
+  raw: unknown,
+  ctx: string,
+  kind: 'browser-agent',
+): BrowserAgentScorerConfig;
+function parseAgentScorer(
+  raw: unknown,
+  ctx: string,
+  kind: 'agent' | 'browser-agent',
+): AgentScorerConfig | BrowserAgentScorerConfig {
   if (!isRecord(raw)) {
     fail('experiment.criterion.agent.scorer.type', `${ctx} must be a mapping.`, ctx);
   }
-  const out: { model?: string; tools?: string[] } = {};
+  const out: { model?: string; systemPrompt?: string; tools?: BrowserAgentScorerToolName[] } = {};
   if (raw.model !== undefined) {
-    out.model = requireString(
+    out.model = parseScorerModel(
       raw.model,
       `${ctx}.model`,
-      'experiment.criterion.agent.scorer.model.type',
+      'experiment.criterion.agent.scorer.model.pattern',
+    );
+  }
+  if (raw.systemPrompt !== undefined) {
+    out.systemPrompt = parseScorerSystemPrompt(
+      raw.systemPrompt,
+      `${ctx}.systemPrompt`,
+      'experiment.criterion.agent.scorer.systemPrompt.type',
     );
   }
   if (raw.tools !== undefined) {
-    if (!Array.isArray(raw.tools)) {
-      fail(
-        'experiment.criterion.agent.scorer.tools.type',
-        `${ctx}.tools must be an array.`,
-        `${ctx}.tools`,
-      );
-    }
-    out.tools = raw.tools.map((tool, i) => {
-      if (typeof tool !== 'string') {
-        fail(
-          'experiment.criterion.agent.scorer.tools.item.type',
-          `${ctx}.tools[${i}] must be a string.`,
-          `${ctx}.tools[${i}]`,
-        );
-      }
-      return tool;
-    });
+    out.tools = parseScorerTools(raw.tools, `${ctx}.tools`, kind);
   }
   ensureNoUnknownKeys(
     raw,
-    new Set(['model', 'tools']),
+    new Set(['model', 'systemPrompt', 'tools']),
     ctx,
     'experiment.criterion.agent.scorer.unknown_field',
   );
-  return out;
+  return kind === 'agent'
+    ? (out as AgentScorerConfig)
+    : (out as BrowserAgentScorerConfig);
+}
+
+/**
+ * Parse a `scorer.tools` allowlist. An explicit list narrows the exploration
+ * tools the scorer gets; the verdict tool is always present, so an empty list
+ * would describe a judge, not an agent, and is rejected as such.
+ */
+function parseScorerTools(
+  raw: unknown,
+  ctx: string,
+  kind: 'agent' | 'browser-agent',
+): BrowserAgentScorerToolName[] {
+  const legal: readonly string[] =
+    kind === 'agent' ? AGENT_SCORER_TOOLS : BROWSER_AGENT_SCORER_TOOLS;
+  if (!Array.isArray(raw)) {
+    fail('experiment.criterion.agent.scorer.tools.type', `${ctx} must be an array.`, ctx);
+  }
+  if (raw.length === 0) {
+    fail(
+      'experiment.criterion.agent.scorer.tools.empty',
+      `${ctx} must list at least one tool; use type: judge for a scorer with no tools.`,
+      ctx,
+    );
+  }
+  const seen = new Set<string>();
+  const tools: BrowserAgentScorerToolName[] = [];
+  raw.forEach((tool, i) => {
+    const at = `${ctx}[${i}]`;
+    if (typeof tool !== 'string') {
+      fail(
+        'experiment.criterion.agent.scorer.tools.item.type',
+        `${at} must be a string.`,
+        at,
+      );
+    }
+    if (!legal.includes(tool)) {
+      const browserOnly =
+        kind === 'agent' && (BROWSER_AGENT_SCORER_TOOLS as readonly string[]).includes(tool);
+      fail(
+        'experiment.criterion.agent.scorer.tools.item.enum',
+        browserOnly
+          ? `${at}: ${JSON.stringify(tool)} is only available on type: browser-agent.`
+          : `${at} must be one of: ${legal.join(', ')} (got ${JSON.stringify(tool)}).`,
+        at,
+      );
+    }
+    if (seen.has(tool)) {
+      fail(
+        'experiment.criterion.agent.scorer.tools.duplicate',
+        `${at} lists ${JSON.stringify(tool)} twice.`,
+        at,
+      );
+    }
+    seen.add(tool);
+    tools.push(tool as BrowserAgentScorerToolName);
+  });
+  return tools;
 }
 
 function parseAggregateCriterion(
@@ -1424,7 +1540,18 @@ function parseReport(raw: unknown, ctx: string): ReportConfig {
   );
   const out: ReportConfig = { instructions };
   if (raw.model !== undefined) {
-    out.model = requireString(raw.model, `${ctx}.model`, 'experiment.evaluation.report.model.type');
+    out.model = parseScorerModel(
+      raw.model,
+      `${ctx}.model`,
+      'experiment.evaluation.report.model.pattern',
+    );
+  }
+  if (raw.systemPrompt !== undefined) {
+    out.systemPrompt = parseScorerSystemPrompt(
+      raw.systemPrompt,
+      `${ctx}.systemPrompt`,
+      'experiment.evaluation.report.systemPrompt.type',
+    );
   }
   if (raw.evidence !== undefined) {
     out.evidence = parseJudgeEvidence(raw.evidence, `${ctx}.evidence`);
@@ -1441,7 +1568,7 @@ function parseReport(raw: unknown, ctx: string): ReportConfig {
   }
   ensureNoUnknownKeys(
     raw,
-    new Set(['instructions', 'model', 'evidence', 'needs', 'timeout']),
+    new Set(['instructions', 'model', 'systemPrompt', 'evidence', 'needs', 'timeout']),
     ctx,
     'experiment.evaluation.report.unknown_field',
   );

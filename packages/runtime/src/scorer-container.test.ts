@@ -3,9 +3,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
+  buildScorerContainerEnv,
   buildScorerContainerMounts,
   buildScorerExecOptions,
   collectScriptResultArtifacts,
+  interpretScorerExec,
   parseResultJson,
   resolveScore,
   resolveScorerPath,
@@ -15,6 +17,7 @@ import {
   SCORER_FALLBACK_PATH,
   SCRIPT_SCORER_ENV,
 } from './scorer-container.js';
+import { ExecTimeoutError } from './container.js';
 import { STABLE_PATHS } from './runtime-contract.js';
 import { RUN_PATHS } from './storage.js';
 
@@ -261,6 +264,208 @@ describe('SCRIPT_SCORER_ENV', () => {
 
   it('is frozen so callers cannot mutate it', () => {
     expect(Object.isFrozen(SCRIPT_SCORER_ENV)).toBe(true);
+  });
+});
+
+// =============================================================================
+// buildScorerContainerEnv — the dedicated container's key-free base env
+// =============================================================================
+
+describe('buildScorerContainerEnv', () => {
+  it('carries the script-scorer contract and the resolved PATH', () => {
+    const env = buildScorerContainerEnv({ imageEnvPath: '/usr/local/go/bin:/usr/bin' });
+    expect(env).toMatchObject(SCRIPT_SCORER_ENV);
+    expect(env.PATH).toBe('/bunsen/bin:/usr/local/go/bin:/usr/bin');
+  });
+
+  it('falls back to the default PATH when the image declares none', () => {
+    expect(buildScorerContainerEnv({}).PATH).toBe(SCORER_FALLBACK_PATH);
+  });
+
+  it('merges reserved run/suite context', () => {
+    const env = buildScorerContainerEnv({
+      reservedEnv: { BUNSEN_RUN_ID: 'run-1', BUNSEN_EXPERIMENT: 'demo' },
+    });
+    expect(env.BUNSEN_RUN_ID).toBe('run-1');
+    expect(env.BUNSEN_EXPERIMENT).toBe('demo');
+  });
+
+  it('contains no provider API key — script criteria must never see one', () => {
+    // The whole point of per-exec key delivery (DESIGN.md D3): creation-time
+    // env is visible to every exec, including user-authored verifier scripts.
+    const env = buildScorerContainerEnv({
+      reservedEnv: { BUNSEN_RUN_ID: 'run-1' },
+      imageEnvPath: '/usr/bin',
+    });
+    expect(Object.keys(env).filter((k) => /_API_KEY$/.test(k))).toEqual([]);
+  });
+});
+
+// =============================================================================
+// interpretScorerExec — LLM scorer outcome → verdict or structured failure
+// =============================================================================
+
+describe('interpretScorerExec', () => {
+  const ok = (stdout: string) =>
+    interpretScorerExec({ exitCode: 0, stdout, stderr: '', timeoutMs: 600_000 });
+
+  it('parses a verdict from stdout', () => {
+    const run = ok(JSON.stringify({ score: 0.5, summary: 'Half credit.' }));
+    expect(run).toEqual({ ok: true, output: { score: 0.5, summary: 'Half credit.' } });
+  });
+
+  it('keeps a null score (the report step scores nothing)', () => {
+    const run = ok(JSON.stringify({ score: null, summary: 'Wrote it up.', report: '# Report' }));
+    expect(run).toEqual({
+      ok: true,
+      output: { score: null, summary: 'Wrote it up.', report: '# Report' },
+    });
+  });
+
+  it('defaults a missing score to null rather than 0', () => {
+    const run = ok(JSON.stringify({ summary: 'No score field.' }));
+    expect(run).toEqual({ ok: true, output: { score: null, summary: 'No score field.' } });
+  });
+
+  it('carries screenshots and artifacts through', () => {
+    const run = ok(
+      JSON.stringify({
+        score: 1,
+        summary: 'Looks right.',
+        screenshots: ['home.png', 'about.png'],
+        artifacts: [{ path: 'out.json', mediaType: 'application/json' }],
+      }),
+    );
+    expect(run.ok && run.output.screenshots).toEqual(['home.png', 'about.png']);
+    expect(run.ok && run.output.artifacts).toEqual([
+      { path: 'out.json', mediaType: 'application/json' },
+    ]);
+  });
+
+  it('reports a timeout as timedOut, in seconds', () => {
+    const run = interpretScorerExec({
+      error: new ExecTimeoutError(600_000, { stdout: '', stderr: '', durationMs: 600_000 }),
+      timeoutMs: 600_000,
+    });
+    expect(run).toEqual({ ok: false, timedOut: true, error: 'Scorer timed out after 600s' });
+  });
+
+  it('reports a non-timeout exec error verbatim', () => {
+    const run = interpretScorerExec({ error: new Error('container is gone'), timeoutMs: 1000 });
+    expect(run).toEqual({ ok: false, timedOut: false, error: 'container is gone' });
+  });
+
+  it('handles a thrown non-Error', () => {
+    const run = interpretScorerExec({ error: 'boom', timeoutMs: 1000 });
+    expect(run).toEqual({ ok: false, timedOut: false, error: 'boom' });
+  });
+
+  it('reports a non-zero exit with the tail of stderr', () => {
+    const run = interpretScorerExec({
+      exitCode: 1,
+      stdout: '',
+      stderr: 'Error: no verdict\n',
+      timeoutMs: 1000,
+    });
+    expect(run).toEqual({ ok: false, timedOut: false, error: 'Scorer exited 1: Error: no verdict' });
+  });
+
+  it('truncates a very long reason line', () => {
+    const run = interpretScorerExec({
+      exitCode: 2,
+      stdout: '',
+      stderr: 'x'.repeat(2000),
+      timeoutMs: 1000,
+    });
+    expect(run.ok).toBe(false);
+    if (!run.ok) {
+      expect(run.error).toStartWith('Scorer exited 2: xxxx');
+      expect(run.error).toEndWith('…');
+      expect(run.error.length).toBeLessThan(600);
+    }
+  });
+
+  it("uses the bundle's `Scoring failed:` line as the reason, not the stack that follows it", () => {
+    const stderr = [
+      '[scorer] judge "Page quality" (page-quality) on openai/gpt-5.6; tools: none',
+      'Scoring failed: Incorrect API key provided: sk-proj-****. You can find your API key at https://platform.openai.com/account/api-keys.',
+      'AI_APICallError: Incorrect API key provided',
+      '    at /bunsen/lib/scorer.cjs:16197:14',
+      '    at async postToApi (/bunsen/lib/scorer.cjs:15855:28)',
+      '    at async retryWithExponentialBackoffInternal (/bunsen/lib/scorer.cjs:16051:12)',
+      '',
+    ].join('\n');
+    const run = interpretScorerExec({ exitCode: 1, stdout: '', stderr, timeoutMs: 1000 });
+    expect(run).toEqual({
+      ok: false,
+      timedOut: false,
+      error:
+        'Scorer exited 1: Scoring failed: Incorrect API key provided: sk-proj-****. You can find your API key at https://platform.openai.com/account/api-keys.',
+    });
+  });
+
+  it('falls back to the last non-stack line when the bundle printed no `Scoring failed:` line', () => {
+    const stderr = 'TypeError: boom\n    at x (/bunsen/lib/scorer.cjs:1:1)\n    at y (/bunsen/lib/scorer.cjs:2:2)\n';
+    expect(scorerFailureReason(stderr)).toBe('TypeError: boom');
+  });
+
+  it('reports a non-zero exit with no stderr at all', () => {
+    const run = interpretScorerExec({ exitCode: 137, stdout: '', stderr: '', timeoutMs: 1000 });
+    expect(run).toEqual({ ok: false, timedOut: false, error: 'Scorer exited 137' });
+  });
+
+  it('reports empty stdout as no verdict', () => {
+    expect(ok('   \n ')).toEqual({
+      ok: false,
+      timedOut: false,
+      error: 'Scorer produced no verdict (no output)',
+    });
+  });
+
+  it('reports unparseable stdout as no verdict, quoting it', () => {
+    const run = ok('not json at all');
+    expect(run.ok).toBe(false);
+    if (!run.ok) {
+      expect(run.error).toBe(
+        'Scorer produced no verdict (unparseable output: not json at all)',
+      );
+      expect(run.timedOut).toBe(false);
+    }
+  });
+
+  it('rejects valid JSON that is not an object', () => {
+    const run = ok('[1, 2, 3]');
+    expect(run.ok).toBe(false);
+    if (!run.ok) expect(run.error).toContain('expected a JSON object');
+  });
+
+  it('rejects a verdict with no summary', () => {
+    expect(ok(JSON.stringify({ score: 1 }))).toEqual({
+      ok: false,
+      timedOut: false,
+      error: 'Scorer produced no verdict (output has no "summary")',
+    });
+  });
+
+  it('rejects a non-numeric score', () => {
+    const run = ok(JSON.stringify({ score: 'high', summary: 'ok' }));
+    expect(run.ok).toBe(false);
+    if (!run.ok) expect(run.error).toBe('Scorer produced no verdict (invalid "score": "high")');
+  });
+
+  it('never resolves a failure to score 0', () => {
+    // DESIGN.md D6: a 0 is a claim about the agent; a broken scorer has no
+    // evidence for it.
+    const failures = [
+      interpretScorerExec({ error: new Error('x'), timeoutMs: 1 }),
+      interpretScorerExec({ exitCode: 1, stderr: 'nope', timeoutMs: 1 }),
+      ok(''),
+      ok('{}'),
+    ];
+    for (const run of failures) {
+      expect(run.ok).toBe(false);
+      expect(run).not.toHaveProperty('output');
+    }
   });
 });
 
@@ -603,5 +808,81 @@ describe('/workspace-source scorer contract', () => {
       );
       expect(dedicatedMode.env.BUNSEN_WORKSPACE_SOURCE_DIR).toBe('/workspace-source');
     });
+  });
+});
+
+// =============================================================================
+// redactSecrets — the criterion log must never carry a key the host handed out
+// =============================================================================
+
+import { redactSecrets, scorerFailureReason } from './scorer-container.js';
+
+describe('redactSecrets', () => {
+  it('replaces every occurrence of each known secret', () => {
+    const key = 'sk-ant-api03-abcdefghijklmnop';
+    const text = `export ANTHROPIC_API_KEY="${key}"\n[scorer] run_command → ${key} again`;
+    const out = redactSecrets(text, [key, 'sk-proj-zyxwvutsrqponmlk']);
+    expect(out).not.toContain(key);
+    expect(out).toBe('export ANTHROPIC_API_KEY="[redacted]"\n[scorer] run_command → [redacted] again');
+  });
+
+  it('ignores empty and short values so ordinary words are not mangled', () => {
+    const text = 'the key is set; done';
+    expect(redactSecrets(text, ['', 'key', 'set', 'done'])).toBe(text);
+  });
+
+  it('is a no-op with no secrets', () => {
+    expect(redactSecrets('anything', [])).toBe('anything');
+  });
+});
+
+// =============================================================================
+// createStreamScrubber — the live echo must not leak a secret split across chunks
+// =============================================================================
+
+import { createStreamScrubber, scorerExecScript, SCORER_PGID_FILE } from './scorer-container.js';
+
+describe('createStreamScrubber', () => {
+  const key = 'sk-ant-api03-SECRETVALUE12345';
+
+  it('redacts a secret that straddles two chunks and never emits a fragment of it', () => {
+    const s = createStreamScrubber([key]);
+    const a = s.push('export KEY="sk-ant-api03-SEC');
+    const b = s.push('RETVALUE12345" done\n');
+    const out = a + b + s.flush();
+    expect(out).toBe('export KEY="[redacted]" done\n');
+    expect(a).not.toContain('sk-ant');
+    expect(a + b).not.toContain('SECRET');
+  });
+
+  it('holds back a chunk tail that could begin a secret, then releases it when it does not', () => {
+    const s = createStreamScrubber([key]);
+    const a = s.push('value is sk-ant');
+    expect(a).toBe('value is ');
+    const b = s.push('-not-the-key actually\n');
+    expect(a + b + s.flush()).toBe('value is sk-ant-not-the-key actually\n');
+  });
+
+  it('passes ordinary text through unchanged, chunk by chunk', () => {
+    const s = createStreamScrubber([key]);
+    expect(s.push('[scorer] step 1: read_file\n') + s.push('[scorer]   read_file → ok\n') + s.flush()).toBe(
+      '[scorer] step 1: read_file\n[scorer]   read_file → ok\n',
+    );
+  });
+
+  it('flush redacts whatever was still pending', () => {
+    const s = createStreamScrubber([key]);
+    const a = s.push(`tail ${key.slice(0, 10)}`);
+    expect(a).toBe('tail ');
+    expect(s.push(key.slice(10)) + s.flush()).toBe('[redacted]');
+  });
+});
+
+describe('scorerExecScript', () => {
+  it('records the process group before exec-ing the bundle', () => {
+    const script = scorerExecScript('/bunsen/runtime/node', '/bunsen/scorer-output/scorer-config.json');
+    expect(script).toContain(`> ${SCORER_PGID_FILE}`);
+    expect(script).toContain("/proc/$$/stat");
+    expect(script).toEndWith("exec '/bunsen/runtime/node' /bunsen/lib/scorer.cjs --config '/bunsen/scorer-output/scorer-config.json'");
   });
 });

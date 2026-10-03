@@ -14,6 +14,104 @@ version and date and a fresh `[Unreleased]` is started.
 
 ## [Unreleased]
 
+### Changed
+
+- **LLM-backed scorers run on Anthropic, OpenAI, or Google models, chosen per criterion.**
+  `scorer.model` (on `judge`, `agent`, and `browser-agent` criteria) and `evaluation.report.model`
+  now take the `<provider>/<model>` form — `anthropic/claude-sonnet-5-5`, `openai/gpt-5.6`,
+  `google/gemini-3.1-pro-preview`. A bare model id (`claude-sonnet-5-5`) is rejected by
+  `bn experiments validate` with a message that shows the fix. The default moves to
+  `anthropic/claude-opus-5-5` (was `claude-sonnet-4-6`) for every LLM-backed scorer and the
+  report, so existing rubrics that omit `model` re-score on a different model. Keys are
+  resolved on the host per provider — `BUNSEN_ANTHROPIC_API_KEY` / `ANTHROPIC_API_KEY`,
+  `BUNSEN_OPENAI_API_KEY` / `OPENAI_API_KEY`, `BUNSEN_GEMINI_API_KEY` / `GEMINI_API_KEY` /
+  `GOOGLE_API_KEY` (first match wins) — and `bn run` now fails **before any container work** when a
+  provider a rubric needs has no key, naming the criteria (id, type, weight, model) that need it.
+  The published `experiment.v1.json` schema was tightened in place to match (`pattern` on `model`).
+- **Scorers see the task prompt, and the default scorer prompts were rewritten.** Every LLM-backed
+  scorer now receives the task the agent was given, a policy-only system prompt, and an invariant
+  user turn that carries the criterion, its instructions, the allowed scores, where the evidence is,
+  and the verdict contract. Re-running an existing experiment can therefore produce different
+  LLM-backed scores than before; scores from runs before and after this change are not comparable.
+- **`scorer.tools` is an enforced allowlist.** It must name only `run_command`, `read_file`,
+  `list_threads`, `read_thread_turns` (plus `screenshot` and `run_playwright_script` on
+  `browser-agent`); unknown names, browser tools on `type: agent`, an empty list, and duplicates fail
+  validation. The `list_files` tool is gone — `read_file` on a directory lists it.
+- **An un-gradeable criterion is `status: error` with `score: null`, not a 0.** A scorer that
+  crashes, times out, hits an API failure after retries, or never submits a verdict is recorded as
+  an error (with the reason in `error` and a log at `evaluation/criteria/<id>.log`), is excluded from
+  the weighted score, and does not trip its own gate; the rest of the evaluation continues and is
+  saved. Previously a timeout scored 0 and a crash discarded every sibling result.
+- **The platform API key never sits in any environment.** It is delivered to each LLM-scorer exec
+  as a one-time key file (mode 600, owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`) that
+  the scorer reads and deletes before anything else runs, for that criterion's provider only, in both
+  `evaluation.container` modes. `type: script` criteria no longer see it, in
+  `evaluation.container: agent` mode the agent under test no longer sees it, and because it is never
+  an environment variable, `/proc/<pid>/environ`, scorer subprocesses, and model-authored Playwright
+  code cannot read it either. The agent's own launch scripts (`agent-script.sh`, `launcher.sh`, which
+  export its keys) are deleted the moment the agent phase ends, so no scorer can read them.
+- No sampling parameters are sent to scorer models (was `temperature: 0`, which current Claude
+  models reject).
+- `bn run` exits **5** when at least one LLM-backed criterion exists and every one of them errored
+  (the documented "evaluation failed" code, previously never emitted). Any other outcome exits as
+  before.
+- `bn doctor` reports platform API keys per provider — check ids `api_key_anthropic`,
+  `api_key_openai`, `api_key_google` replace the single `api_keys` row in `--format json` output.
+- `bn agents infer-invoke --model` takes the `<provider>/<model>` form (default
+  `anthropic/claude-opus-5-5`, was `claude-opus-4-8`) and needs that provider's key.
+- Scorer tool parameters were renamed for consistency (relevant only if your `instructions` name
+  them): `run_command` takes `timeout_ms` and `background`; `screenshot` takes `full_page`,
+  `wait_for_selector`, `delay_ms`; `run_playwright_script` takes `timeout_ms`. Every duration is
+  `*_ms`.
+- The nine bundled example experiments whose report asks for evidence "from diff, logs, and traces"
+  now declare `report.evidence: [diff, logs, traces]` (the field was previously ignored, see Fixed).
+
+### Added
+
+- OpenAI and Google scorer models (`openai/…`, `google/…`) for `judge`, `agent`, `browser-agent`, and
+  `evaluation.report`; scorer cost is attributed per provider/model under `scorer:<criterion>`.
+- `scorer.systemPrompt` (judge, agent, browser-agent) and `evaluation.report.systemPrompt` replace
+  the default system prompt wholesale. The criterion, instructions, allowed scores, evidence, and
+  verdict tool live in the user turn and the tool definitions, so they survive any override. A
+  replaced prompt makes scores non-comparable with the default.
+- `CriterionStatus` gains `'error'`; `CriterionResult` / manifest `evaluation.criteria[]` gain
+  `model` (the resolved `<provider>/<model>` for LLM-backed criteria) and `error`;
+  `EvaluationResult.reportError` / manifest `evaluation.report_error` record a failed report step;
+  the `criterion.completed` event's `status` can be `'error'`. The run index gains `model` and
+  `error` columns (index schema version 5; existing indexes rebuild automatically).
+- LLM-backed criteria now write a scorer log at `evaluation/criteria/<id>.log` and set `log_path`,
+  like script criteria (the report step writes `summary-report.log`). Every secret the host handed
+  out for the run — platform keys and secret-looking agent env vars — is scrubbed from that log
+  before it is written, and the scorer masks provider-key shapes in the tool-result previews it prints.
+- The vendored LiteLLM pricing snapshot was refreshed (244 models): the Claude 5.5, GPT-5.6, and
+  Gemini 3.x ids price from data; ids LiteLLM has since pruned (the Claude 3 family, Gemini 2.0)
+  fall back to the coarse per-provider default and are flagged as unpriced.
+- `@bunsen-dev/types` exports `ScorerProvider`, `parseScorerModelRef`, `SCORER_MODEL_PATTERN`, and the
+  `AgentScorerToolName` / `BrowserAgentScorerToolName` unions with their constant lists.
+
+### Fixed
+
+- `evaluation.report.instructions` and `evaluation.report.evidence` are honored (they were read by
+  the runtime and ignored by the scorer).
+- Scorer tool inputs are validated and omitted values get their documented defaults —
+  `run_command` runs with a 30 s timeout (it had none), `run_playwright_script` with 60 s (it failed
+  instantly), and a verdict outside the criterion's `scores` is rejected and re-requested instead
+  of being silently snapped.
+- Scorer models that reject `temperature` (current Claude models) work.
+- Scorers and `bn agents infer-invoke` work on current Claude models, which reject forced tool
+  choice (`tool_choice: tool` / `any`). The verdict tool is now the only tool offered on the final
+  call, on every provider, instead of being forced.
+- An aggregate-only rubric with an `evaluation.report` no longer silently skips the report.
+- `bn runs open` shows errored criteria instead of dropping every criterion with a null score.
+- A timed-out scorer (LLM-backed or `script`) is now killed — its whole process group — before the
+  next criterion runs. Previously Docker only abandoned the exec and the scorer kept running, making
+  paid requests and writing into the shared workspace and screenshot directory.
+
+### Removed
+
+- `@bunsen-dev/types`: the internal `ScorerType` union; `@bunsen-dev/runtime`: `determineScorerType`.
+  The internal `ScorerConfig` handed to the bundled scorer was reshaped (no compatibility path).
+
 ## [0.4.0] - 2026-09-08
 
 ### Changed

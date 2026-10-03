@@ -179,21 +179,43 @@ function renderText(manifest: RunManifestV1, runId: string): void {
       const runDir = getRunDir(runId);
       console.log();
       for (const criterion of evaluation.criteria) {
-        const scoreStr = criterion.score !== null ? criterion.score.toFixed(2) : 'N/A';
+        // A `null` score is not one thing: `error` means the scorer produced no
+        // verdict (excluded from the weighted score, never a zero the agent
+        // earned), `skipped` means an upstream gate closed, and a plain null on
+        // a completed criterion is an observation-only note.
+        const scoreStr =
+          criterion.status === 'error'
+            ? chalk.red('ERROR')
+            : criterion.status === 'skipped'
+              ? chalk.yellow('SKIPPED')
+              : criterion.score !== null
+                ? criterion.score.toFixed(2)
+                : 'N/A';
         const weightStr = criterion.weight === 0 ? ' (observation only)' : '';
         console.log(`${criterion.id}: ${scoreStr}${weightStr}`);
         console.log(chalk.dim(`  ${criterion.summary}`));
+        if (criterion.error) {
+          console.log(chalk.red(`  Error: ${criterion.error}`));
+        }
+        if (criterion.model) {
+          console.log(chalk.dim(`  Model: ${criterion.model}`));
+        }
         if (criterion.screenshots && criterion.screenshots.length > 0) {
           for (const screenshot of criterion.screenshots) {
             console.log(chalk.cyan(`  Screenshot: ${path.join(runDir, screenshot)}`));
           }
         }
       }
+      const reportError = evaluation.reportError ?? manifest.evaluation?.report_error;
       if (evaluation.report) {
         console.log();
         console.log(chalk.bold('Report'));
         console.log(chalk.dim('─'.repeat(50)));
         console.log(evaluation.report);
+      } else if (reportError) {
+        // A configured report that failed is recorded, not thrown.
+        console.log();
+        console.log(chalk.yellow(`Report: not generated — ${reportError}`));
       }
     }
   }

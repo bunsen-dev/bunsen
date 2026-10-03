@@ -83,6 +83,10 @@ export type {
   JudgeCriterion,
   JudgeEvidence,
   JudgeScorerConfig,
+  AgentScorerToolName,
+  BrowserAgentScorerToolName,
+  BrowserAgentScorerConfig,
+  ScorerToolName,
   AgentCriterion,
   AgentScorerConfig,
   BrowserAgentCriterion,
@@ -93,6 +97,19 @@ export type {
   ReportConfig,
   ExperimentVariant,
 } from './experiment.js';
+export { AGENT_SCORER_TOOLS, BROWSER_AGENT_SCORER_TOOLS } from './experiment.js';
+
+// Scorer model references (`<provider>/<model>`)
+export {
+  SCORER_PROVIDERS,
+  SCORER_MODEL_PATTERN,
+  SCORER_MODEL_EXAMPLE,
+  SCORER_KEY_FILE_ENV,
+  ScorerModelRefError,
+  isScorerProvider,
+  parseScorerModelRef,
+} from './scorer-model.js';
+export type { ScorerProvider, ScorerModelRef } from './scorer-model.js';
 
 // ---------------------------------------------------------------------------
 // Agent config (v1)
@@ -262,7 +279,7 @@ export type {
   CalibrationResult,
   ContainerOptions,
   ContainerMount,
-  ScorerType,
+  ScorerRunType,
   DependencyScore,
   ScorerConfig,
   ScorerOutput,

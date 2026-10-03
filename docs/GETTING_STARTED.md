@@ -7,10 +7,14 @@ you at the path that fits what you're doing.
 
 - **Docker** — every run executes in a container. Docker Desktop or Engine, running.
 - **Node.js ≥ 22** — the CLI ships as an npm package.
-- **An Anthropic API key** — needed for LLM evaluation and Claude-powered agents
-  like `claude-code`. Set `ANTHROPIC_API_KEY` in your environment (or a `.env`
-  file in your project — Bunsen loads it automatically). A no-AI agent scored by
-  a deterministic rubric runs fully offline without one.
+- **An API key for the provider your scorers use** — the default scorer model is
+  Anthropic's, so `ANTHROPIC_API_KEY` covers LLM evaluation out of the box (and
+  Claude-powered agents like `claude-code`). A rubric can name `openai/…` or
+  `google/…` scorer models instead, which need `OPENAI_API_KEY` /
+  `GEMINI_API_KEY`. Set them in your environment or a `.env` file in your project
+  — Bunsen loads it automatically, and `bn doctor` reports each provider
+  separately. A no-AI agent scored by a deterministic rubric runs fully offline
+  without any key.
 
 ## Install the CLI
 

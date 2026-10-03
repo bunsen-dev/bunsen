@@ -81,10 +81,19 @@ concern, run on a disposable/throwaway host or VM and pass only throwaway API ke
   with no outbound access. See [The Environment Model](./ENVIRONMENT.md) and
   [experiment.yaml Reference](./EXPERIMENT_YAML.md) for where this is configured.
 
-> **Platform agents vs. the agent under test.** The supervisor and scorer (the *platform
-> agents*) make their own model calls using a separate `BUNSEN_ANTHROPIC_API_KEY`, distinct from the
-> provider keys passed to the agent under test via `defaults.passEnv`. Scoping each independently lets you,
-> for example, give the agent under test only a throwaway key while keeping the evaluation key elsewhere.
+> **Platform agents vs. the agent under test.** The supervisor and scorer (the *platform agents*) make
+> their own model calls with keys the platform resolves on the host, per provider: `BUNSEN_ANTHROPIC_API_KEY`
+> or `ANTHROPIC_API_KEY`, `BUNSEN_OPENAI_API_KEY` or `OPENAI_API_KEY`, `BUNSEN_GEMINI_API_KEY` /
+> `GEMINI_API_KEY` / `GOOGLE_API_KEY` (first match wins). The `BUNSEN_`-prefixed form is how you keep the
+> platform's key distinct from the provider keys the agent under test gets via `defaults.passEnv` — give the
+> agent under test only a throwaway key while the evaluation runs on another.
+>
+> A platform key is **never set on any environment**. Each LLM-scorer `exec` receives exactly one key, for
+> that criterion's provider, in both `evaluation.container` modes, as a **one-time key file**: a mode-600 file owned by the exec user, named in `BUNSEN_SCORER_KEY_FILE`, that the scorer reads and deletes before anything else runs (the host deletes it again after the exec). The key is never an environment variable, so `/proc/<pid>/environ`, `run_command` children, and model-authored `run_playwright_script` code cannot read it.
+> The scorer also strips every `*_API_KEY` from the subprocesses it spawns. The supervisor is Anthropic-only and
+> likewise receives `BUNSEN_ANTHROPIC_API_KEY` per exec. Consequences: `type: script` criteria never see a
+> platform provider key, and in `evaluation.container: agent` mode the agent under test no longer sees it
+> either (it used to, because the scorer shared its container).
 
 ## Sharing runs safely
 
@@ -94,13 +103,18 @@ before you share one.**
 What's in a run dir and what it can leak:
 
 - **`agent-script.sh` / `launcher.sh`** hold your plaintext API keys as `export KEY="value"` lines. Bunsen
-  scrubs these from the run dir on normal completion **and** synchronously on Ctrl-C / `SIGTERM`, so a
-  cleanly finished or canceled run shouldn't contain them. A hard kill (`SIGKILL`) or power loss can still
+  deletes them the moment the agent phase ends — before capture and before any scorer runs, so no
+  scorer ever sees them — **and** synchronously on Ctrl-C / `SIGTERM`, so a cleanly finished or canceled
+  run shouldn't contain them. A hard kill (`SIGKILL`) or power loss can still
   leave them behind — check before sharing.
 - **`logs.txt`, `artifacts/recording.cast` (raw terminal bytes), and `orchestration/result.json`** capture
   whatever the agent printed and received. If a key was passed on the agent's command line, or the agent
   echoed a secret, it lands here. These are **not** scrubbed.
-- **There is no automatic redaction.** Review and scrub a run dir manually before publishing or attaching it
+- **`evaluation/criteria/<id>.log`** (scorer transcripts) are the one exception: an exploring scorer can
+  print whatever it reads, so every platform key and every secret-looking environment value Bunsen itself
+  passed to the agent is redacted from these — in the saved log and in the live `bn run` output. A secret
+  Bunsen never handled (one the agent minted or fetched) is not.
+- **There is no other automatic redaction.** Review and scrub a run dir manually before publishing or attaching it
   to a bug report.
 
 ### Scrubbing a run directory before sharing

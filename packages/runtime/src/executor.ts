@@ -15,6 +15,7 @@ import type {
   ReportConfig,
   RunPlatform,
   AgentDepSpec,
+  ScorerProvider,
 } from '@bunsen-dev/types';
 import { parseOptionalDuration } from '@bunsen-dev/types';
 import {
@@ -66,17 +67,24 @@ import {
 import { refreshRunManifest } from './manifest.js';
 import { appendRunEvent, type RunEventInput } from './run-events.js';
 import {
-  resolveCriteria,
-  getExecutionOrder,
-  buildScorerConfig,
-  runAggregate,
-  blockedJudgeEvidence,
   buildEvaluationResult,
-  validateRubric,
-  checkGate,
-  getGateThreshold,
-  determineScorerType,
+  buildReportScorerConfig,
+  isLLMCriterion,
+  requiredScorerProviders,
+  type ScorerPaths,
+  type ScorerProviderRequirement,
 } from './evaluation-coordinator.js';
+import {
+  evaluateCriteria,
+  allLLMCriteriaErrored,
+  type CriteriaScorers,
+} from './evaluate-criteria.js';
+import {
+  resolvePlatformKeys,
+  scorerKeyFor,
+  buildMissingScorerKeysError,
+  type PlatformKeys,
+} from './platform-keys.js';
 import {
   createScorerContainer,
   runCodeScorer,
@@ -84,14 +92,11 @@ import {
   stopScorerContainer,
   slugifyCriterion,
   BUNSEN_SCORE_SCRIPT,
+  type LLMScorerRun,
   type ScorerContainerInfo,
 } from './scorer-container.js';
-import type {
-  ScorerOutput,
-  CriterionResult,
-  DependencyScore,
-  ScorerConfig,
-} from '@bunsen-dev/types';
+import { parseScorerModelRef } from '@bunsen-dev/types';
+import type { DependencyScore, ScorerConfig } from '@bunsen-dev/types';
 import {
   buildImage,
   ensureImage,
@@ -123,6 +128,7 @@ import {
   type ExecResult,
 } from './container.js';
 import { resolveContainerNodeRuntime } from './node-runtime.js';
+import { pgidRecordPrefix, reapProcessGroupCommand } from './process-group.js';
 
 /**
  * Thrown out of `executeRun` when the run was canceled mid-flight (either by
@@ -429,35 +435,6 @@ export function buildExecLogs(result: Pick<ExecResult, 'stdout' | 'stderr'>): st
 export const AGENT_PGID_FILE = '/bunsen/run/agent.pgid';
 
 /**
- * Shell prefix prepended to the direct-mode launch so it records its process-group
- * id. Each `docker exec` is its own group leader, so `$$`'s group covers the agent
- * and every descendant. Best-effort and exit-code-transparent (`;`-separated, never
- * changes the launched command's status).
- *
- * Field 5 of `/proc/$$/stat` is the process-group id — read it straight from `/proc`
- * rather than shelling out to `ps`, which isn't reliably present/uniform across every
- * experiment image (a missing `ps` silently left the pgid file empty, so the reap then
- * found nothing to kill). `mkdir -p` guarantees the dir exists before the write.
- */
-export function agentPgidRecordPrefix(pgidFile: string = AGENT_PGID_FILE): string {
-  const dir = pgidFile.replace(/\/[^/]+$/, '');
-  return `mkdir -p ${dir} 2>/dev/null; awk '{print $5}' /proc/$$/stat > ${pgidFile} 2>/dev/null || true; `;
-}
-
-/**
- * Shell command that SIGKILLs exactly the recorded agent process *group* (the
- * `-- -"$PGID"` form), reaping the agent and its descendants while sparing the
- * container's init and `sleep infinity` keepalive (different groups). Echoes a
- * one-line status the caller logs.
- */
-export function reapAgentProcessGroupCommand(pgidFile: string = AGENT_PGID_FILE): string {
-  return `PGID=$(cat ${pgidFile} 2>/dev/null)
-       if [ -z "$PGID" ]; then echo "no agent process group recorded; skipping"; exit 0; fi
-       if kill -KILL -- -"$PGID" 2>/dev/null; then echo "reaped agent process group $PGID"
-       else echo "agent process group $PGID had no live processes"; fi`;
-}
-
-/**
  * Terminate a timed-out agent and everything it spawned, before the workspace is
  * captured for scoring.
  *
@@ -481,7 +458,7 @@ export async function terminateTimedOutAgent(
   report: (msg: string) => void,
 ): Promise<void> {
   try {
-    const result = await execShellInContainer(container, reapAgentProcessGroupCommand(), {
+    const result = await execShellInContainer(container, reapProcessGroupCommand(AGENT_PGID_FILE, 'agent'), {
       timeout: 10000,
     });
     // Durably surfaced (not a transient/verbose-only line): on a scored timeout the
@@ -495,6 +472,21 @@ export async function terminateTimedOutAgent(
         err instanceof Error ? err.message : String(err)
       }`,
     );
+  }
+}
+
+/**
+ * Delete the run-dir files that carry the agent's plaintext provider keys
+ * (`agent-script.sh` / `launcher.sh` export them). Called the moment the agent
+ * phase ends — before capture and before any scorer runs — so the scorer
+ * container (which mounts the run dir read-only) and every criterion in it
+ * never see those keys. Idempotent; `cleanupInternalRunFiles` repeats it in
+ * the final cleanup together with the completion marker.
+ */
+export function scrubAgentKeyFiles(runDir: string): void {
+  for (const file of ['agent-script.sh', 'launcher.sh']) {
+    const filePath = path.join(runDir, file);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 }
 
@@ -615,6 +607,21 @@ export async function executeRun(
           `set by variant '${agentVariant}'.`,
       );
     }
+  }
+
+  // Scorer API keys, resolved per provider from the host env. This preflight
+  // runs before any Docker work: a rubric that names `openai/gpt-5.6` with no
+  // OpenAI key must fail in a second, not after a ten-minute image build and a
+  // full agent run. Script/aggregate-only rubrics (and `--skip-evaluation`)
+  // need no key at all, so they resolve to an empty requirement set and run
+  // fully offline.
+  const platformKeys = resolvePlatformKeys(process.env);
+  const requiredProviders = skipEvaluation
+    ? new Map<ScorerProvider, ScorerProviderRequirement[]>()
+    : requiredScorerProviders(experiment.evaluation);
+  const missingProviders = missingScorerProviders(requiredProviders, platformKeys);
+  if (missingProviders.size > 0) {
+    throw buildMissingScorerKeysError(missingProviders);
   }
 
   // Load project config early so platform resolution can read its defaults.
@@ -987,10 +994,7 @@ export async function executeRun(
     // script/aggregate-only) or a dedicated `evaluation.report` step.
     const needsScorerBundle =
       !skipEvaluation &&
-      (experiment.evaluation.criteria.some((c) => {
-        const type = determineScorerType(c);
-        return type !== 'code' && type !== 'aggregate';
-      }) ||
+      (experiment.evaluation.criteria.some(isLLMCriterion) ||
         experiment.evaluation.report !== undefined);
     if (needsScorerBundle && !hasScorerBundle) {
       throw new Error(
@@ -1037,30 +1041,18 @@ export async function executeRun(
       nodeRuntimePath = await resolveContainerNodeRuntime(runPlatform, { log });
     }
 
-    // Get API key for platform agents (scorer and/or supervisor). Agent
-    // invocation is composed deterministically from config — no key needed
-    // to start the agent — so a no-LLM agent (e.g. echo-agent) with a
-    // script/aggregate-only rubric runs fully offline.
-    const platformApiKey = process.env.BUNSEN_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
-    // Check if evaluation needs an API key (script + aggregate only rubrics
-    // without a report step don't need one).
-    const needsEvalApiKey =
-      !skipEvaluation &&
-      (experiment.evaluation.criteria.some((c) => {
-        const type = determineScorerType(c);
-        return type !== 'code' && type !== 'aggregate';
-      }) ||
-        experiment.evaluation.report !== undefined);
-    if (needsEvalApiKey && !platformApiKey) {
-      throw new Error(
-        'BUNSEN_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY environment variable is required for evaluation'
-      );
-    }
+    // The scorer key preflight ran before any Docker work (see
+    // `resolvePlatformKeys` near the top of executeRun). Agent invocation is
+    // composed deterministically from config — no key is needed to start the
+    // agent — so a no-LLM agent (e.g. echo-agent) with a script/aggregate-only
+    // rubric runs fully offline.
+    //
     // Supervised mode drives the agent via the LLM supervisor, which needs the
-    // platform key. Starting the agent itself needs no key (the invocation is
-    // composed deterministically), so without a key a supervised run proceeds
-    // with supervision silently disabled — surface that loudly instead.
-    if (useSupervisor && hasSupervisorBundle && !platformApiKey) {
+    // Anthropic platform key (the supervisor is Anthropic-only; see DESIGN.md
+    // D8). Starting the agent itself needs no key, so without a key a
+    // supervised run proceeds with supervision silently disabled — surface
+    // that loudly instead.
+    if (useSupervisor && hasSupervisorBundle && !platformKeys.anthropic) {
       info(
         'Warning: supervised mode was requested but no BUNSEN_ANTHROPIC_API_KEY / ' +
           'ANTHROPIC_API_KEY is set — the supervisor cannot run, so the agent will run ' +
@@ -1155,10 +1147,10 @@ export async function executeRun(
       }
     }
 
-    // When scoring in agent container, add platform API key for LLM scorers
-    if (scoreInAgentContainer && platformApiKey && needsScorerBundle) {
-      env.BUNSEN_ANTHROPIC_API_KEY = platformApiKey;
-    }
+    // No provider API key goes into the agent container's base env, in either
+    // container mode: LLM scorers receive exactly one `BUNSEN_<PROVIDER>_API_KEY`
+    // per exec (`runLLMScorer`), so `type: script` criteria — and the agent
+    // itself — never see the platform's keys.
 
     // Create persistent container (stays alive for agent + evaluator)
     progress('Starting container...');
@@ -1175,10 +1167,14 @@ export async function executeRun(
     activeRun.container = container;
 
     let result: { exitCode: number; stdout: string; stderr: string; durationMs: number };
-    // Track whether evaluation threw so we can compute final run status
-    // after the agent + eval phases finish. Gate failures don't fail the
-    // run — they're a scored outcome, not an error.
-    let evaluationThrew = false;
+    // Track whether the evaluation phase failed so we can compute final run
+    // status after the agent + eval phases finish. Two causes: the phase threw
+    // unexpectedly, or every LLM-backed criterion errored (the platform could
+    // not grade the run at all). Gate failures don't fail the run — they're a
+    // scored outcome — and neither does a single errored criterion among
+    // several that scored.
+    let evaluationFailed = false;
+    let evaluationFailureReason = 'evaluation phase threw';
 
     try {
       // ===== Setup phase ordering =====
@@ -1619,7 +1615,7 @@ exec su bunsen -c "${agentScriptFile}"
         }
 
         // 6. Start supervisor agent (if available) to handle interactive prompts
-        if (hasSupervisorBundle && platformApiKey && useSupervisor) {
+        if (hasSupervisorBundle && platformKeys.anthropic && useSupervisor) {
           const supervisorCmd = needsNodeRuntime ? '/bunsen/runtime/node' : 'node';
           log('Starting supervisor agent for interactive prompt handling...');
 
@@ -1629,7 +1625,7 @@ exec su bunsen -c "${agentScriptFile}"
             [supervisorCmd, '/bunsen/lib/supervisor.cjs'],
             {
               env: {
-                BUNSEN_ANTHROPIC_API_KEY: platformApiKey,
+                BUNSEN_ANTHROPIC_API_KEY: platformKeys.anthropic.value,
                 BUNSEN_TASK_DESCRIPTION: experiment.task.prompt,
                 BUNSEN_LOG_FILE: logFile,
                 BUNSEN_OUTPUT_FILE: '/bunsen/run/supervisor.json',
@@ -1745,8 +1741,8 @@ ${agentScript}
           directScript = `chown bunsen:bunsen /bunsen/run/agent-script.sh && su bunsen -c /bunsen/run/agent-script.sh`;
         }
         // Record this exec's process group so a scored timeout can reap exactly the
-        // agent's tree (and nothing else) — see agentPgidRecordPrefix.
-        directScript = agentPgidRecordPrefix() + directScript;
+        // agent's tree (and nothing else) — see pgidRecordPrefix.
+        directScript = pgidRecordPrefix(AGENT_PGID_FILE) + directScript;
         try {
           result = await execShellInContainer(container, directScript, {
             env: runAsNonRoot ? {} : agentEnv,
@@ -1797,6 +1793,9 @@ ${agentScript}
         data: { exitCode: result.exitCode, durationMs: Date.now() - agentStartTime },
       });
       activeRun.phase = 'capture';
+      // The agent has consumed its launch script; nothing after this point may
+      // read the keys it exported — least of all the scorers.
+      scrubAgentKeyFiles(runDir);
 
       // A failed capture step degrades the run's artifacts; it must never
       // discard the completed run itself. Each step below records a warning
@@ -2076,10 +2075,8 @@ ${agentScript}
         // Check if any rubric criteria need a scorer container (anything
         // except aggregate), or if we need the scorer bundle for the report.
         const hasContainerScorers =
-          experiment.evaluation.criteria.some((c) => {
-            const t = determineScorerType(c);
-            return t !== 'aggregate';
-          }) || experiment.evaluation.report !== undefined;
+          experiment.evaluation.criteria.some((c) => c.type !== 'aggregate') ||
+          experiment.evaluation.report !== undefined;
 
         let extractedScorerInputDir: string | undefined;
         let extractedWorkspaceDir: string | undefined;
@@ -2088,9 +2085,9 @@ ${agentScript}
         let usedAgentContainerForScoring = false;
 
         try {
-          // Validate rubric
-          validateRubric(experiment.evaluation.criteria);
-
+          // The rubric is validated by `evaluateCriteria` below (and by the
+          // experiment loader at parse time); a malformed one throws out of
+          // this try and is recorded as an evaluation-phase failure.
           if (scoreInAgentContainer && hasContainerScorers) {
             // Agent-container scoring: reuse the agent's container
             log('Setting up scoring in agent container...');
@@ -2138,280 +2135,163 @@ ${agentScript}
             );
           }
 
-          // Resolve criteria and get execution order
-          const resolvedCriteria = resolveCriteria(experiment.evaluation.criteria);
-          const executionOrder = getExecutionOrder(experiment.evaluation.criteria);
-
-          log(`Evaluating ${executionOrder.length} criteria: ${executionOrder.join(', ')}`);
-
-          // Track results and dependency scores
-          const criterionResults: CriterionResult[] = [];
-          const dependencyScores: Record<string, DependencyScore> = {};
-          let report: string | undefined;
-
-          // Track gate failure for early exit
-          let gateFailure: { criterion: string; score: number | null; threshold: string } | null =
-            null;
-
-          // Evaluate each criterion in dependency order
-          for (const criterionName of executionOrder) {
-            const criterion = resolvedCriteria.find((c) => c.id === criterionName)!;
-            const criterionStart = Date.now();
-            emit({ event: 'criterion.started', data: { id: criterion.id } });
-
-            // If a gate failed, skip all remaining criteria (report is run
-            // separately after the loop and is unaffected by gate failures).
-            if (gateFailure) {
-              progress(`Skipping: ${criterion.id} (gate failed: ${gateFailure.criterion})`);
-
-              const skippedResult: CriterionResult = {
-                id: criterion.id,
-                weight: criterion.resolvedWeight,
-                score: null,
-                summary: `Skipped: gate criterion "${gateFailure.criterion}" failed (scored ${gateFailure.score ?? 'null'}, required ${gateFailure.threshold})`,
-                status: 'skipped',
-                scorerType: criterion.type,
-              };
-
-              if (criterion.scores) {
-                skippedResult.allowedScores = criterion.scores;
-              }
-
-              criterionResults.push(skippedResult);
-              dependencyScores[criterion.id] = {
-                score: null,
-                summary: skippedResult.summary,
-              };
-
-              log(`  ${criterion.id}: SKIPPED - ${skippedResult.summary}`);
-              emit({
-                event: 'criterion.completed',
-                data: {
-                  id: criterion.id,
-                  score: null,
-                  durationMs: Date.now() - criterionStart,
-                  status: 'skipped',
-                },
-              });
-              continue;
-            }
-
-            // Capture-degraded runs: a judge whose evidence a failed capture
-            // step destroyed is skipped (score: null) — never scored against
-            // missing evidence. Aggregates whose dependencies were ALL
-            // skipped have nothing to aggregate and skip likewise (mixed
-            // null/scored deps proceed; runAggregate ignores nulls).
-            const blockedEvidence = blockedJudgeEvidence(criterion, failedEvidence);
-            const aggregateStarved =
-              criterion.type === 'aggregate' &&
-              criterion.resolvedDependencies.length > 0 &&
-              criterion.resolvedDependencies.every(
-                (name) => dependencyScores[name]?.score === null,
-              );
-            if (blockedEvidence.length > 0 || aggregateStarved) {
-              const summary =
-                blockedEvidence.length > 0
-                  ? `Skipped: required evidence unavailable (${blockedEvidence.join(', ')}) — a capture step failed before evaluation`
-                  : 'Skipped: every dependency was skipped, nothing to aggregate';
-              progress(`Skipping: ${criterion.id} (${blockedEvidence.length > 0 ? 'evidence unavailable' : 'dependencies skipped'})`);
-
-              const skippedResult: CriterionResult = {
-                id: criterion.id,
-                weight: criterion.resolvedWeight,
-                score: null,
-                summary,
-                status: 'skipped',
-                scorerType: criterion.type,
-              };
-              if (criterion.scores) {
-                skippedResult.allowedScores = criterion.scores;
-              }
-              criterionResults.push(skippedResult);
-              dependencyScores[criterion.id] = { score: null, summary };
-
-              log(`  ${criterion.id}: SKIPPED - ${summary}`);
-              emit({
-                event: 'criterion.completed',
-                data: {
-                  id: criterion.id,
-                  score: null,
-                  durationMs: Date.now() - criterionStart,
-                  status: 'skipped',
-                },
-              });
-              continue;
-            }
-
-            progress(`Scoring: ${criterion.id}`);
-
-            let output: ScorerOutput;
-
-            if (criterion.type === 'aggregate') {
-              // Run aggregate locally (no LLM needed)
-              output = runAggregate(
-                criterion.aggregate,
-                Object.fromEntries(
-                  criterion.resolvedDependencies.map((name) => [name, dependencyScores[name]])
-                ),
-                experiment.evaluation.criteria
-              );
-            } else {
-              // All non-aggregate scorers run in a container
-              // Lazy-create scorer container on first non-aggregate criterion (default path only)
-              if (!scorerContainerInfo) {
-                log('Creating scorer container...');
-                scorerContainerInfo = await createScorerContainer({
-                  image: imageName,
-                  workspaceDir: extractedWorkspaceDir || runDir,
-                  workspaceSourceDir: extractedWorkspaceSourceDir,
-                  runDir,
-                  verifiersPath: experiment.verifiersPath,
-                  runId: runId,
-                  platform: runPlatform,
-                  scorerBundlePath: hasScorerBundle ? scorerBundlePath : undefined,
-                  nodeRuntimePath: needsNodeRuntime ? nodeRuntimePath : undefined,
-                  apiKey: platformApiKey,
-                  reservedEnv: reserved,
-                  proxyCertsDir: proxyInfo?.certsDir,
-                  proxyBootstrapBundlePath: proxyInfo
-                    ? getPlatformBundlePath('proxy-bootstrap')
-                    : undefined,
-                });
-                activeRun.scorerContainer = scorerContainerInfo;
-              }
-
-              if (criterion.type === 'script') {
-                // Script scorer: run shell command.
-                const scriptTimeoutMs = parseOptionalDuration(criterion.timeout) ?? 60_000;
-                output = await runCodeScorer(scorerContainerInfo, {
-                  code: criterion.run,
-                  criterion: criterion.id,
-                  runDir,
-                  timeout: Math.ceil(scriptTimeoutMs / 1000),
-                });
-              } else {
-                // LLM-based scorer (judge, agent, browser-agent): run scorer binary.
-                const scorerConfig: ScorerConfig = buildScorerConfig(
-                  criterion,
-                  '/bunsen/run',
-                  '/workspace',
-                  Object.fromEntries(
-                    criterion.resolvedDependencies.map((name) => [name, dependencyScores[name]])
-                  )
-                );
-
-                const criterionTimeout =
-                  parseOptionalDuration(criterion.timeout) ?? DEFAULT_CRITERION_TIMEOUT_MS;
-
-                output = await runLLMScorer(scorerContainerInfo, {
-                  configJson: JSON.stringify(scorerConfig, null, 2),
-                  criterion: criterion.id,
-                  nodeCmd: needsNodeRuntime ? '/bunsen/runtime/node' : 'node',
-                  timeout: criterionTimeout,
-                  proxyEnv: proxyInfo ? getProxyEnv(proxyInfo) : undefined,
-                  onLog: (msg) => log(msg),
-                });
-
-                // Copy screenshots from scorer output to artifacts/screenshots/ (if any)
-                const scorerScreenshotsDir = path.join(scorerContainerInfo.outputDir, 'screenshots');
-                if (fs.existsSync(scorerScreenshotsDir)) {
-                  const runScreenshotsDir = getScreenshotsDir(runId, baseDir);
-                  fs.mkdirSync(runScreenshotsDir, { recursive: true });
-                  const screenshotFiles = fs.readdirSync(scorerScreenshotsDir);
-                  for (const file of screenshotFiles) {
-                    fs.copyFileSync(
-                      path.join(scorerScreenshotsDir, file),
-                      path.join(runScreenshotsDir, file)
-                    );
-                  }
-                  // Clean up scorer screenshots dir for next criterion
-                  fs.rmSync(scorerScreenshotsDir, { recursive: true, force: true });
-                  log(`Copied ${screenshotFiles.length} screenshots to artifacts/screenshots/`);
-                }
-              }
-            }
-
-            // Store result
-            const criterionResult: CriterionResult = {
-              id: criterion.id,
-              weight: criterion.resolvedWeight,
-              score: output.score,
-              summary: output.summary,
-              status: 'completed',
-              scorerType: criterion.type,
-            };
-
-            if (criterion.scores) {
-              criterionResult.allowedScores = criterion.scores;
-            }
-
-            // Add log path for script scorers
-            if (criterion.type === 'script') {
-              criterionResult.logPath = `${RUN_PATHS.evaluationCriteriaDir}/${slugifyCriterion(criterion.id)}.log`;
-            }
-
-            // Include screenshots if present (browser-agent scorers)
-            if (output.screenshots && output.screenshots.length > 0) {
-              criterionResult.screenshots = output.screenshots.map(
-                (filename) => `${RUN_PATHS.artifactsScreenshots}/${filename}`
+          // Copy any screenshots the scorer wrote into artifacts/screenshots/
+          // and clear the staging dir so the next criterion starts clean.
+          const collectScorerScreenshots = (info: ScorerContainerInfo): void => {
+            const scorerScreenshotsDir = path.join(info.outputDir, 'screenshots');
+            if (!fs.existsSync(scorerScreenshotsDir)) return;
+            const runScreenshotsDir = getScreenshotsDir(runId, baseDir);
+            fs.mkdirSync(runScreenshotsDir, { recursive: true });
+            const screenshotFiles = fs.readdirSync(scorerScreenshotsDir);
+            for (const file of screenshotFiles) {
+              fs.copyFileSync(
+                path.join(scorerScreenshotsDir, file),
+                path.join(runScreenshotsDir, file)
               );
             }
+            fs.rmSync(scorerScreenshotsDir, { recursive: true, force: true });
+            log(`Copied ${screenshotFiles.length} screenshots to artifacts/screenshots/`);
+          };
 
-            // Forward script-scorer artifacts (`result.json`) to the criterion result.
-            if (output.artifacts && output.artifacts.length > 0) {
-              criterionResult.artifacts = output.artifacts;
-            }
+          // Container-side paths the scorer is told about. `/workspace-source`
+          // exists in both modes: the dedicated scorer container mounts an
+          // extracted copy (buildScorerContainerMounts), and the agent container
+          // assembled it in place (buildWorkspaceSourceAssemblyScript) and never
+          // removes it — the same rubric must see the same evidence either way.
+          const paths: ScorerPaths = {
+            contextDir: '/bunsen/run',
+            workspacePath: '/workspace',
+            workspaceSourcePath: '/workspace-source',
+          };
 
-            criterionResults.push(criterionResult);
-            dependencyScores[criterion.id] = {
-              score: output.score,
-              summary: output.summary,
-            };
-
-            log(`  ${criterion.id}: ${output.score !== null ? output.score.toFixed(2) : 'N/A'} - ${output.summary}`);
-            emit({
-              event: 'criterion.completed',
-              data: {
-                id: criterion.id,
-                score: output.score,
-                durationMs: Date.now() - criterionStart,
-                status: 'completed',
-              },
+          // Created on first use — by a script criterion, an LLM criterion, or
+          // the report step. The report needs one even when no criterion did
+          // (an aggregate-only rubric with `evaluation.report`).
+          const ensureScorerContainer = async (): Promise<ScorerContainerInfo> => {
+            if (scorerContainerInfo) return scorerContainerInfo;
+            log('Creating scorer container...');
+            scorerContainerInfo = await createScorerContainer({
+              image: imageName,
+              workspaceDir: extractedWorkspaceDir || runDir,
+              workspaceSourceDir: extractedWorkspaceSourceDir,
+              runDir,
+              verifiersPath: experiment.verifiersPath,
+              runId: runId,
+              platform: runPlatform,
+              scorerBundlePath: hasScorerBundle ? scorerBundlePath : undefined,
+              nodeRuntimePath: needsNodeRuntime ? nodeRuntimePath : undefined,
+              reservedEnv: reserved,
+              proxyCertsDir: proxyInfo?.certsDir,
+              proxyBootstrapBundlePath: proxyInfo
+                ? getPlatformBundlePath('proxy-bootstrap')
+                : undefined,
             });
+            if (activeRun) activeRun.scorerContainer = scorerContainerInfo;
+            return scorerContainerInfo;
+          };
 
-            // Check gate condition (if this criterion has one)
-            if (criterion.gate !== undefined && !gateFailure) {
-              const gatePassed = checkGate(output.score, criterion.gate);
-              if (!gatePassed) {
-                const threshold = getGateThreshold(criterion.gate);
-                gateFailure = {
-                  criterion: criterion.id,
-                  score: output.score,
-                  threshold,
-                };
-                progress(
-                  `Gate failed: ${criterion.id} scored ${output.score ?? 'null'} (required ${threshold}). Skipping remaining criteria.`
-                );
-              }
-            }
-          }
+          const nodeCmd = needsNodeRuntime ? '/bunsen/runtime/node' : 'node';
+
+          // Every secret the host handed out for this run — the platform keys and
+          // any secret-looking agent env var — is scrubbed from scorer stderr
+          // before it lands in the criterion log: an agentic scorer can read
+          // `agent-script.sh`, which exports the agent's own keys.
+          const scorerLogSecrets = [
+            ...Object.values(platformKeys).map((k) => k.value),
+            ...Object.entries(env)
+              .filter(([name]) => /(KEY|TOKEN|SECRET|PASSWORD)/i.test(name))
+              .map(([, value]) => value),
+          ];
+
+          /**
+           * Run one LLM-backed scorer exec (criterion or report). The criterion's
+           * own provider key is the only key in the exec env — resolved from the
+           * config's `<provider>/<model>`, which the preflight above already
+           * proved we hold.
+           */
+          const runScorerExec = async (
+            config: ScorerConfig,
+            timeoutMs: number
+          ): Promise<LLMScorerRun> => {
+            const info = await ensureScorerContainer();
+            const { provider } = parseScorerModelRef(config.model);
+            const run = await runLLMScorer(info, {
+              config,
+              apiKey: scorerKeyFor(provider, platformKeys).value,
+              nodeCmd,
+              timeout: timeoutMs,
+              proxyEnv: proxyInfo ? getProxyEnv(proxyInfo) : undefined,
+              runDir,
+              redact: scorerLogSecrets,
+              onLog: (msg) => log(msg),
+            });
+            collectScorerScreenshots(info);
+            return run;
+          };
+
+          const scorers: CriteriaScorers = {
+            script: async (criterion) => {
+              const info = await ensureScorerContainer();
+              const scriptTimeoutMs = parseOptionalDuration(criterion.timeout) ?? 60_000;
+              return runCodeScorer(info, {
+                code: criterion.run,
+                criterion: criterion.id,
+                runDir,
+                timeout: Math.ceil(scriptTimeoutMs / 1000),
+              });
+            },
+            llm: async (criterion, config) =>
+              runScorerExec(
+                config,
+                parseOptionalDuration(criterion.timeout) ?? DEFAULT_CRITERION_TIMEOUT_MS
+              ),
+          };
+
+          const {
+            results: criterionResults,
+            dependencyScores,
+            gateFailure,
+          } = await evaluateCriteria({
+            criteria: experiment.evaluation.criteria,
+            failedEvidence,
+            paths,
+            scorers,
+            log,
+            progress,
+            emit,
+            screenshotKey: (filename) => `${RUN_PATHS.artifactsScreenshots}/${filename}`,
+            // Script and LLM criteria both leave a `<slug>.log`; aggregates run
+            // in-process and produce none.
+            // Only advertised when the scorer actually wrote it — a criterion
+            // that errored before its exec started (no container, bad config)
+            // has no log to point at.
+            logPathFor: (criterion) => {
+              if (criterion.type === 'aggregate') return undefined;
+              const rel = `${RUN_PATHS.evaluationCriteriaDir}/${slugifyCriterion(criterion.id)}.log`;
+              return fs.existsSync(path.join(runDir, rel)) ? rel : undefined;
+            },
+          });
 
           // Run the dedicated `evaluation.report` step if configured. Runs
-          // regardless of gate state — the report is the narrative record.
-          if (experiment.evaluation.report && scorerContainerInfo) {
+          // regardless of gate state — the report is the narrative record — and
+          // creates the scorer container itself if no criterion needed one.
+          let report: string | undefined;
+          let reportError: string | undefined;
+          if (experiment.evaluation.report) {
             activeRun.phase = 'evaluation.report';
             emit({ event: 'evaluation.report.started', data: {} });
             const reportStart = Date.now();
-            report = await runReportStep({
+            const reportOutcome = await runReportStep({
               reportConfig: experiment.evaluation.report,
-              scorerContainerInfo,
               criteria: experiment.evaluation.criteria,
               dependencyScores,
-              needsNodeRuntime,
-              proxyInfo,
+              paths,
+              runScorer: runScorerExec,
               log,
               progress,
             });
+            report = reportOutcome.report;
+            reportError = reportOutcome.error;
             emit({
               event: 'evaluation.report.completed',
               data: { durationMs: Date.now() - reportStart },
@@ -2420,13 +2300,29 @@ ${agentScript}
 
           // Build and save evaluation result
           const evaluationResult = buildEvaluationResult(criterionResults, report);
+          // A configured report that produced nothing is recorded, not thrown:
+          // the criteria scored, and the narrative's absence is a fact about
+          // the run (DESIGN.md D6).
+          if (reportError !== undefined) evaluationResult.reportError = reportError;
 
-          // If a gate failed, override weighted score to 0
+          // A failed gate — and only a failed gate — zeroes the weighted score.
+          // An errored criterion contributes `null` and is excluded from the
+          // average; it is not a zero the agent earned.
           if (gateFailure) {
             evaluationResult.weightedScore = 0;
           }
 
           saveEvaluationResult(runId, evaluationResult, baseDir);
+
+          // The platform could not grade this run at all — every LLM-backed
+          // criterion errored. That is an infrastructure failure, not a score,
+          // so the run is marked failed (and `bn run` exits 5). Any other mix
+          // (some scored, some errored) is a normal, saved evaluation.
+          if (allLLMCriteriaErrored(criterionResults)) {
+            evaluationFailed = true;
+            evaluationFailureReason = 'every LLM-backed criterion errored';
+            progress('Evaluation failed: every LLM-backed criterion errored.');
+          }
 
           if (gateFailure) {
             progress(
@@ -2441,7 +2337,8 @@ ${agentScript}
           progress(`Evaluation failed: ${errorMessage}`);
           // Also append to logs for debugging
           appendLogs(runId, `\n--- EVALUATION ERROR ---\n${errorMessage}`, baseDir);
-          evaluationThrew = true;
+          evaluationFailed = true;
+          evaluationFailureReason = 'evaluation phase threw';
         } finally {
           if (usedAgentContainerForScoring) {
             // Agent-container scoring: only clean up the scorer output temp dir
@@ -2525,10 +2422,10 @@ ${agentScript}
     // budget was spent and we graded the result.
     const agentFailed = result.exitCode !== 0 && !activeRun?.timedOut;
     const finalStatus: 'succeeded' | 'failed' =
-      agentFailed || evaluationThrew ? 'failed' : 'succeeded';
+      agentFailed || evaluationFailed ? 'failed' : 'succeeded';
     const failurePhase: 'agent' | 'evaluation' | null = agentFailed
       ? 'agent'
-      : evaluationThrew
+      : evaluationFailed
         ? 'evaluation'
         : null;
     log(`Run ${runId} ${finalStatus}`);
@@ -2551,7 +2448,7 @@ ${agentScript}
     } else {
       emit({
         event: 'run.failed',
-        data: { phase: 'evaluation', reason: 'evaluation phase threw' },
+        data: { phase: 'evaluation', reason: evaluationFailureReason },
       });
     }
     if (activeRun) activeRun.terminalEventEmitted = true;
@@ -3959,70 +3856,65 @@ export function buildWorkspaceMaterializationScript(): string {
 }
 
 /**
+ * The providers an evaluation needs API keys for that the host env does not
+ * supply — the scorer preflight's decision, isolated so it can be tested
+ * without a Docker run. Empty means the run may proceed.
+ */
+export function missingScorerProviders(
+  required: Map<ScorerProvider, ScorerProviderRequirement[]>,
+  keys: PlatformKeys,
+): Map<ScorerProvider, ScorerProviderRequirement[]> {
+  const missing = new Map<ScorerProvider, ScorerProviderRequirement[]>();
+  for (const [provider, requirements] of required) {
+    if (!keys[provider]) missing.set(provider, requirements);
+  }
+  return missing;
+}
+
+/**
  * Run the dedicated `evaluation.report` step after all criteria have been
  * scored. Produces a narrative string that gets attached to the
  * {@link EvaluationResult}. Runs regardless of gate state — the report is the
  * narrative record and must never be blocked by a pipeline gate.
+ *
+ * A report that cannot be produced is **recorded, not thrown**: the criteria
+ * already scored, and `reportError` tells the reader why there is no narrative
+ * (DESIGN.md D6). Exported for unit testing against a fake `runScorer`.
  */
-async function runReportStep(opts: {
+export async function runReportStep(opts: {
   reportConfig: ReportConfig;
-  scorerContainerInfo: ScorerContainerInfo;
   criteria: Criterion[];
   dependencyScores: Record<string, DependencyScore>;
-  needsNodeRuntime: boolean;
-  proxyInfo?: ProxyContainerInfo;
+  paths: ScorerPaths;
+  /** Runs one LLM-scorer exec; see the executor's `runScorerExec`. */
+  runScorer: (config: ScorerConfig, timeoutMs: number) => Promise<LLMScorerRun>;
   log: (msg: string) => void;
   progress: (msg: string) => void;
-}): Promise<string | undefined> {
-  const { reportConfig, scorerContainerInfo, criteria, dependencyScores, needsNodeRuntime, proxyInfo, log, progress } =
-    opts;
+}): Promise<{ report?: string; error?: string }> {
+  const { reportConfig, criteria, dependencyScores, paths, runScorer, log, progress } = opts;
 
   progress('Generating evaluation report...');
 
-  // Expand `needs: 'all'` against the full criteria list so the scorer sees
-  // every prior result as dependency context. Unknown ids are already
-  // rejected by validateCriteriaGraph, so we trust them here.
-  const allIds = criteria.map((c) => c.id);
-  const resolvedNeeds: string[] =
-    reportConfig.needs === undefined
-      ? allIds
-      : reportConfig.needs === 'all'
-        ? allIds
-        : [...reportConfig.needs];
-  const dependencyScoresForReport: Record<string, DependencyScore> = {};
-  for (const id of resolvedNeeds) {
-    if (dependencyScores[id]) dependencyScoresForReport[id] = dependencyScores[id];
-  }
-
-  const scorerConfig: ScorerConfig = {
-    criterion: 'summary-report',
-    instructions: reportConfig.instructions,
-    type: 'report',
-    contextDir: '/bunsen/run',
-    workspacePath: '/workspace',
-  };
-  if (reportConfig.model) scorerConfig.model = reportConfig.model;
-  if (reportConfig.evidence) scorerConfig.context = reportConfig.evidence;
-  if (Object.keys(dependencyScoresForReport).length > 0) {
-    scorerConfig.dependencyScores = dependencyScoresForReport;
-  }
-
+  const scorerConfig = buildReportScorerConfig(
+    reportConfig,
+    criteria,
+    paths,
+    dependencyScores,
+  );
   const reportTimeoutMs =
     parseOptionalDuration(reportConfig.timeout) ?? DEFAULT_CRITERION_TIMEOUT_MS;
 
   try {
-    const output = await runLLMScorer(scorerContainerInfo, {
-      configJson: JSON.stringify(scorerConfig, null, 2),
-      criterion: 'summary-report',
-      nodeCmd: needsNodeRuntime ? '/bunsen/runtime/node' : 'node',
-      timeout: reportTimeoutMs,
-      proxyEnv: proxyInfo ? getProxyEnv(proxyInfo) : undefined,
-      onLog: (msg) => log(msg),
-    });
-    return output.report ?? output.summary;
+    const run = await runScorer(scorerConfig, reportTimeoutMs);
+    if (!run.ok) {
+      log(`Report generation failed: ${run.error}`);
+      return { error: run.error };
+    }
+    return { report: run.output.report ?? run.output.summary };
   } catch (err) {
-    log(`Report generation failed: ${err instanceof Error ? err.message : String(err)}`);
-    return undefined;
+    const message = err instanceof Error ? err.message : String(err);
+    log(`Report generation failed: ${message}`);
+    return { error: message };
   }
 }
 

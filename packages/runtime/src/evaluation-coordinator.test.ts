@@ -7,22 +7,29 @@ import type {
   Criterion,
   CriterionResult,
   DependencyScore,
+  ReportConfig,
 } from '@bunsen-dev/types';
 import {
   blockedJudgeEvidence,
   resolveDependencies,
   topologicalSort,
-  determineScorerType,
+  isLLMCriterion,
+  criterionScorerModel,
+  reportScorerModel,
+  requiredScorerProviders,
   resolveCriteria,
   getExecutionOrder,
   buildScorerConfig,
+  buildReportScorerConfig,
   calculateWeightedScore,
   runAggregate,
   buildEvaluationResult,
   validateRubric,
   checkGate,
   getGateThreshold,
+  DEFAULT_SCORER_MODEL,
   type ResolvedCriterion,
+  type ScorerPaths,
 } from './evaluation-coordinator.js';
 
 describe('resolveDependencies', () => {
@@ -132,36 +139,146 @@ describe('topologicalSort', () => {
   });
 });
 
-describe('determineScorerType', () => {
-  it('maps judge to llm', () => {
-    const c: Criterion = { id: 't', title: 'Test', type: 'judge', instructions: 'x' };
-    expect(determineScorerType(c)).toBe('llm');
+const SCRIPT: Criterion = { id: 's', title: 'Script', type: 'script', run: 'npm test' };
+const AGGREGATE: Criterion = {
+  id: 'agg',
+  title: 'Agg',
+  type: 'aggregate',
+  needs: ['s'],
+  aggregate: { function: 'weighted_average' },
+};
+
+describe('isLLMCriterion', () => {
+  it('accepts judge, agent, and browser-agent', () => {
+    const llm: Criterion[] = [
+      { id: 'j', title: 'J', type: 'judge', instructions: 'x' },
+      { id: 'a', title: 'A', type: 'agent', instructions: 'x' },
+      { id: 'ba', title: 'BA', type: 'browser-agent', instructions: 'x' },
+    ];
+    for (const c of llm) expect(isLLMCriterion(c)).toBe(true);
   });
 
-  it('maps agent to agent', () => {
-    const c: Criterion = { id: 't', title: 'Test', type: 'agent', instructions: 'x' };
-    expect(determineScorerType(c)).toBe('agent');
+  it('rejects script and aggregate', () => {
+    expect(isLLMCriterion(SCRIPT)).toBe(false);
+    expect(isLLMCriterion(AGGREGATE)).toBe(false);
+  });
+});
+
+describe('criterionScorerModel', () => {
+  it('applies the default model when the criterion sets none', () => {
+    const c: Criterion = { id: 'j', title: 'J', type: 'judge', instructions: 'x' };
+    expect(criterionScorerModel(c)).toBe(DEFAULT_SCORER_MODEL);
+    expect(DEFAULT_SCORER_MODEL).toBe('anthropic/claude-opus-5-5');
   });
 
-  it('maps browser-agent to visual', () => {
-    const c: Criterion = { id: 't', title: 'Test', type: 'browser-agent', instructions: 'x' };
-    expect(determineScorerType(c)).toBe('visual');
-  });
-
-  it('maps script to code', () => {
-    const c: Criterion = { id: 't', title: 'Test', type: 'script', run: 'npm test' };
-    expect(determineScorerType(c)).toBe('code');
-  });
-
-  it('maps aggregate to aggregate', () => {
-    const c: Criterion = {
-      id: 't',
-      title: 'Test',
-      type: 'aggregate',
-      needs: ['a'],
-      aggregate: { function: 'weighted_average' },
+  it('honors an explicit scorer.model on every LLM-backed type', () => {
+    const judge: Criterion = {
+      id: 'j',
+      title: 'J',
+      type: 'judge',
+      instructions: 'x',
+      scorer: { model: 'openai/gpt-5.6' },
     };
-    expect(determineScorerType(c)).toBe('aggregate');
+    const agent: Criterion = {
+      id: 'a',
+      title: 'A',
+      type: 'agent',
+      instructions: 'x',
+      scorer: { model: 'google/gemini-3.1-pro-preview' },
+    };
+    const browser: Criterion = {
+      id: 'ba',
+      title: 'BA',
+      type: 'browser-agent',
+      instructions: 'x',
+      scorer: { model: 'anthropic/claude-opus-5-5' },
+    };
+    expect(criterionScorerModel(judge)).toBe('openai/gpt-5.6');
+    expect(criterionScorerModel(agent)).toBe('google/gemini-3.1-pro-preview');
+    expect(criterionScorerModel(browser)).toBe('anthropic/claude-opus-5-5');
+  });
+
+  it('returns undefined for script and aggregate (no model runs)', () => {
+    expect(criterionScorerModel(SCRIPT)).toBeUndefined();
+    expect(criterionScorerModel(AGGREGATE)).toBeUndefined();
+  });
+});
+
+describe('reportScorerModel', () => {
+  it('defaults when report.model is absent', () => {
+    expect(reportScorerModel({ instructions: 'Summarize.' })).toBe(DEFAULT_SCORER_MODEL);
+  });
+
+  it('honors report.model', () => {
+    expect(reportScorerModel({ instructions: 'Summarize.', model: 'openai/gpt-5.6' })).toBe(
+      'openai/gpt-5.6',
+    );
+  });
+});
+
+describe('requiredScorerProviders', () => {
+  it('groups LLM-backed criteria by provider with id, type, weight, and model', () => {
+    const providers = requiredScorerProviders({
+      criteria: [
+        SCRIPT,
+        { id: 'j', title: 'J', type: 'judge', instructions: 'x', weight: 2 },
+        {
+          id: 'a',
+          title: 'A',
+          type: 'agent',
+          instructions: 'x',
+          scorer: { model: 'openai/gpt-5.6' },
+        },
+        {
+          id: 'ba',
+          title: 'BA',
+          type: 'browser-agent',
+          instructions: 'x',
+          scorer: { model: 'openai/gpt-5.4-mini' },
+          weight: 0,
+        },
+      ],
+    });
+
+    expect([...providers.keys()].sort()).toEqual(['anthropic', 'openai']);
+    expect(providers.get('anthropic')).toEqual([
+      { id: 'j', type: 'judge', weight: 2, model: DEFAULT_SCORER_MODEL },
+    ]);
+    expect(providers.get('openai')).toEqual([
+      { id: 'a', type: 'agent', weight: 1, model: 'openai/gpt-5.6' },
+      { id: 'ba', type: 'browser-agent', weight: 0, model: 'openai/gpt-5.4-mini' },
+    ]);
+  });
+
+  it('includes the report step as id "report"', () => {
+    const providers = requiredScorerProviders({
+      criteria: [SCRIPT],
+      report: { instructions: 'Summarize.', model: 'google/gemini-3.1-pro-preview' },
+    });
+    expect(providers.get('google')).toEqual([
+      { id: 'report', type: 'report', weight: 0, model: 'google/gemini-3.1-pro-preview' },
+    ]);
+  });
+
+  it('returns an empty map for a script/aggregate-only rubric', () => {
+    const providers = requiredScorerProviders({ criteria: [SCRIPT, AGGREGATE] });
+    expect(providers.size).toBe(0);
+  });
+
+  it('throws on a malformed model reference', () => {
+    expect(() =>
+      requiredScorerProviders({
+        criteria: [
+          {
+            id: 'j',
+            title: 'J',
+            type: 'judge',
+            instructions: 'x',
+            scorer: { model: 'claude-sonnet-5-5' },
+          },
+        ],
+      }),
+    ).toThrow('must be "<provider>/<model>"');
   });
 });
 
@@ -498,74 +615,239 @@ describe('resolveCriteria', () => {
     const resolved = resolveCriteria(criteria);
 
     expect(resolved[0].resolvedWeight).toBe(1);
-    expect(resolved[0].scorerType).toBe('llm');
+    expect(resolved[0].type).toBe('judge');
     expect(resolved[0].resolvedDependencies).toEqual([]);
 
     expect(resolved[1].resolvedWeight).toBe(2);
-    expect(resolved[1].scorerType).toBe('agent');
+    expect(resolved[1].type).toBe('agent');
     expect(resolved[1].resolvedDependencies).toEqual(['a']);
   });
 });
 
 describe('buildScorerConfig', () => {
-  it('builds a basic judge config', () => {
+  const paths: ScorerPaths = { contextDir: '/bunsen/run', workspacePath: '/workspace' };
+
+  it('builds a judge config with the resolved default model and no dead fields', () => {
     const criterion: ResolvedCriterion = {
       id: 'test',
       title: 'Test',
       type: 'judge',
       instructions: 'Test description',
       resolvedWeight: 1,
-      scorerType: 'llm',
       resolvedDependencies: [],
     };
 
-    const config = buildScorerConfig(criterion, '/bunsen/run', '/workspace', {});
+    const config = buildScorerConfig(criterion, paths, {});
 
-    expect(config.criterion).toBe('test');
-    expect(config.instructions).toBe('Test description');
-    expect(config.type).toBe('llm');
-    expect(config.contextDir).toBe('/bunsen/run');
-    expect(config.workspacePath).toBe('/workspace');
+    expect(config).toEqual({
+      type: 'judge',
+      id: 'test',
+      title: 'Test',
+      instructions: 'Test description',
+      model: DEFAULT_SCORER_MODEL,
+      contextDir: '/bunsen/run',
+      workspacePath: '/workspace',
+    });
+    // The bundle contract is exactly these keys — no `criterion`, `prompt`,
+    // `context`, or `aggregate` left over from the old shape.
+    expect(Object.keys(config).sort()).toEqual([
+      'contextDir',
+      'id',
+      'instructions',
+      'model',
+      'title',
+      'type',
+      'workspacePath',
+    ]);
   });
 
-  it('includes agent scorer config', () => {
+  it('carries scorer.model, systemPrompt, tools, scores, and evidence through', () => {
     const criterion: ResolvedCriterion = {
       id: 'test',
       title: 'Test',
       type: 'agent',
       instructions: 'Test description',
-      scorer: { model: 'gpt-4', tools: ['run_command'] },
+      scores: { 0: 'no', 1: 'yes' },
+      scorer: {
+        model: 'openai/gpt-5.6',
+        systemPrompt: 'You are terse.',
+        tools: ['run_command', 'read_file'],
+      },
       resolvedWeight: 1,
-      scorerType: 'agent',
       resolvedDependencies: [],
     };
 
-    const config = buildScorerConfig(criterion, '/bunsen/run', '/workspace', {});
+    const config = buildScorerConfig(criterion, paths, {});
 
-    expect(config.model).toBe('gpt-4');
-    expect(config.tools).toEqual(['run_command']);
+    expect(config.type).toBe('agent');
+    expect(config.model).toBe('openai/gpt-5.6');
+    expect(config.systemPrompt).toBe('You are terse.');
+    expect(config.tools).toEqual(['run_command', 'read_file']);
+    expect(config.scores).toEqual({ 0: 'no', 1: 'yes' });
+    // Copied, not aliased — the bundle config is serialized independently.
+    expect(config.tools).not.toBe(criterion.scorer!.tools);
   });
 
-  it('includes dependency scores', () => {
+  it('copies a judge criterion evidence list', () => {
+    const criterion: ResolvedCriterion = {
+      id: 'j',
+      title: 'J',
+      type: 'judge',
+      instructions: 'x',
+      evidence: ['diff', 'traces'],
+      resolvedWeight: 1,
+      resolvedDependencies: [],
+    };
+
+    const config = buildScorerConfig(criterion, paths, {});
+    expect(config.evidence).toEqual(['diff', 'traces']);
+    expect(config.evidence).not.toBe(criterion.evidence);
+  });
+
+  it('includes workspaceSourcePath only when the snapshot is mounted', () => {
+    const criterion: ResolvedCriterion = {
+      id: 'j',
+      title: 'J',
+      type: 'judge',
+      instructions: 'x',
+      resolvedWeight: 1,
+      resolvedDependencies: [],
+    };
+
+    expect(buildScorerConfig(criterion, paths, {}).workspaceSourcePath).toBeUndefined();
+    expect(
+      buildScorerConfig(
+        criterion,
+        { ...paths, workspaceSourcePath: '/workspace-source' },
+        {},
+      ).workspaceSourcePath,
+    ).toBe('/workspace-source');
+  });
+
+  it('passes only the dependency scores this criterion declared', () => {
     const criterion: ResolvedCriterion = {
       id: 'summary',
       title: 'Summary',
-      type: 'aggregate',
+      type: 'judge',
+      instructions: 'Summarize a and b',
       needs: ['a', 'b'],
-      aggregate: { function: 'weighted_average' },
-      resolvedWeight: 0,
-      scorerType: 'aggregate',
+      resolvedWeight: 1,
       resolvedDependencies: ['a', 'b'],
     };
 
-    const deps: Record<string, DependencyScore> = {
+    const config = buildScorerConfig(criterion, paths, {
       a: { score: 0.8, summary: 'Good' },
       b: { score: 0.6, summary: 'OK' },
+      unrelated: { score: 1, summary: 'Not a dependency' },
+    });
+
+    expect(config.dependencyScores).toEqual({
+      a: { score: 0.8, summary: 'Good' },
+      b: { score: 0.6, summary: 'OK' },
+    });
+  });
+
+  it('omits dependencyScores when the criterion has no dependencies', () => {
+    const criterion: ResolvedCriterion = {
+      id: 'j',
+      title: 'J',
+      type: 'judge',
+      instructions: 'x',
+      resolvedWeight: 1,
+      resolvedDependencies: [],
     };
+    expect(buildScorerConfig(criterion, paths, { a: { score: 1, summary: 'x' } })
+      .dependencyScores).toBeUndefined();
+  });
 
-    const config = buildScorerConfig(criterion, '/bunsen/run', '/workspace', deps);
+  it('throws for script and aggregate criteria (the executor dispatches those)', () => {
+    const script: ResolvedCriterion = {
+      ...SCRIPT,
+      resolvedWeight: 1,
+      resolvedDependencies: [],
+    } as ResolvedCriterion;
+    const aggregate: ResolvedCriterion = {
+      ...AGGREGATE,
+      resolvedWeight: 0,
+      resolvedDependencies: ['s'],
+    } as ResolvedCriterion;
 
+    expect(() => buildScorerConfig(script, paths, {})).toThrow(
+      'which the bundled scorer does not run',
+    );
+    expect(() => buildScorerConfig(aggregate, paths, {})).toThrow(
+      'which the bundled scorer does not run',
+    );
+  });
+});
+
+describe('buildReportScorerConfig', () => {
+  const paths: ScorerPaths = { contextDir: '/bunsen/run', workspacePath: '/workspace' };
+  const criteria: Criterion[] = [
+    { id: 'a', title: 'A', type: 'judge', instructions: 'x' },
+    { id: 'b', title: 'B', type: 'judge', instructions: 'x' },
+  ];
+  const deps: Record<string, DependencyScore> = {
+    a: { score: 0.8, summary: 'Good' },
+    b: { score: 0.6, summary: 'OK' },
+  };
+
+  it('builds the report step with its reserved id and title', () => {
+    const report: ReportConfig = { instructions: 'Summarize the run.' };
+    const config = buildReportScorerConfig(report, criteria, paths, deps);
+
+    expect(config.type).toBe('report');
+    expect(config.id).toBe('summary-report');
+    expect(config.title).toBe('Evaluation report');
+    expect(config.instructions).toBe('Summarize the run.');
+    expect(config.model).toBe(DEFAULT_SCORER_MODEL);
+    expect(config.contextDir).toBe('/bunsen/run');
+    expect(config.workspacePath).toBe('/workspace');
+    expect(config.workspaceSourcePath).toBeUndefined();
+  });
+
+  it('defaults needs to every criterion', () => {
+    const config = buildReportScorerConfig({ instructions: 'x' }, criteria, paths, deps);
     expect(config.dependencyScores).toEqual(deps);
+
+    const explicitAll = buildReportScorerConfig(
+      { instructions: 'x', needs: 'all' },
+      criteria,
+      paths,
+      deps,
+    );
+    expect(explicitAll.dependencyScores).toEqual(deps);
+  });
+
+  it('narrows dependency scores to an explicit needs list', () => {
+    const config = buildReportScorerConfig(
+      { instructions: 'x', needs: ['b'] },
+      criteria,
+      paths,
+      deps,
+    );
+    expect(config.dependencyScores).toEqual({ b: { score: 0.6, summary: 'OK' } });
+  });
+
+  it('carries model, systemPrompt, evidence, and the workspace snapshot', () => {
+    const config = buildReportScorerConfig(
+      {
+        instructions: 'x',
+        model: 'google/gemini-3.1-pro-preview',
+        systemPrompt: 'Write like a lab notebook.',
+        evidence: ['diff', 'logs'],
+      },
+      criteria,
+      { ...paths, workspaceSourcePath: '/workspace-source' },
+      deps,
+    );
+
+    expect(config.model).toBe('google/gemini-3.1-pro-preview');
+    expect(config.systemPrompt).toBe('Write like a lab notebook.');
+    expect(config.evidence).toEqual(['diff', 'logs']);
+    expect(config.workspaceSourcePath).toBe('/workspace-source');
+    expect(config.tools).toBeUndefined();
+    expect(config.scores).toBeUndefined();
   });
 });
 

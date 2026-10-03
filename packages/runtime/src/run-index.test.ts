@@ -139,6 +139,57 @@ describe('openRunIndex', () => {
     }
   });
 
+  it('rebuilds a pre-v5 index so criteria gain the model/error columns', () => {
+    const manifest = makeManifest({
+      evaluation: {
+        weighted_score: 0,
+        criteria: [
+          {
+            id: 'quality',
+            weight: 1,
+            score: null,
+            summary: 'Scorer produced no verdict.',
+            status: 'error',
+            scorer_type: 'judge',
+            model: 'google/gemini-3.1-pro-preview',
+            error: 'context window exceeded',
+          },
+        ],
+      },
+    });
+    saveRunManifest(manifest.run_id, manifest, tempDir);
+
+    // Build the index, then forge the schema version that predates the
+    // `model` / `error` columns on `run_criteria`.
+    let db = openRunIndex(tempDir);
+    upsertManifest(db, manifest);
+    db.prepare("UPDATE meta SET value = '4' WHERE key = 'schema_version'").run();
+    db.close();
+
+    db = openRunIndex(tempDir);
+    try {
+      const version = db.prepare<{ value: string }, [string]>(
+        'SELECT value FROM meta WHERE key = ?'
+      ).get('schema_version');
+      expect(version?.value).toBe('5');
+      expect(RUN_INDEX_SCHEMA_VERSION).toBe(5);
+
+      const columns = db.prepare<{ name: string }, []>(
+        "SELECT name FROM pragma_table_info('run_criteria')"
+      ).all().map((r) => r.name);
+      expect(columns).toContain('model');
+      expect(columns).toContain('error');
+
+      const [criterion] = listRunCriteria(db, manifest.run_id);
+      expect(criterion.model).toBe('google/gemini-3.1-pro-preview');
+      expect(criterion.error).toBe('context window exceeded');
+      expect(criterion.score).toBeNull();
+      expect(criterion.status).toBe('error');
+    } finally {
+      db.close();
+    }
+  });
+
   it('readonly mode requires the file to exist', () => {
     expect(() => openRunIndex(tempDir, { readonly: true })).toThrow();
     // Once it exists, readonly works.
@@ -227,6 +278,8 @@ describe('upsertManifest', () => {
           summary: 'Mostly passing',
           status: 'completed',
           scorerType: 'script',
+          model: null,
+          error: null,
           allowedScores: [0, 0.5, 1],
           logPath: 'scorer-tests.log',
         },
@@ -252,6 +305,51 @@ describe('upsertManifest', () => {
       expect(artifacts).toEqual([
         { kind: 'logs', rel_path: 'logs.txt' },
         { kind: 'scores', rel_path: 'evaluation/result.json' },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('round-trips an errored LLM criterion (null score, resolved model, error text)', () => {
+    const db = openRunIndex(tempDir);
+    try {
+      upsertManifest(
+        db,
+        makeManifest({
+          evaluation: {
+            weighted_score: 0,
+            criteria: [
+              {
+                id: 'quality',
+                weight: 1,
+                score: null,
+                summary: 'Scorer produced no verdict.',
+                status: 'error',
+                scorer_type: 'judge',
+                model: 'openai/gpt-5.6',
+                error: 'no verdict after forced submit',
+                log_path: 'evaluation/criteria/quality.log',
+              },
+            ],
+          },
+        }),
+      );
+
+      expect(listRunCriteria(db, 'r1')).toEqual([
+        {
+          runId: 'r1',
+          criterion: 'quality',
+          weight: 1,
+          score: null,
+          summary: 'Scorer produced no verdict.',
+          status: 'error',
+          scorerType: 'judge',
+          model: 'openai/gpt-5.6',
+          error: 'no verdict after forced submit',
+          allowedScores: null,
+          logPath: 'evaluation/criteria/quality.log',
+        },
       ]);
     } finally {
       db.close();

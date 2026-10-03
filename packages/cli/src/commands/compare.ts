@@ -329,6 +329,10 @@ function renderComparison(
       runs.map((m) => {
         const c = m.evaluation?.criteria.find((x) => x.id === criterion);
         if (!c) return pad('-');
+        // Same vocabulary as `bn eval show`: a scorer that produced no verdict
+        // must not read like a gate skip or an observation-only null.
+        if (c.status === 'error') return pad('ERR');
+        if (c.status === 'skipped') return pad('SKIP');
         return pad(c.score !== null ? c.score.toFixed(2) : 'N/A');
       }),
     );

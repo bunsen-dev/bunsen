@@ -128,7 +128,7 @@ export interface CriterionCompletedEvent extends RunEventBase {
     id: string;
     score: number | null;
     durationMs: number;
-    status?: 'completed' | 'skipped';
+    status?: 'completed' | 'skipped' | 'error';
   };
 }
 

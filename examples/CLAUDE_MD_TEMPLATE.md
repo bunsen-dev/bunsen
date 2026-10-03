@@ -288,8 +288,10 @@ Key concepts:
 - **Five criterion types**: `script` (shell command), `judge` (single LLM call with evidence), `agent` (full agent loop with tools), `browser-agent` (agent + Playwright), `aggregate` (math over `needs:` scores).
 - **Narrative report**: lives at `evaluation.report`, runs once per evaluation regardless of gate state. Omit to disable.
 - **Gates**: `gate.ifBelow: 1` skips remaining criteria when this one falls below the threshold (saves tokens). Skipped criteria record `status: 'skipped'`, `score: null`.
-- **Evidence**: `evidence: [diff]` (default), `[diff, logs]`, or `[diff, logs, traces]` — `judge`-only.
-- **Aggregates**: `type: aggregate` with `aggregate.function: weighted_average|all|any|min|max` plus a `needs:` list — combines dependent criterion scores without an LLM call.
+- **Evidence**: `evidence: [diff]` (default), `[diff, logs]`, or `[diff, logs, traces]` — on `judge` criteria and on `evaluation.report`. `agent` / `browser-agent` reject it; they fetch evidence with tools.
+- **Scorer config**: LLM-backed criteria and the report take `scorer: { model, tools, systemPrompt }` — `model` is `<provider>/<model>` (`anthropic/claude-sonnet-5-5` by default; `openai/…` and `google/…` also work), `tools` is an allowlist of the exploration tools, and `systemPrompt` replaces the default system prompt wholesale.
+- **Aggregates**: `type: aggregate` with `aggregate.function: weighted_average|all|any|min|max|threshold` (`threshold` takes `at:`) plus a `needs:` list — combines dependent criterion scores without an LLM call.
+- **Errors**: a scorer that crashes, times out, or never returns a verdict records `status: 'error'`, `score: null`, and an `error` string; it's excluded from the weighted score and its own gate is not evaluated. The rest of the evaluation continues.
 
 ### `agent.yaml`
 

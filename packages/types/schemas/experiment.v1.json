@@ -50,10 +50,7 @@
     },
 
     "step": {
-      "oneOf": [
-        { "$ref": "#/$defs/runStep" },
-        { "$ref": "#/$defs/writeFileStep" }
-      ]
+      "oneOf": [{ "$ref": "#/$defs/runStep" }, { "$ref": "#/$defs/writeFileStep" }]
     },
 
     "runStep": {
@@ -78,18 +75,12 @@
         "timeout": { "$ref": "#/$defs/duration" }
       },
       "additionalProperties": false,
-      "oneOf": [
-        { "required": ["from"] },
-        { "required": ["content"] }
-      ]
+      "oneOf": [{ "required": ["from"] }, { "required": ["content"] }]
     },
 
     "workspaceSource": {
       "type": "object",
-      "oneOf": [
-        { "required": ["path"] },
-        { "required": ["imagePath"] }
-      ],
+      "oneOf": [{ "required": ["path"] }, { "required": ["imagePath"] }],
       "properties": {
         "path": { "type": "string", "minLength": 1 },
         "imagePath": { "type": "string", "minLength": 1 },
@@ -141,10 +132,7 @@
 
     "environmentImage": {
       "type": "object",
-      "oneOf": [
-        { "required": ["base"] },
-        { "required": ["dockerfile"] }
-      ],
+      "oneOf": [{ "required": ["base"] }, { "required": ["dockerfile"] }],
       "properties": {
         "base": { "type": "string", "minLength": 1 },
         "dockerfile": { "type": "string", "minLength": 1 }
@@ -173,10 +161,7 @@
       "properties": {
         "timeout": { "$ref": "#/$defs/duration" },
         "platform": {
-          "oneOf": [
-            { "const": "auto" },
-            { "$ref": "#/$defs/platform" }
-          ]
+          "oneOf": [{ "const": "auto" }, { "$ref": "#/$defs/platform" }]
         },
         "artifactCaptureTimeout": { "$ref": "#/$defs/duration" },
         "onTimeout": { "$ref": "#/$defs/onTimeout" }
@@ -239,6 +224,26 @@
       ]
     },
 
+    "scorerModel": {
+      "type": "string",
+      "pattern": "^(anthropic|openai|google)/.+$",
+      "description": "Model to score with, as \"<provider>/<model>\" — anthropic/claude-sonnet-5-5, openai/gpt-5.6, google/gemini-3.1-pro-preview. Bare model ids are rejected. Default: anthropic/claude-sonnet-5-5. The provider's API key must be set on the host (ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY, or their BUNSEN_-prefixed forms)."
+    },
+    "scorerSystemPrompt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Replaces the scorer's default system prompt wholesale (nothing is appended). The criterion, instructions, allowed scores, evidence, and the verdict tool are delivered in the user turn and tool definitions, so they survive any override."
+    },
+
+    "judgeScorer": {
+      "type": "object",
+      "properties": {
+        "model": { "$ref": "#/$defs/scorerModel" },
+        "systemPrompt": { "$ref": "#/$defs/scorerSystemPrompt" }
+      },
+      "additionalProperties": false
+    },
+
     "judgeCriterion": {
       "allOf": [
         { "$ref": "#/$defs/criterionBase" },
@@ -251,11 +256,7 @@
               "type": "array",
               "items": { "type": "string", "enum": ["diff", "logs", "traces"] }
             },
-            "scorer": {
-              "type": "object",
-              "properties": { "model": { "type": "string" } },
-              "additionalProperties": false
-            }
+            "scorer": { "$ref": "#/$defs/judgeScorer" }
           },
           "additionalProperties": false
         }
@@ -265,8 +266,44 @@
     "agentScorer": {
       "type": "object",
       "properties": {
-        "model": { "type": "string" },
-        "tools": { "type": "array", "items": { "type": "string" } }
+        "model": { "$ref": "#/$defs/scorerModel" },
+        "systemPrompt": { "$ref": "#/$defs/scorerSystemPrompt" },
+        "tools": {
+          "type": "array",
+          "description": "Allowlist of exploration tools. Omit for all of them; submit_score is always available.",
+          "items": {
+            "type": "string",
+            "enum": ["run_command", "read_file", "list_threads", "read_thread_turns"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "browserAgentScorer": {
+      "type": "object",
+      "properties": {
+        "model": { "$ref": "#/$defs/scorerModel" },
+        "systemPrompt": { "$ref": "#/$defs/scorerSystemPrompt" },
+        "tools": {
+          "type": "array",
+          "description": "Allowlist of exploration tools, including the browser pair. Omit for all of them; submit_score is always available.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "run_command",
+              "read_file",
+              "list_threads",
+              "read_thread_turns",
+              "screenshot",
+              "run_playwright_script"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
       },
       "additionalProperties": false
     },
@@ -294,7 +331,7 @@
           "properties": {
             "type": { "const": "browser-agent" },
             "instructions": { "type": "string", "minLength": 1 },
-            "scorer": { "$ref": "#/$defs/agentScorer" }
+            "scorer": { "$ref": "#/$defs/browserAgentScorer" }
           },
           "additionalProperties": false
         }
@@ -352,14 +389,16 @@
       "type": "object",
       "required": ["instructions"],
       "properties": {
-        "model": { "type": "string" },
+        "model": { "$ref": "#/$defs/scorerModel" },
         "evidence": {
           "type": "array",
+          "description": "Evidence inlined into the report prompt. Default: [diff].",
           "items": { "type": "string", "enum": ["diff", "logs", "traces"] }
         },
         "instructions": { "type": "string", "minLength": 1 },
         "needs": { "$ref": "#/$defs/criterionNeeds" },
-        "timeout": { "$ref": "#/$defs/duration" }
+        "timeout": { "$ref": "#/$defs/duration" },
+        "systemPrompt": { "$ref": "#/$defs/scorerSystemPrompt" }
       },
       "additionalProperties": false
     },

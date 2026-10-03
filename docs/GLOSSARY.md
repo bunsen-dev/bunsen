@@ -70,9 +70,20 @@ experiment, with a `type` and a weight. Criteria are what you write to define
 "criterion" is the rubric entry it runs. (The run manifest records a
 `scorerType` field for each result — that manifest vocabulary is separate from
 the authoring `type` above; see [Run Manifest & Events](./RUN_MANIFEST.md).)
+Every criterion result also records a `status`: `completed`, `skipped` (a gate
+short-circuited it), `error` (the scorer could not reach a verdict — `score` is
+`null`, not 0), or `not_run`.
+
+**Scorer model** — the model an LLM-backed criterion or the report runs on,
+written `<provider>/<model>` with `provider` one of `anthropic`, `openai`, or
+`google` (default: `anthropic/claude-opus-5-5`). Set per criterion with
+`scorer.model`, or on the report with `report.model`. See
+[Scorers & Evaluation](./SCORERS.md#models-and-providers).
 
 **Verifier** — a helper file or asset placed in an experiment's `verifiers/`
-directory, mounted read-only at `/bunsen/verifiers` during scoring. A `script`
+directory, mounted read-only at `/bunsen/verifiers` in the scorer container
+(and, only with `evaluation.container: agent`, in the agent container before
+the agent runs — so it is not hidden from the agent there). A `script`
 criterion typically calls a verifier. A verifier is a *file*; a criterion is the
 *rubric entry* that runs it.
 
@@ -80,9 +91,12 @@ criterion typically calls a verifier. A verifier is a *file*; a criterion is the
 runs once after all criteria and produces a markdown artifact with **no numeric
 score**. It is not a criterion type.
 
-**Gate** — a criterion marked `gate: true` that short-circuits the rest of
-scoring when it fails — e.g. skip expensive LLM judging when the cheap `script`
-tests already failed. See [Scorers & Evaluation](./SCORERS.md).
+**Gate** — a criterion carrying `gate: { ifBelow: <threshold> }`, which
+short-circuits the rest of scoring when its resolved score falls below that
+threshold — e.g. skip expensive LLM judging when the cheap `script` tests
+already failed. Only a `completed` criterion can trip its gate; a criterion
+whose scorer errored is not a gate verdict. See
+[Scorers & Evaluation](./SCORERS.md#gate-semantics).
 
 ## Configuration
 

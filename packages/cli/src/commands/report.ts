@@ -19,7 +19,8 @@ interface ReportOptions {
 
 export async function reportCommand(runId: string, options: ReportOptions): Promise<void> {
   try {
-    if (!loadRunManifest(runId)) {
+    const manifest = loadRunManifest(runId);
+    if (!manifest) {
       console.error(chalk.red(`Run not found: ${runId}`));
       process.exit(1);
     }
@@ -33,7 +34,12 @@ export async function reportCommand(runId: string, options: ReportOptions): Prom
     }
 
     if (!evaluation.report) {
-      console.log(chalk.dim('No report found in evaluation results'));
+      const reportError = evaluation.reportError ?? manifest.evaluation?.report_error;
+      if (reportError) {
+        console.log(chalk.yellow(`Report: not generated — ${reportError}`));
+      } else {
+        console.log(chalk.dim('No report found in evaluation results'));
+      }
       return;
     }
 

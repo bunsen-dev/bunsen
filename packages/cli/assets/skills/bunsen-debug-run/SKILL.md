@@ -40,13 +40,19 @@ authoring skill. It never edits `experiment.yaml` / `agent.yaml` itself.
 - The failing **phase** (from the `run.failed` event in the run's `events.jsonl`) localizes
   the cause: `agent` = the agent-under-test crashed (read logs); `install.build` /
   `install.configure` = the agent's install (→ **bunsen-new-agent**); `workspace.sources` /
-  `workspace.setup` = experiment setup (→ **bunsen-new-experiment**); `evaluation` = a scorer
-  crashed (→ **bunsen-author-scorer**). `reason: SIGTERM` = timeout / external termination.
+  `workspace.setup` = experiment setup (→ **bunsen-new-experiment**); `evaluation` = every
+  LLM-backed criterion errored (→ **bunsen-author-scorer**; `bn run` exits **5**). A single
+  scorer that crashes, times out, or hits a provider error does *not* fail the run: it is
+  recorded as `status: error`, `score: null`, and the evaluation continues — look for `ERROR`
+  rows in `bn eval show`. `reason: SIGTERM` = timeout / external termination.
 
 **Low score**  — separate "agent did the wrong work" from "scorer is miscalibrated"
-- `bn eval show <id>` — per-criterion breakdown: score (or N/A), `(observation only)` for
-  `weight: 0`, the scorer's summary (the **why**), a `Log:` path for script criteria,
-  `Screenshot:` paths for browser-agent.
+- `bn eval show <id>` — per-criterion breakdown: score (or `N/A`), `ERROR` with the reason
+  for a scorer that produced no verdict, `SKIPPED` after a gate, `(observation only)` for
+  `weight: 0`, the scorer's summary (the **why**), the `Model:` an LLM-backed criterion ran on
+  (`<provider>/<model>`), a `Log:` path for script **and** LLM-backed criteria
+  (`evaluation/criteria/<id>.log` holds the scorer's own transcript), `Screenshot:` paths for
+  browser-agent. `bn eval human` skips errored criteria; `bn runs open` renders them.
 - `bn eval report <id>` — the narrative report (`--save` / `--open`).
 - Then decide: confirm real failure with `bn runs diff <id>` + `bn runs logs <id>`; if the
   scorer's reasoning looks wrong, read the script criterion's `.log` and hand off to
@@ -68,6 +74,10 @@ authoring skill. It never edits `experiment.yaml` / `agent.yaml` itself.
   agent likely bypassed it, or made no LLM calls) — **treat totals as a lower bound**;
   `skipped` = `--skip-traces` was set. `bn runs traces <id>` lists the captured calls;
   `--full` dumps full request/response bodies.
+- `captured` with real cost but **empty threads** (`bn runs threads`, or a trace-evidence
+  judge / a scorer's `list_threads` reporting nothing) is the known gap for OpenAI Responses
+  and Gemini traffic (codex-cli, gemini-cli, or a scorer on those providers): tokens and cost
+  are right, turn bodies are not reconstructed yet. Not an agent defect.
 
 **Unexpected / empty diff**
 - `bn runs diff <id>` — the workspace diff. **Lockfiles are filtered by default**; pass
@@ -106,7 +116,9 @@ Name the root cause and hand off — debug-run doesn't edit YAML:
   agent had nothing to work on → **bunsen-new-experiment**.
 - A criterion scored implausibly, a judge is miscalibrated, a script criterion errored, or a
   scorer is too expensive → **bunsen-author-scorer**.
-- Docker missing, no API key, storage issue → not a config defect; run `bn doctor`.
+- Docker missing, no API key, storage issue → not a config defect; run `bn doctor` (one row
+  per scorer provider — `api_key_anthropic` / `api_key_openai` / `api_key_google`; a missing
+  OpenAI or Google key only matters when a rubric names an `openai/…` or `google/…` model).
 
 State the evidence (which command showed what) so the handoff is actionable. Prefer
 `--format json` (on `show`, `cost`, `eval show`, `list`, `compare`) when an agent needs to
