@@ -167,6 +167,11 @@ Example experiments live under `examples/experiments/`, grouped by category:
 | `bunsen/visual`   | Headless + Playwright/Chromium for visual scoring. |
 | `bunsen/desktop`  | Full desktop environment for GUI agents.           |
 
+`bunsen/visual` keeps Chromium in a shared `/ms-playwright` cache, so browser
+scoring works as root or the non-root `bunsen` user, including
+[`evaluation.container: agent`](./docs/AGENT_CONTAINER_SCORING.md#updating-an-older-visual-image).
+Older images need to be rebuilt or refreshed to pick up this fix.
+
 Most experiments use a Bunsen image (the default); you can also point at any
 Docker image or a `Dockerfile` in the experiment directory. See
 [The Environment Model](./docs/ENVIRONMENT.md) for image selection, runtimes,

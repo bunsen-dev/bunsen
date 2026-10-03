@@ -59,14 +59,16 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     && rm -rf /var/lib/apt/lists/*
 
+# Use a shared browser cache so non-root agents and scorers can launch Chromium.
+# Set this before installing so the download and runtime resolve the same path.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 # Install Playwright globally and download Chromium
 # Using npx ensures we get the matching browser version
 RUN npm install -g playwright \
     && npx playwright install chromium \
-    && npx playwright install-deps chromium
-
-# Set Playwright to run in headless mode by default
-ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+    && npx playwright install-deps chromium \
+    && chmod -R o+rX "$PLAYWRIGHT_BROWSERS_PATH"
 
 # Create standard directories
 RUN mkdir -p /input /output /agent

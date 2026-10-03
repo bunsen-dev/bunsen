@@ -1,0 +1,33 @@
+name: Test Visual Image
+
+on:
+  pull_request:
+    paths:
+      - 'images/visual/**'
+      - '.github/workflows/test-visual-image.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'images/visual/**'
+      - '.github/workflows/test-visual-image.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-visual-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build visual image
+        run: docker build -t bunsen/visual ./images/visual
+
+      - name: Launch Chromium and capture screenshots as bunsen and root
+        run: bash images/visual/test.sh

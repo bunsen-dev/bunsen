@@ -90,9 +90,27 @@ What this means for you:
 - **No separate container** — the workspace is already in place, so scoring saves container-creation overhead and preserves all state.
 - **Same workspace contract** — scorers still see a mutable `/workspace` and `/workspace-source` — an immutable snapshot of the initial seeded inputs.
 - **Same user context** — scorers run as the same user as the agent, so user-scoped environments resolve the same way during scoring.
-- **Same criterion types** — `script`, `judge`, `agent`, and `browser-agent` criteria all work unchanged — with one caveat: scorers run as the agent's user, so a `browser-agent` criterion needs Playwright's browsers to be readable by that user. On `bunsen/visual` they are installed under `/root/.cache`, so a non-root run cannot launch them in this mode; keep browser criteria on the default `dedicated` mode for now.
+- **Same criterion types** — `script`, `judge`, `agent`, and `browser-agent` criteria all work unchanged. Browser criteria need Playwright's browsers to be readable and executable by the scorer's user. Updated `bunsen/visual` images install them in `/ms-playwright` with read and execute access for non-root users, so both `bunsen` and root runs can use browser criteria in this mode.
 - **Verifier visibility** — `/bunsen/verifiers` must be mounted up front, so the agent can read verifier assets before scoring begins. This is specific to this mode: in the default `dedicated` mode only the scorer container mounts them. Don't put scoring secrets in `verifiers/` when you opt into agent-container scoring.
 - **Bring your own grader** — because the agent's `defaults.passEnv` keys (e.g. `ANTHROPIC_API_KEY`) are present in this container, a `type: script` criterion that calls a model itself and writes `result.json` works here. In the default `dedicated` mode no provider key reaches script criteria, by design.
+
+### Updating an older visual image
+
+Older `bunsen/visual` images install Chromium under `/root/.cache/ms-playwright`, which non-root scorers cannot access. Rebuild the image from the updated Dockerfile:
+
+```bash
+docker build -t bunsen/visual ./images/visual
+bash images/visual/test.sh
+```
+
+Published images need to be rebuilt and republished before registry users receive this fix. After publication, refresh an existing local image with:
+
+```bash
+docker pull ghcr.io/bunsen-dev/bunsen-visual:latest
+docker tag ghcr.io/bunsen-dev/bunsen-visual:latest bunsen/visual:latest
+```
+
+If an experiment adds package layers on top of `bunsen/visual`, remove its cached `bunsen-experiment-...` Docker image so the next run rebuilds those layers from the updated base. Custom images must likewise install browsers outside a private home directory and give the scorer's user read and execute access.
 
 ## Trade-offs
 
